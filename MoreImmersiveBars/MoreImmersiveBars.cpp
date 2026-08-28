@@ -103,7 +103,7 @@ namespace MoreImmersiveBars
                             optimalBed = b;
                         }
                     }
-                    else if (b->getOccupant() == character)
+                    else if (b->getOccupant() == character) //try to use the same bed again - prevent beds hopping
                     {
                         optimalBed = b;
                         break;
@@ -144,7 +144,7 @@ namespace MoreImmersiveBars
                                 optimalBed = b;
                             }
                         }
-                        else if (b->getOccupant() == character)
+                        else if (b->getOccupant() == character) //try to use the same bed again - prevent beds hopping
                         {
                             optimalBed = b;
                             break;
@@ -196,32 +196,30 @@ namespace MoreImmersiveBars
     void (*_NV_setCurrentGoal_orig)(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri);
     void _NV_setCurrentGoal_hook(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri)
     {
-        //limit how many bar guard can go to sleep?
-        //blackboard->howManyGuysDoingThisGoal
-        //blackboard->charactercount? platoon->_characterCountCurrent?
+
         Blackboard* bb = nullptr;
         if (thisptr->character) bb = thisptr->character->getBlackboard();
         if (bb)
         {
             std::string aiPackageName = bb->getCurrentAIPackageName();
+            //limit how many bar guards can go to sleep in a squad
             if (aiPackageName == "Shop-24hr")
             {
                 if (thisptr->_squadMemberType != SQUAD_LEADER)
                 {
                     if (t->key() == GO_HOME_AND_GO_TO_BED)
                     {
-                        DebugLog(thisptr->character->displayName + " is trying to sleep!");
-                        DebugLog("Squad leader is " + thisptr->character->getSquadLeader()->displayName);
+                        //DebugLog(thisptr->character->displayName + " is trying to sleep!");
+                        //DebugLog("Squad leader is " + thisptr->character->getSquadLeader()->displayName);
                         int maxSlackers = (bb->characterCount - 1) / 2 ;
                         if (maxSlackers < 1) maxSlackers = 1;
                         int currentSlackers = bb->howManyGuysDoingThisGoal(t, thisptr->character);
                         Character* leader = thisptr->character->platoon->squadleader;
                         if (leader->getStateBroadcast()->isSleeping)
                         {
-                            DebugLog("Leader is sleeping");
                             currentSlackers -= 1;
                         }
-                        DebugLog(" max slackers: " + Ogre::StringConverter::toString(maxSlackers) + " current: " + Ogre::StringConverter::toString(currentSlackers));
+                        //DebugLog(" max slackers: " + Ogre::StringConverter::toString(maxSlackers) + " current: " + Ogre::StringConverter::toString(currentSlackers));
                         if (bb->howManyGuysDoingThisGoal(t, thisptr->character) >= maxSlackers)
                         {
                             thisptr->body->_endAction();
