@@ -1,0 +1,13 @@
+//characters in faction with notARealFaction = true (drifters, vagrant etc.) can't use public beds (in bar and such)
+//solved by hooking into useablestuffs _NV_getCostToUse and set price to 0 if not a real faction
+
+//USE_BED seems to make npc use whatever bed is available without needing to specify the subject but it act weirdly sometimes
+//ex: character->getOrdersReciever()->addOrder(USE_BED, nullptr, character->getPosition(), true, true);
+
+//Order a character to go to bed (specify which bed)
+//selectedCharacter->getOrdersReciever()->addOrder(USE_BED_ORDER, bed, bed->getPosition(), true, true);
+
+//forcefully teleport a character into a bed
+//character->setBedMode(true, bed);
+
+//barkeep constantly wake up from sleep when they have "get out of bed when in trouble" goal
