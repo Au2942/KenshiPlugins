@@ -70,7 +70,7 @@ namespace SquadAutonomy
         }
         return "";
     }
-
+    std::string saveName = "SquadAutonomy.save";
     bool SetAI(ActivePlatoon*, std::map<int, lektor<GameData*>>, bool = true);
     bool ResetAI(ActivePlatoon*, bool = true);
 
@@ -81,6 +81,10 @@ namespace SquadAutonomy
         {
             _enabled = enabled;
             _squad = squad;
+            _homeTown = nullptr;
+            _homeBuilding = nullptr;
+            _workTown = nullptr;
+            _workBuilding = nullptr;
         }
         ActivePlatoon* getSquad()
         {
@@ -120,19 +124,98 @@ namespace SquadAutonomy
                 if (enable)
                 {
                     success = SetAI(_squad, _squadPackages);
+
                 }
                 else
                 {
                     success = ResetAI(_squad);
                 }
-                if (success) _enabled = enable;
+                if (success)
+                {
+                    _enabled = enable;
+                    if (enable)
+                    {
+                        if (!setSquadHome(false)) //if fail to set home to work
+                        {
+                            setSquadHome(true); //set home to home
+                        }
+                    }
+                    else
+                    {
+                        _squad->me->getOwnerships()->setHomeBuilding(nullptr, _squad->me->getSquadType());
+                        _squad->me->getOwnerships()->setHomeTown(nullptr, _squad->me->getSquadType());
+                    }
+                }
             }
             return success;
+        }
+        void updateSquadPackages()
+        {
+            if (_squadPackages.size() > 0)
+            {
+                SetAI(_squad, _squadPackages);
+            }
+            else
+            {
+                ResetAI(_squad);
+            }
+        }
+        TownBase* getTown(bool home)
+        {
+            if (home) return _homeTown;
+            return _workTown;
+        }
+        Building* getBuilding(bool home)
+        {
+            if (home) return _homeBuilding;
+            return _workBuilding;
+        }
+        void setTown(TownBase* town, bool home)
+        {
+            if (home) _homeTown = town;
+            else _workTown = town;
+        }
+        void setBuilding(Building* building, bool home)
+        {
+            if (home) _homeBuilding = building;
+            else _workBuilding = building;
+        }
+        bool setSquadHome(bool home)
+        {
+            if (home)
+            {
+                if (_homeBuilding)
+                {
+                    _squad->me->getOwnerships()->setHomeBuilding(_homeBuilding, _squad->me->getSquadType());
+                    if (_homeTown)
+                    {
+                        _squad->me->getOwnerships()->setHomeTown(_homeTown, _squad->me->getSquadType());
+                    }
+                    return true;
+                }
+            }
+            else
+            {
+                if (_workBuilding)
+                {
+                    _squad->me->getOwnerships()->setHomeBuilding(_workBuilding, _squad->me->getSquadType());
+                    if (_workTown)
+                    {
+                        _squad->me->getOwnerships()->setHomeTown(_workTown, _squad->me->getSquadType());
+                    }
+                    return true;
+                }
+            }
+            return false;
         }
     private:
         ActivePlatoon* _squad;
         bool _enabled;
         std::map<int, lektor<GameData*>> _squadPackages;
+        TownBase* _homeTown;
+        Building* _homeBuilding;
+        TownBase* _workTown;
+        Building* _workBuilding;
     };
     class SquadAutonomySettings
     {
@@ -205,9 +288,13 @@ namespace SquadAutonomy
     private:
         int _category;
         ActivePlatoon* _selectedSquad;
+        std::string _squadName;
         void _toggleAI(DataPanelLine* line); //button for enabling/setting packages to a squad
         void _addAI(DataPanelLine* line); //set the packages in the setting
         void _clearAI(DataPanelLine* line); //clear all packages in the setting
+        void _setHome(DataPanelLine* line);
+        void _setWork(DataPanelLine* line);
+        void _setBuilding(bool home);
 
         void _changeAIPackageSearchText(DataPanelLine* line);
         void _loadConfig();
@@ -263,8 +350,7 @@ namespace SquadAutonomy
             gui->destroy(this->_panel);
         }
 
-        //this->_panel = gui->createDatapanel(0.828f, 0.40f, 0.28f, 0.172f, true, "Window", true);
-        this->_panel = gui->createDatapanel(0.25f, 0.25f, 0.5f, 0.5f, true, "Window", true);
+        this->_panel = gui->createDatapanel(0.3f, 0.3f, 0.4f, 0.4f, true, "Window", true);
         this->_panel->setCaption("Squad Autonomy");
         this->_panel->setPanelName("SquadAutonomy");
 
@@ -279,33 +365,87 @@ namespace SquadAutonomy
             return;
         this->_panel->setLineSpacing(32.0f);
         this->_panel->clearPage(this->_category);
-
         auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad);
+        if (_squadName != "")
+        {
+            this->_panel->setCaption("Squad Autonomy: " + _squadName);
+        }
+        
+        DataPanelLine_Text* textbox;
+        
         auto button = this->_panel->setLineToggleButton("", "Enable Autonomy", this->_category);
         button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_toggleAI);
+        button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+        button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) /button->button->getParent()->getHeight());
         if (squadSettings)
         {
             button->button->setStateSelected(squadSettings->getEnabled());
         }
-        auto textbox = this->_panel->setLineTextEditable("Search", "", this->_category, true, false, MyGUI::Align::Left, 0.95f);
-        textbox->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_changeAIPackageSearchText);
-        DebugLog(textbox->editBox->_getTextureName());
+        this->_panel->addSpace(this->_category, 0.25f);
+
+        button = this->_panel->setLineTextButton("", "Set Squad Home Building", this->_category, 1.0f, "Kenshi_Button2");
+        button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_setHome);
+        button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+        button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
+
+        button = this->_panel->setLineTextButton("", "Set Squad Work Building", this->_category, 1.0f, "Kenshi_Button2");
+        button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_setWork);
+        button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+        button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
+        this->_panel->addSpace(this->_category, 0.25f);
+
+        auto editbox = this->_panel->setLineTextEditable("Search", "", this->_category, true, false, MyGUI::Align::Left, 0.95f);
+        editbox->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_changeAIPackageSearchText);
+
         auto dropbox = this->_panel->setLineDropBox(lineBoxAIPackage, this->_category, &this->_selectedAIPackageIndex, false, 1.0f);
+
         _updateAIPackageList("");
-        textbox->getEditBox()->setSize(dropbox->listBox->getSize());
+        editbox->getEditBox()->setSize(dropbox->listBox->getSize());
+        this->_panel->addSpace(this->_category, 0.25f);
 
         auto slider = this->_panel->setLineSliderEditable("Priority", this->_category, true, 0.0f, 5.0f, &this->_priority);
         slider->nameText->setEnabled(false);
         slider->setPrecision(0);
+        this->_panel->addSpace(this->_category, 0.25f);
 
         button = this->_panel->setLineTextButton("", "Add AI Package", this->_category, 1.0f, "Kenshi_Button2");
         button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_addAI);
+        button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+        button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
 
         button = this->_panel->setLineTextButton("", "Clear AI Packages", this->_category, 1.0f, "Kenshi_Button2");
         button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this), this, &SquadAutonomyPanel::_clearAI);
-        
+        button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+        button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
+        this->_panel->addSpace(this->_category, 0.25f);
         if (squadSettings)
         {
+            
+            if (squadSettings->getBuilding(true))
+            {
+                std::string townText;
+                textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left);
+                textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+                townText = "Home: " + squadSettings->getBuilding(true)->displayName;
+                if (squadSettings->getTown(true))
+                {
+                    townText += ", " + squadSettings->getTown(true)->getKnownName();
+                }
+                textbox->editBox->setCaption(townText);
+            }
+            if (squadSettings->getBuilding(false))
+            {
+                std::string townText;
+                textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left);
+                textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+                townText = "Work: " + squadSettings->getBuilding(false)->displayName;
+                if (squadSettings->getTown(false))
+                {
+                    townText += ", " + squadSettings->getTown(false)->getKnownName();
+                }
+                textbox->editBox->setCaption(townText);
+            }
+            
             auto squadPackages = squadSettings->getSquadPackages();
             if (squadPackages.size() > 0)
             {
@@ -317,14 +457,16 @@ namespace SquadAutonomy
                     for (int i = 0; i < packages.size(); ++i)
                     {
                         DebugLog(Ogre::StringConverter::toString(it->first) + " " + packages[i]->name);
-                        auto textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left);
+                        textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left);
                         textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
                         textbox->editBox->setCaption(Ogre::StringConverter::toString(it->first) + " " + packages[i]->name);
                     }
                 }
             }
         }
-    
+        textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left); //buffer text for scrolling (dont know why it doesn't fit)
+        this->_panel->addSpace(this->_category, 1.0f);
+
     }
 
     void SquadAutonomyPanel::SetButton(const std::string& caption, int cat, float width, void (SquadAutonomyPanel::* callback)(DataPanelLine*))
@@ -365,6 +507,7 @@ namespace SquadAutonomy
     void SquadAutonomyPanel::selectSquad(ActivePlatoon* squad)
     {
         _selectedSquad = squad;
+        _squadName = squad->me->displayName;
     }
 
     void SquadAutonomyPanel::_loadConfig()
@@ -372,7 +515,7 @@ namespace SquadAutonomy
         _cfgPath = GetCurrentDLLDirectory() + "SquadAutonomy.cfg";
         DebugLog("Config file is at: " + _cfgPath);
         DebugLog("Reading config file");
-        std::fstream cfgFile(_cfgPath, std::ios::in | std::ios::out | std::ios::app);
+        std::fstream cfgFile(_cfgPath, std::fstream::in | std::fstream::out | std::fstream::app);
         if (!cfgFile.is_open())
         {
             DebugLog("Cannot open config file");
@@ -513,44 +656,27 @@ namespace SquadAutonomy
 
     void SquadAutonomyPanel::_addAI(DataPanelLine* line)
     {
-        /*ActivePlatoon* platoon;
-        Ogre::FastArray<MainTabPortraitPlatoon> tabPlatoons = gui->mainbar->tabPortraits;
-        for (int i = 0; i < tabPlatoons.size(); ++i)
-        {
-            if (tabPlatoons[i].tab->getVisible())
-            {
-                platoon = tabPlatoons[i].platoon;
-                DebugLog("Squad: " + platoon->getName() + " is selected");
-            }
-        }*/
+
         if (_selectedSquad)
         {
             GameData* data;
             if (_selectedAIPackageIndex < _AIPackageList.size()) data = _AIPackageList[_selectedAIPackageIndex];
-            SquadSettingsInfo* squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad);
-            if (data && squadSettings)
+            SquadSettingsInfo* settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad);
+            if (data && settings)
             {
-                squadSettings->addPackage(static_cast<int>(_priority), data);
+                settings->addPackage(static_cast<int>(_priority), data);
                 DebugLog("Add " + data->name + " package");
+                if (settings->getEnabled())
+                {
+                    settings->updateSquadPackages();
+                }
+                refresh();
             }
-            refresh();
         }
         else
         {
             DebugLog("Add AI: No squad selected.");
         }
-        /*if (platoon && platoon->isPlayer)
-        {
-            auto squadPackage = settings.GetSquadPackages(platoon);
-            if (squadPackage)
-            {
-                SetAI(platoon, *squadPackage);
-            }
-        }
-        else
-        {
-            ou->showPlayerAMessage("Error: Please select a squad.", true);
-        }*/
     }
     
     void SquadAutonomyPanel::_clearAI(DataPanelLine* line)
@@ -561,6 +687,10 @@ namespace SquadAutonomy
             if (settings)
             {
                 settings->clearPackages();
+                if (settings->getEnabled())
+                {
+                    settings->updateSquadPackages();
+                }
                 refresh();
             }
         }
@@ -570,6 +700,63 @@ namespace SquadAutonomy
         }
     }
 
+    void SquadAutonomyPanel::_setHome(DataPanelLine* line)
+    {
+        _setBuilding(true);
+    }
+
+    void SquadAutonomyPanel::_setWork(DataPanelLine* line)
+    {
+        _setBuilding(false);
+    }
+
+    void SquadAutonomyPanel::_setBuilding(bool home)
+    {
+        auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad);
+        if (!_selectedSquad)
+        {
+            ou->showPlayerAMessage("No squad selected!", true);
+            return;
+        }
+        if (!gui->selectedObject)
+        {
+            ou->showPlayerAMessage("Select something!", true);
+            return;
+        }
+
+        Building* building = gui->selectedObject.getBuilding();
+        if (!building)
+        {
+            ou->showPlayerAMessage("Select a building!", true);
+            return;
+        }
+        if (building->isFurnitureOrDoor())
+        {
+            if (building->isDoor())
+            {
+                DebugLog("Is a door of " + building->doorParentBuilding()->displayName);
+                building = building->doorParentBuilding();
+            }
+            else if (building->isFurniture())
+            {
+                DebugLog("Is a furniture of " + building->furnitureParentBuilding()->displayName);
+                building = building->furnitureParentBuilding();
+            }
+        }
+
+        //_selectedSquad->me->getOwnerships()->setHomeBuilding(building, _selectedSquad->me->getSquadType());
+        settings->setBuilding(building, home);
+        std::string report = "Set " + _selectedSquad->me->displayName + " home building: " + building->displayName;
+        TownBase* town = building->getCurrentTownLocation();
+        if (town)
+        {
+            //_selectedSquad->me->getOwnerships()->setHomeTown(town, _selectedSquad->me->squadType);
+            settings->setTown(town, home);
+            report += ", " + town->getKnownName();
+        }
+        ou->showPlayerAMessage(report, true);
+        refresh();
+    }
 
     bool SetAI(ActivePlatoon* platoon, std::map<int, lektor<GameData*>> aiPackages, bool addToList)
     {
@@ -592,13 +779,6 @@ namespace SquadAutonomy
             obj->getMovement()->halt();
             obj->ai->taskSystemAI->clearOrders();
             obj->getBody()->_endAction();
-            /*PlayerInterface* playerInterface = obj->getFaction()->isPlayer;
-            if (playerInterface)
-            {
-                obj->getFaction()->isPlayer = nullptr;
-                //characterPIs[obj] = playerInterface;
-            }*/
-
         }
         Blackboard* bb = platoon->me->getBlackboard();
         bb->clearAllPackages();
@@ -610,7 +790,7 @@ namespace SquadAutonomy
                 bb->_addPackage(data[i], pack->first);
             }
         }
-        //if (addToList) lektorEx::push_back_unique(autonomousPlatoons, platoon);
+        platoon->me->speedOverride = NO_SPEED_CHANGE;
         return true;
     }
     bool ResetAI(ActivePlatoon* platoon, bool removeFromList)
@@ -646,7 +826,6 @@ namespace SquadAutonomy
                 }
             }*/
         }
-        //if (removeFromList) lektorEx::remove(autonomousPlatoons, platoon);
         return true;
     }
 
@@ -883,8 +1062,8 @@ namespace SquadAutonomy
         int height = thisptr->txtName->getHeight();
         DebugLog(Ogre::StringConverter::toString(left) + ", " + Ogre::StringConverter::toString(width) +
             ", " + Ogre::StringConverter::toString(top) + ", " + Ogre::StringConverter::toString(height));
-        MyGUI::Button* autonomyButton = parent->createWidgetReal<MyGUI::Button>("Kenshi_Button1", (float)left / parent->getWidth() + 0.05, 
-            (float)top / parent->getHeight(), (float)width / parent->getWidth() - 0.1, (float)height / parent->getHeight(), MyGUI::Align::Center, "AutonomyButton");
+        MyGUI::Button* autonomyButton = parent->createWidgetReal<MyGUI::Button>("Kenshi_Button1", static_cast<float>(left) / parent->getWidth() + 0.05, 
+            static_cast<float>(top) / parent->getHeight(), static_cast<float>(width) / parent->getWidth() - 0.1, static_cast<float>(height) / parent->getHeight(), MyGUI::Align::Center, "AutonomyButton");
         autonomyButton->setCaption("AUT");
         AutonomyButton* autButton = new AutonomyButton(autonomyButton, _data->platoon);
         autButtons.insert(thisptr);
@@ -929,22 +1108,75 @@ namespace SquadAutonomy
     int (*saveGame_orig)(SaveManager* thisptr, const std::string& location, const std::string& name);
     int saveGame_hook(SaveManager* thisptr, const std::string& location, const std::string& name)
     {
-        //save the settings into mod folder to init when load
-        // clear all packages from all player's squads so they can safely remove the mod
-        // return the playerinterface to all player members
-        //std::unordered_map<Character*, PlayerInterface*>::iterator it;
-        /*auto settings = SquadAutonomySettings::getSingletonPtr()->squadSettings;
 
-        for (int i = 0; i < settings.size(); ++i)
+        int result = saveGame_orig(thisptr, location, name);
+        DebugLog(Ogre::StringConverter::toString(result));
+        if (result != 0) return result;
+        std::ofstream saveFile(location + name + '\\' + saveName, std::fstream::out | std::fstream::trunc);
+        DebugLog(location + name + '\\' + saveName);
+        if (!saveFile.is_open())
         {
-            ActivePlatoon * platoon = settings[i]->getSquad();
-            if (platoon)
+            DebugLog("Cannot open save file");
+        }
+        else
+        {
+            auto settings = SquadAutonomySettings::getSingletonPtr();
+            for (int i = 0; i < settings->squadSettings.size(); ++i)
             {
-                ResetAI(settings[i]->getSquad(), false);
+                auto squadSettings = settings->squadSettings[i];
+                /*ActivePlatoon* platoon = squadSettings->getSquad();
+                if (!platoon) continue;
+                hand platoonHand = platoon->me->getHandle();
+                if (platoonHand)
+                {
+                    saveFile << "Squad" << ": ";
+                    saveFile << platoonHand.type << ' ';
+                    saveFile << platoonHand.container << ' ';
+                    saveFile << platoonHand.containerSerial << ' ';
+                    saveFile << platoonHand.index << ' ';
+                    saveFile << platoonHand.serial << '\n';
+                    saveFile << "Enable: " << Ogre::StringConverter::toString(squadSettings->getEnabled());
+                }*/
+                Building * home = squadSettings->getBuilding(true);
+                if (home)
+                {
+                    hand homeHand = home->getHandle();
+                    saveFile << "Home Building - " << home->displayName << ": ";
+                    saveFile << homeHand.type << ' ';
+                    saveFile << homeHand.container << ' ';
+                    saveFile << homeHand.containerSerial << ' ';
+                    saveFile << homeHand.index << ' ';
+                    saveFile << homeHand.serial << '\n';
+                }
+                Building* work = squadSettings->getBuilding(false);
+                if (work)
+                {
+                    hand workHand = work->getHandle();
+                    saveFile << "Work Building - " << work->displayName << ": ";
+                    saveFile << workHand.type << ' ';
+                    saveFile << workHand.container << ' ';
+                    saveFile << workHand.containerSerial << ' ';
+                    saveFile << workHand.index << ' ';
+                    saveFile << workHand.serial << '\n';
+                }
+                auto packages = squadSettings->getSquadPackages();
+                for (auto it = packages.begin(); it != packages.end(); ++it)
+                {
+                    auto data = it->second;
+                    if (data.size() > 0)
+                    {
+                        saveFile << it->first;
+
+                        for (int j = 0; j < data.size(); ++j)
+                        {
+                            saveFile << ' ';
+                            saveFile << data[j]->name;
+                        }
+                        saveFile << '\n';
+                    }
+                }
             }
-        }*/
-        //DebugLog(location + name);
-        saveGame_orig(thisptr, location, name);
+        }
         //DebugLog("Save code: " + Ogre::StringConverter::toString(saveError));
         /*if (saveError == 0)
         {
@@ -959,64 +1191,165 @@ namespace SquadAutonomy
 
         }
         return saveError;*/
+        return result;
     }
 
     int (*loadGame_orig)(SaveManager* thisptr, const std::string& location, const std::string& name);
     int loadGame_hook(SaveManager* thisptr, const std::string& location, const std::string& name)
     {
         // load settings or create .settings file if not exists
-        //DebugLog(location + name);
+        DebugLog(location + " : " + name);
+        std::ifstream saveFile(location+name+saveName);
+        if (!saveFile.is_open())
+        {
+            DebugLog("Cannot open save file");
+        }
+        else
+        {
+            
+        }
+        
+        saveFile.close();
         return loadGame_orig(thisptr, location, name);
     }
-    // Hook the method (call interception) — the primary mod mechanism
-    void (*currentActionChecks_orig)(AITaskSytem* thisptr);
-    void currentActionChecks_hook(AITaskSytem* thisptr)
+
+    void (*choosePermaJob_orig)(AITaskSytem* thisptr, std::map<float, Tasker*, std::less<float>, Ogre::STLAllocator<std::pair<float const, Tasker*>, Ogre::GeneralAllocPolicy > >& orderedGoals, TaskMatch& alreadyHasGoal, bool urgentOnes, bool _jobsEnabled);
+    void choosePermaJob_hook(AITaskSytem* thisptr, std::map<float, Tasker*, std::less<float>, Ogre::STLAllocator<std::pair<float const, Tasker*>, Ogre::GeneralAllocPolicy > >& orderedGoals, TaskMatch& alreadyHasGoal, bool urgentOnes, bool _jobsEnabled)
+    {
+        Character* character = thisptr->character;
+        SquadSettingsInfo* settings;
+        if (urgentOnes && _jobsEnabled && character)
+        {
+            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(character->getPlatoon());
+            if (settings && settings->getEnabled())
+            {
+                _jobsEnabled = false;
+                for (auto it = orderedGoals.begin(); it != orderedGoals.end(); ++it)
+                {
+                    if (it->second && (it->second->key() == AUTO_LABOURING_MINES || it->second->key() == AUTO_LABOURING_MINES_PRETEND))
+                    {
+                        DebugLog("Enable job");
+                        _jobsEnabled = true;
+                        break;
+                    }
+                }
+            }
+        }
+        choosePermaJob_orig(thisptr, orderedGoals, alreadyHasGoal, urgentOnes, _jobsEnabled);
+    }
+
+    float (*runGOAP_orig)(AITaskSytem* thisptr, Tasker* task, bool _a2, bool playerOrder);
+    float runGOAP_hook(AITaskSytem* thisptr, Tasker* task, bool _a2, bool playerOrder)
+    {
+        Character* character = thisptr->character;
+        SquadSettingsInfo* settings;
+        bool setHome = false;
+        if (character)
+        {
+            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(character->getPlatoon());
+            if (settings && settings->getEnabled())
+            {
+                if (task && (task->key() == STAY_IN_HOME || task->key() == GO_HOME_AND_GO_TO_BED))
+                {
+                    setHome = settings->setSquadHome(true);
+                }
+            }
+        }
+        float result = runGOAP_orig(thisptr, task, _a2, playerOrder);
+
+        if (setHome)
+        {
+            settings->setSquadHome(false);
+        }
+
+        return result;
+    }
+    
+
+    void (*periodicUpdate_orig)(AITaskSytem* thisptr, float time);
+    void periodicUpdate_hook(AITaskSytem* thisptr, float time)
     {
         Character* character = thisptr->character;
         SquadSettingsInfo* settings;
         PlayerInterface* pi;
         if (character)
         {
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(thisptr->character->getPlatoon());
+            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(character->getPlatoon());
             if (settings && settings->getEnabled())
             {
-                pi = thisptr->character->getFaction()->isPlayer;
-                thisptr->character->getFaction()->isPlayer = nullptr;
+                pi = character->getFaction()->isPlayer;
+                character->getFaction()->isPlayer = nullptr;
             }
         }
-        currentActionChecks_orig(thisptr);
+
+        periodicUpdate_orig(thisptr, time);
+
         if (settings && settings->getEnabled())
         {
             thisptr->character->getFaction()->isPlayer = pi;
+            for (auto it = thisptr->orderedGoals.begin(); it != thisptr->orderedGoals.end(); ++it)
+            {
+                auto tasker = it->second;
+                if (tasker)
+                {
+                    DebugLog(Ogre::StringConverter::toString(it->first) + " - " + tasker->getDescription());
+                }
+            }
         }
     }
 
-    // Hook the method (call interception) — the primary mod mechanism
-    void (*chooseGoal_orig)(AITaskSytem* thisptr, bool timedLockOnCurrentGoal);
-    void chooseGoal_hook(AITaskSytem* thisptr, bool timedLockOnCurrentGoal)
+    void (*_NV_setCurrentGoal_orig)(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri);
+    void _NV_setCurrentGoal_hook(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri)
     {
+        _NV_setCurrentGoal_orig(thisptr, t, score, pri);
         Character* character = thisptr->character;
         SquadSettingsInfo* settings;
-        PlayerInterface* pi;
-        if (character)
+        if (t && character)
         {
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(thisptr->character->getPlatoon());
+            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(character->getPlatoon());
             if (settings && settings->getEnabled())
             {
-                pi = thisptr->character->getFaction()->isPlayer;
-                thisptr->character->getFaction()->isPlayer = nullptr;
+                TaskData* taskData = t->taskData;
+                if (taskData)
+                {
+                    if (t->key() == RELAX_IN_TOWN_PACKAGE)
+                    {
+                        {
+                            DebugLog("Change goal duration!");
+                            //std::string description = t->getDescription();
+                            taskData->setDurationBased(0.5, 8.0, false);
+                        }
+                    }
+                    if (t->key() == MAN_A_TURRET || t->key() == MAN_THE_GATE)
+                    {
+                        {
+                            DebugLog("Change goal duration!");
+                            //std::string description = t->getDescription();
+                            taskData->setDurationBased(1.0, 1.0, false);
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
+    /*float (*findSomethingToDoInHome_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
+    float findSomethingToDoInHome_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
+    {
+        Character* character = thisptr->getCharacter();
+        SquadSettingsInfo* settings;
+        if (character)
+        {
+            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(character->getPlatoon());
+            if (settings && settings->getEnabled())
+            {
+                DebugLog("Debug: Find something to do in home!");
             }
         }
+        return findSomethingToDoInHome_orig(thisptr, in, out, justAsking);
+    }*/
 
-        chooseGoal_orig(thisptr, timedLockOnCurrentGoal);
-
-        if (settings && settings->getEnabled())
-        {
-            thisptr->character->getFaction()->isPlayer = pi;
-        }
-
-    }
-  
 }
 
 bool (*EscMenu_openedOtherWindows)(class EscMenu*);
@@ -1046,18 +1379,23 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Autonomy: Could not add hook!");
     /*if (KenshiLib::SUCCESS != KenshiLib::AddHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
         ErrorLog("Autonomy: Could not add hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::saveGame), &SquadAutonomy::saveGame_hook, &SquadAutonomy::saveGame_orig))
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::saveGame), &SquadAutonomy::saveGame_hook, &SquadAutonomy::saveGame_orig))
 		ErrorLog("Autonomy: Could not add hook!");
 	if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::loadGame), &SquadAutonomy::loadGame_hook, &SquadAutonomy::loadGame_orig))
-		ErrorLog("Autonomy: Could not add hook!");*/
+		ErrorLog("Autonomy: Could not add hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SquadManagementScreen::SquadCellView::update), &SquadAutonomy::SquadCellView_update_hook, &SquadAutonomy::SquadCellView_update_orig))
         ErrorLog("Autonomy: Could not add hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoal) , &SquadAutonomy::chooseGoal_hook, &SquadAutonomy::chooseGoal_orig))
-        ErrorLog("Autonomy: Could not add EscMenu hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::currentActionChecks), &SquadAutonomy::currentActionChecks_hook, &SquadAutonomy::currentActionChecks_orig))
-        ErrorLog("Autonomy: Could not add EscMenu hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(EscMenu_openedOtherWindows, &SquadAutonomy::EscMenu_openedOtherWindows_hook, &SquadAutonomy::EscMenu_openedOtherWindows_orig))
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::choosePermaJob), &SquadAutonomy::choosePermaJob_hook, &SquadAutonomy::choosePermaJob_orig))
         ErrorLog("Autonomy: Could not add hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGOAP) , &SquadAutonomy::runGOAP_hook, &SquadAutonomy::runGOAP_orig))
+        ErrorLog("Autonomy: Could not add hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::periodicUpdate), &SquadAutonomy::periodicUpdate_hook, &SquadAutonomy::periodicUpdate_orig))
+        ErrorLog("Autonomy: Could not add  hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &SquadAutonomy::_NV_setCurrentGoal_hook, &SquadAutonomy::_NV_setCurrentGoal_orig))
+        ErrorLog("Autonomy: Could not add  hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(EscMenu_openedOtherWindows, &SquadAutonomy::EscMenu_openedOtherWindows_hook, &SquadAutonomy::EscMenu_openedOtherWindows_orig))
+        ErrorLog("Autonomy: Could not add EscMenu hook!");
+
     KenshiLib::ApplyQueuedHooks();
 }
 
