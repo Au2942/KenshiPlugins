@@ -76,6 +76,7 @@ namespace SquadAutonomy
     bool ResetAI(Platoon*);
     bool shouldSave = false;
     bool shouldLoad = false;
+    bool loadNextCall = false;
     class SquadSettingsInfo
     {
     public:
@@ -1440,10 +1441,15 @@ namespace SquadAutonomy
                 }
             }
         }
-        else if (shouldLoad)
+        else if (loadNextCall)
         {
             SquadAutonomySettings::getSingletonPtr()->loadSettings(savePath);
+            loadNextCall = false;
+        }
+        else if (shouldLoad)
+        {
             shouldLoad = false;
+            loadNextCall = true;
         }
     }
 
