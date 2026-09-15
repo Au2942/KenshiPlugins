@@ -4,8 +4,10 @@
 
 #include <kenshi/Kenshi.h>
 #include <kenshi/Globals.h>
+#include <kenshi/GameWorld.h>
 #include <kenshi/GameData.h>
 #include <kenshi/Character.h>
+#include <kenshi/RaceData.h>
 #include <kenshi/CharBody.h>
 #include <kenshi/StateBroadcastData.h>
 #include <kenshi/util/YesNoMaybe.h>
@@ -124,13 +126,19 @@ namespace MoreImmersiveBars
         UseableStuff* optimalBed = nullptr;
         Building* building = nullptr;
         if (!character) return nullptr;
+        RaceData* race = character->getRace();
         hand buildingHand = character->isInsideBuilding;
         if (buildingHand) building = buildingHand.getBuilding();
         if (building && building->designation == BD_BAR)
         {
             float maxScore = std::numeric_limits<float>::lowest();
             lektor<Building*> barBeds;
-            building->findAllFurnitureWithFunction(barBeds, BF_BED);
+            BuildingFunction bf = BF_BED;
+            if (race && race->robot)
+            {
+                bf = BF_SKELETON_BED;
+            }
+            building->findAllFurnitureWithFunction(barBeds, bf);
             for (uint32_t i = 0; i < barBeds.size(); ++i)
             {
                 bool isRented = false;
@@ -149,12 +157,18 @@ namespace MoreImmersiveBars
                         if (building) rentedBed = bedBuilding->getUseableStuff();
                         if (rentedBed)
                         {
+                            //TODO: check time as well
                             //DebugLog("Rented bed cost: " + Ogre::StringConverter::toString(rentedCost));
                             if (rentedBed == b)
                             {
-                                //DebugLog("Rented bed!");
-                                isRented = true;
-                                break;
+                                //TODO: check time as well
+                                //DebugLog("Bed already rented!");
+                                float currentTime = ou->getTimeStamp_inGameHours().getTotalHours();
+                                //DebugLog("Time now: " + Ogre::StringConverter::toString(currentTime) + " rented time: " + Ogre::StringConverter::toString(it->second));
+                                if (currentTime - it->second < 24.0)
+                                {
+                                    return nullptr;
+                                }
                             }
                         }
                     }
@@ -211,6 +225,7 @@ namespace MoreImmersiveBars
                 {
                     if (who && who->getFaction() && who->getFaction()->notARealFaction)
                     {
+                        //TODO: change to getting the squad template data->cost to use bed later
                         return 0;
                     }
                 }
@@ -223,61 +238,41 @@ namespace MoreImmersiveBars
     void (*_NV_setCurrentGoal_orig)(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri);
     void _NV_setCurrentGoal_hook(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri)
     {
-        //TODO: use statebroadcast -> time since last slept to do the sleeping logic // hook into scoreGoToBed maybe?
+
         Blackboard* bb = nullptr;
         Character* character = nullptr;
+        TaskData* data = nullptr;
+        float min = 0;
+        float fuzz = 0;
+        bool isDurationBased = false;
+        bool resetTaskData = false;
         if (thisptr) character = thisptr->character;
         if (character) bb = character->getBlackboard();
         if (bb)
         {
             std::string aiPackageName = bb->getCurrentAIPackageName();
-            //limit how many bar guards can go to sleep in a squad
-            if (aiPackageName == "Shop-24hr")
-            {
-                if (thisptr->_squadMemberType != SQUAD_LEADER)
-                {
-                    if (t && t->key() == GO_HOME_AND_GO_TO_BED)
-                    {
-                        //DebugLog(thisptr->character->displayName + " is trying to sleep!");
-                        //DebugLog("Squad leader is " + thisptr->character->getSquadLeader()->displayName);
-                        int maxSlackers = (bb->characterCount - 1) / 2 ;
-                        if (maxSlackers < 1) maxSlackers = 1;
-                        int currentSlackers = bb->howManyGuysDoingThisGoal(t, character);
-
-                        ActivePlatoon* platoon = character->platoon;
-                        Character* leader = nullptr;
-                        StateBroadcastData* stateBroadcast = nullptr;
-                        if (platoon) leader = platoon->squadleader;
-                        if (leader) stateBroadcast = leader->getStateBroadcast();
-                        if (stateBroadcast && stateBroadcast->isSleeping)
-                        {
-                            currentSlackers -= 1;
-                        }
-                        //DebugLog(" max slackers: " + Ogre::StringConverter::toString(maxSlackers) + " current: " + Ogre::StringConverter::toString(currentSlackers));
-                        if (bb->howManyGuysDoingThisGoal(t, character) >= maxSlackers)
-                        {
-                            if (thisptr->body) thisptr->body->_endAction();
-                            return;
-                        }
-                    }
-                }
-            }
-
-            _NV_setCurrentGoal_orig(thisptr, t, score, pri);
-
             if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" || aiPackageName == "town thugs night patrol + day bar")
             {
-                if (t && t->key() == RELAX_IN_TOWN_PACKAGE)
+                if (t) data = t->taskData;
+                if (data)
                 {
-                    TaskData* taskData = t->taskData;
-                    if (taskData)
-                    {
-                        taskData->setDurationBased(0.5, 8.0, false);
-                    }
+                    min = data->durationMin;
+                    fuzz = data->durationFuzz;
+                    isDurationBased = data->isDurationBased;
+                    resetTaskData = true;
+                    data->setDurationBased(0.5, 8.0, false);
                 }
+
             }
         }
-        else _NV_setCurrentGoal_orig(thisptr, t, score, pri);
+        _NV_setCurrentGoal_orig(thisptr, t, score, pri);
+        if (resetTaskData)
+        {
+            if (data)
+            {
+                data->setDurationBased(min, fuzz, isDurationBased);
+            }
+        }
     }
 
     float (*runTargetFind_orig)(TaskData* thisptr, AI* ai, const hand& _target, hand& out, bool justAsking);
@@ -307,7 +302,58 @@ namespace MoreImmersiveBars
         }
         return score;
     }
+
+    float (*score_orig)(Tasker* thisptr, AI* ai);
+    float score_hook(Tasker* thisptr, AI* ai)
+    {
+        float score = score_orig(thisptr, ai);
+
+        Blackboard* bb = nullptr;
+        Character* character = nullptr;
+        Platoon* platoon = nullptr;
+        if (ai)
+        {
+            bb = ai->getBlackboard();
+            character = ai->getCharacter();
+            platoon = ai->getPlatoon();
+        }
+        if (thisptr && thisptr->key() == GO_HOME_AND_GO_TO_BED)
+        {
+            if (bb && platoon)
+            {
+                std::string aiPackageName = bb->getCurrentAIPackageName();
+                StateBroadcastData* state = character->getStateBroadcast();
+                if (aiPackageName == "Shop-24hr" && platoon->squadType != SQUAD_LEADER)
+                {
+
+                    //DebugLog(thisptr->character->displayName + " is trying to sleep!");
+                    //DebugLog("Squad leader is " + thisptr->character->getSquadLeader()->displayName);
+                    int maxSlackers = (bb->characterCount - 1) / 2;
+                    if (maxSlackers < 1) maxSlackers = 1;
+                    int currentSlackers = bb->howManyGuysDoingThisGoal(thisptr, character);
+                        
+                    //DebugLog(" max slackers: " + Ogre::StringConverter::toString(maxSlackers) + " current: " + Ogre::StringConverter::toString(currentSlackers));
+                    if (currentSlackers >= maxSlackers)
+                    {
+                        return 0.0;
+                    }
+                }
+                if (state)
+                {
+                    if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" || aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr")
+                    {
+                        if (state->lastSlept < 720.0) return score * 0.1;
+                        if (state->lastSlept > 960.0) return score * 5.0;
+                    }
+                }
+            }
+
+        }
+        return score;
+    }
 }
+
+
 
 __declspec(dllexport) void startPlugin()
 {
@@ -321,11 +367,10 @@ __declspec(dllexport) void startPlugin()
         if (platform == 1)
         {
             *(uintptr_t*)&rentedBeds = baseAddr + 0x212db18;
-            //*(uintptr_t*)&load = baseAddr + 0x47AC10;
         }
         else if (platform == 0)
         {
-            //*(uintptr_t*)&load = baseAddr + 0x47AD00;
+            *(uintptr_t*)&rentedBeds = baseAddr + 0x212BA58;
         }
     }
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&UseableStuff::_NV_getCostToUse), &MoreImmersiveBars::_NV_getCostToUse_hook, &MoreImmersiveBars::_NV_getCostToUse_orig))
@@ -333,6 +378,8 @@ __declspec(dllexport) void startPlugin()
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &MoreImmersiveBars::_NV_setCurrentGoal_hook, &MoreImmersiveBars::_NV_setCurrentGoal_orig))
         ErrorLog("Could not add setCurrentGoal hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &MoreImmersiveBars::runTargetFind_hook, &MoreImmersiveBars::runTargetFind_orig))
+        ErrorLog("Could not add runTargetFind hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Tasker::score), &MoreImmersiveBars::score_hook, &MoreImmersiveBars::score_orig))
         ErrorLog("Could not add runTargetFind hook!");
     KenshiLib::ApplyQueuedHooks();
     DebugLog("Mod started");

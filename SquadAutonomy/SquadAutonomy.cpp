@@ -147,7 +147,7 @@ namespace SquadAutonomy
     {
     public:
         SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr), 
-            _manTurrets(false), _doSleep(false), _startSleepTime(0.0), _endSleepTime(0.0), _usePaidBeds(false), _restUntilHealed(true)
+            _startWorkTime(0.0), _endWorkTime(24.0), _manTurrets(false), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true)
         {
             Faction* faction = squad->getFaction();
             if (faction)
@@ -347,21 +347,21 @@ namespace SquadAutonomy
         {
             return _usePaidBeds;
         }
-        float getStartSleepTime()
+        float getStartWorkTime()
         {
-            return _startSleepTime;
+            return _startWorkTime;
         }
-        float getEndSleepTime()
+        float getEndWorkTime()
         {
-            return _endSleepTime;
+            return _endWorkTime;
         }
-        void setStartSleepTime(float time)
+        void setStartWorkTime(float time)
         {
-            _startSleepTime = time;
+            _startWorkTime = time;
         }
-        void setEndSleepTime(float time)
+        void setEndWorkTime(float time)
         {
-            _endSleepTime = time;
+            _endWorkTime = time;
         }
         void setDoSleep(bool val)
         {
@@ -375,31 +375,31 @@ namespace SquadAutonomy
         {
             _usePaidBeds = val;
         }
-        bool isSleepTime()
+        bool isRestTime()
         {
-            if (!_doSleep) return false;
+            //if (!_doSleep) return false;
             int currentHour = static_cast<int>(ou->getTimeStamp_inGameHours().getTotalHours()) % 24;
-            int startTime = static_cast<int>(_startSleepTime) % 24;
-            int endTime = static_cast<int>(_endSleepTime) % 24;
-            bool sleepTime = false;
+            int endTime = static_cast<int>(_endWorkTime);
+            int startTime = static_cast<int>(_startWorkTime);
+            bool restTime = false;
             //DebugLog("Current time: " + Ogre::StringConverter::toString(currentHour));
             //DebugLog("start time: " + Ogre::StringConverter::toString(startTime) + " end time : " + Ogre::StringConverter::toString(endTime));
-            if (startTime == endTime) return true;
-            if (startTime > endTime)
+            if (endTime == startTime) return true;
+            if (endTime > startTime)
             {
-                if (currentHour >= startTime || currentHour < endTime)
+                if (currentHour >= endTime || currentHour < startTime)
                 {
-                    sleepTime = true;
+                    restTime = true;
                 }
             }
             else
             {
-                if (currentHour >= startTime && currentHour < endTime)
+                if (currentHour >= endTime && currentHour < startTime)
                 {
-                    sleepTime = true;
+                    restTime = true;
                 }
             }
-            return sleepTime;
+            return restTime;
         }
 
     private:
@@ -413,8 +413,8 @@ namespace SquadAutonomy
         Building* _workBuilding;
         bool _manTurrets;
         bool _doSleep;
-        float _startSleepTime;
-        float _endSleepTime;
+        float _endWorkTime;
+        float _startWorkTime;
         bool _restUntilHealed;
         bool _usePaidBeds;
     };
@@ -511,10 +511,10 @@ namespace SquadAutonomy
                     }
                     saveFile << "\tEndPackages:" << '\n';
                     saveFile << "\tOptions:" << '\n';
+                    saveFile << "\t\tStartWorkTime: " << squadSettings->getStartWorkTime() << '\n';
+                    saveFile << "\t\tEndWorkTime: " << squadSettings->getEndWorkTime() << '\n';
                     saveFile << "\t\tManTurrets: " << Ogre::StringConverter::toString(squadSettings->getManTurrets()) << '\n';
                     saveFile << "\t\tDoSleep: " << Ogre::StringConverter::toString(squadSettings->getDoSleep()) << '\n';
-                    saveFile << "\t\t\tStartSleepTime: " << squadSettings->getStartSleepTime() << '\n';
-                    saveFile << "\t\t\tEndSleepTime: " << squadSettings->getEndSleepTime() << '\n';
                     saveFile << "\t\t\tRestUntilHealed: " << Ogre::StringConverter::toString(squadSettings->getRestUntilHealed()) << '\n';
                     saveFile << "\t\t\tUsePaidBeds: " << Ogre::StringConverter::toString(squadSettings->getUsePaidBeds()) << '\n';
                     saveFile << "\tEndOptions:" << '\n';
@@ -560,10 +560,10 @@ namespace SquadAutonomy
                     Building* home = nullptr;
                     Building* work = nullptr;
                     std::map<int, lektor<GameData*>> packages;
+                    float startTime = 0.0f;
+                    float endTime = 24.0f;
                     bool manTurrets = false;
                     bool doSleep = false;
-                    float startTime = 0.0f;
-                    float endTime = 0.0f;
                     bool restUntilHealed = true;
                     bool usePaidBeds = false;
                     /*========================*/
@@ -681,6 +681,20 @@ namespace SquadAutonomy
                                 dataLine.erase(0, dataLine.find_first_not_of(" \t"));
                                 //DebugLog(type);
                                 //DebugLog(dataLine);
+                                if (type == "StartWorkTime")
+                                {
+                                    if (dataLine == "") continue;
+                                    std::stringstream ss(dataLine);
+                                    ss >> startTime;
+                                    continue;
+                                }
+                                if (type == "EndWorkTime")
+                                {
+                                    if (dataLine == "") continue;
+                                    std::stringstream ss(dataLine);
+                                    ss >> endTime;
+                                    continue;
+                                }
                                 if (type == "ManTurrets")
                                 {
                                     if (dataLine == "true")
@@ -695,20 +709,6 @@ namespace SquadAutonomy
                                     {
                                         doSleep = true;
                                     }
-                                    continue;
-                                }
-                                if (type == "StartSleepTime")
-                                {
-                                    if (dataLine == "") continue;
-                                    std::stringstream ss(dataLine);
-                                    ss >> startTime;
-                                    continue;
-                                }
-                                if (type == "EndSleepTime")
-                                {
-                                    if (dataLine == "") continue;
-                                    std::stringstream ss(dataLine);
-                                    ss >> endTime;
                                     continue;
                                 }
                                 if (type == "RestUntilHealed")
@@ -755,10 +755,10 @@ namespace SquadAutonomy
                         {
                             settingsInfo->setPackages(packages);
                         }
+                        settingsInfo->setStartWorkTime(startTime);
+                        settingsInfo->setEndWorkTime(endTime);
                         settingsInfo->setManTurrets(manTurrets);
                         settingsInfo->setDoSleep(doSleep);
-                        settingsInfo->setStartSleepTime(startTime);
-                        settingsInfo->setEndSleepTime(endTime);
                         settingsInfo->setRestUntilHealed(restUntilHealed);
                         settingsInfo->setUsePaidBeds(usePaidBeds);
                         settingsInfo->enableAutonomy(enable);
@@ -1003,7 +1003,7 @@ namespace SquadAutonomy
         void refresh();
         void updateOptions(DataPanelLine*);
         void updateOptionsAndRefresh(DataPanelLine*);
-        SquadAutonomyPanel::AutonomyOptions() : _category(1), _selectedSquad(nullptr), _panel(nullptr), _doSleep(false), _startSleepTime(0.0f), _endSleepTime(24.0f), _usePaidBeds(false) 
+        SquadAutonomyPanel::AutonomyOptions() : _category(1), _selectedSquad(nullptr), _panel(nullptr), _doSleep(false), _startWorkTime(0.0f), _endWorkTime(24.0f), _usePaidBeds(false) 
         {
         }
         void setPanel(DatapanelGUI* panel)
@@ -1025,8 +1025,8 @@ namespace SquadAutonomy
         DatapanelGUI* _panel;
         bool _manTurrets;
         bool _doSleep;
-        float _startSleepTime;
-        float _endSleepTime;
+        float _startWorkTime;
+        float _endWorkTime;
         bool _restUntilHealed;
         bool _usePaidBeds;
         //bool _buySupplies;
@@ -1245,13 +1245,24 @@ namespace SquadAutonomy
         //get value from settings
         _manTurrets = squadSettings->getManTurrets();
         _doSleep = squadSettings->getDoSleep();
-        _startSleepTime = squadSettings->getStartSleepTime();
-        _endSleepTime = squadSettings->getEndSleepTime();
+        _startWorkTime = squadSettings->getStartWorkTime();
+        _endWorkTime = squadSettings->getEndWorkTime();
         _usePaidBeds = squadSettings->getUsePaidBeds();
         _restUntilHealed = squadSettings->getRestUntilHealed();
 
         this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
         //DebugLog("refresh options!");
+        auto startSlider = this->_panel->setLineSliderEditable("Start Work Time", this->_category, true, 0.0f, 24.0f, &this->_startWorkTime);
+        startSlider->nameText->setEnabled(false);
+        startSlider->setPrecision(0);
+        startSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
+            this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        auto endSlider = this->_panel->setLineSliderEditable("End Work Time", this->_category, true, 0.0f, 24.0f, &this->_endWorkTime);
+        endSlider->nameText->setEnabled(false);
+        endSlider->setPrecision(0);
+        endSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
+            this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+
         auto checkbox = this->_panel->setLineCheckbox("Man Turrets", &_manTurrets, this->_category);
         checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
             this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
@@ -1260,19 +1271,8 @@ namespace SquadAutonomy
             this, &SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh);
 
 
-
         if (squadSettings->getDoSleep())
         {
-            auto startSlider = this->_panel->setLineSliderEditable("Start Time", this->_category, true, 0.0f, 24.0f, &this->_startSleepTime);
-            startSlider->nameText->setEnabled(false);
-            startSlider->setPrecision(0);
-            startSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-                this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-            auto endSlider = this->_panel->setLineSliderEditable("End Time", this->_category, true, 0.0f, 24.0f, &this->_endSleepTime);
-            endSlider->nameText->setEnabled(false);
-            endSlider->setPrecision(0);
-            endSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-                this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
             checkbox = this->_panel->setLineCheckbox("Rest until healed", &_restUntilHealed, this->_category);
             checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
                 this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
@@ -1287,11 +1287,11 @@ namespace SquadAutonomy
         if (this->_selectedSquad == nullptr) return;
         auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
         squadSettings->setManTurrets(_manTurrets);
+        squadSettings->setStartWorkTime(_startWorkTime);
+        squadSettings->setEndWorkTime(_endWorkTime);
         squadSettings->setDoSleep(_doSleep);
         squadSettings->setRestUntilHealed(_restUntilHealed);
         squadSettings->setUsePaidBeds(_usePaidBeds);
-        squadSettings->setStartSleepTime(_startSleepTime);
-        squadSettings->setEndSleepTime(_endSleepTime);
     }
     void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
     {
@@ -2137,7 +2137,7 @@ namespace SquadAutonomy
         if (urgentOnes && _jobsEnabled && settings && settings->isEnabled())
         {
             Log("PermaJob");
-            if (settings->isSleepTime())
+            if (settings->isRestTime())
             {
                 _jobsEnabled = false;
             }
@@ -2261,7 +2261,7 @@ namespace SquadAutonomy
                 }
                 else
                 {
-                    if (settings->isSleepTime())
+                    if (settings->isRestTime())
                     {
                         settings->assignSquadHome(true);
                     }
@@ -2277,7 +2277,7 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled() && task)
         {
-            if (settings->isSleepTime())
+            if (settings->isRestTime())
             {
                 TaskType type = task->key();
                 if (task->priority == TP_URGENT && (type == ATTACK_ENEMIES || type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME
@@ -2393,13 +2393,13 @@ namespace SquadAutonomy
             {
                 faction->isPlayer = nullptr;
             }
-            if (!settings->hasHome())
+            /*if (!settings->hasHome())
             {
                 SetNearestFriendlyTownAsHome(platoon);
             }
             else
             {
-                if (settings->isSleepTime())
+                if (settings->isRestTime())
                 {
                     settings->assignSquadHome(true);
                 }
@@ -2410,7 +2410,7 @@ namespace SquadAutonomy
                         settings->assignSquadHome(true);
                     }
                 }
-            }
+            }*/
             //DebugLog("End PeriodicUpdate");
         }
 
@@ -2482,8 +2482,8 @@ namespace SquadAutonomy
                         
                 if (settings->getDoSleep())
                 {
-                    t->startTime = settings->getEndSleepTime();
-                    t->endTime = settings->getStartSleepTime();
+                    t->startTime = static_cast<int>(settings->getStartWorkTime());
+                    t->endTime = static_cast<int>(settings->getEndWorkTime());
                 }
                 //DebugLog("Man something end time: " + Ogre::StringConverter::toString(t->endTime));
                 //std::string description = t->getDescription();
@@ -2494,15 +2494,10 @@ namespace SquadAutonomy
             {
                 if (settings->getDoSleep())
                 {
-                    if (settings->isSleepTime())
+                    if (settings->isRestTime())
                     {
-                        t->startTime = settings->getStartSleepTime();
-                        t->endTime = settings->getEndSleepTime();
-                    }
-                    else if (settings->getRestUntilHealed())
-                    {
-                        t->startTime = 0;
-                        t->endTime = 24;
+                        t->startTime = static_cast<int>(settings->getEndWorkTime());
+                        t->endTime = static_cast<int>(settings->getStartWorkTime());
                     }
                     if (taskData)
                     {
@@ -2545,16 +2540,17 @@ namespace SquadAutonomy
             TaskType type = thisptr->key();
             if (type == STAY_IN_HOME || type == SIT_AROUND)
             {
-                if (settings->getDoSleep() && !settings->isSleepTime())
+                if (!settings->isRestTime())
                 {
-                    return score *= 0.01;
+                    return score *= 0.001;
                 }
             }
-            if (type == MAN_A_TURRET || type == MAN_A_TURRET_ON_BUILDING || type == MAN_THE_GATE || type == AUTO_LABOURING_MINES ||
-                type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT ||
-                type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE || type == PATROL_TOWN || type == ATTACK_ENEMIES || type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME)
+            if (type == MAN_A_TURRET || type == MAN_A_TURRET_ON_BUILDING || 
+                type == MAN_THE_GATE || type == AUTO_LABOURING_MINES || type == AUTO_LABOURING_MINES_PRETEND ||
+                type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT || type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE || 
+                type == PATROL_TOWN || type == ATTACK_ENEMIES || type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME)
             {
-                if (settings->isSleepTime())
+                if (settings->isRestTime())
                 {
                     return 0.0;
                 }
@@ -2596,26 +2592,33 @@ namespace SquadAutonomy
                 race = character->getRace();
                 medical = character->getMedical();
             }
+            if (settings->getRestUntilHealed() && stateBroadcast && stateBroadcast->isSleeping)
+            {
+                if (race && !race->robot && medical && !medical->isFullyRested())
+                {
+                    //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
+                    return score = 10.0;
+                }
+            }
+            Faction* faction = squad->getFaction();
+            //for auto sleep task but idk if it even works
+            if (faction && faction->isPlayer)
+            {
+                //DebugLog("AutoSleep Task: " + Ogre::StringConverter::toString(score));
+                return score;
+            }
             if (settings->getDoSleep())
             {
                 //if need to rest
-                if (stateBroadcast && stateBroadcast->isSleeping)
+                if (settings->isRestTime())
                 {
                     if (race && !race->robot && medical && !medical->isFullyRested())
                     {
                         //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
-                        return score = 10.0;
+                        return score *= 10.0;
                     }
-                }
-                else
-                {
-                    if (settings->isSleepTime() && stateBroadcast && !stateBroadcast->isSleeping)
+                    if (stateBroadcast && !stateBroadcast->isSleeping)
                     {
-                        if (race && !race->robot && medical && !medical->isFullyRested())
-                        {
-                            //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
-                            return score *= 10.0;
-                        }
                         float minuteSinceLastSlept = thisptr->getStateBroadcast()->lastSlept.getHoursPassed() * 60.0;
                         if (minuteSinceLastSlept < 120.0)
                         {
@@ -2629,24 +2632,14 @@ namespace SquadAutonomy
                         {
                             return score *= 0.01;
                         }
-                        if (minuteSinceLastSlept < 960.0)
+                        if (minuteSinceLastSlept > 960.0)
                         {
                             return score *= 0.5;
                         }
                     }
                 }
             }
-            else
-            {
-                Faction* faction = squad->getFaction();
-                //for auto sleep task but idk if it even works
-                if (faction && faction->isPlayer)
-                {
-                    //DebugLog("AutoSleep Task: " + Ogre::StringConverter::toString(score));
-                    return score;
-                }
-                return 0.0;
-            }
+            return 0.0;
             Log("end gotobed");
         }
         return score;
@@ -2677,25 +2670,22 @@ namespace SquadAutonomy
                 race = character->getRace();
                 medical = character->getMedical();
             }
+            //if still injured and has get rest until healed
+            if (settings->getRestUntilHealed())
+            {
+                if (medical && !medical->restedState <= 0.9 && race && !race->robot)
+                {
+                    //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
+                    return 0.0;
+                }
+            }
             if (settings->getDoSleep())
             {
-                //if still injured and has get rest until healed
-                if (settings->getRestUntilHealed())
-                {
-                    if (medical && !medical->isFullyRested() && race && !race->robot)
-                    {
-                        //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
-                        return 0.0;
-                    }
-                }
-                if (settings->isSleepTime())
+                if (settings->isRestTime())
                 {
                     return 0.0;
                 }
-                else
-                {
-                    return 1.0;
-                }
+                else return 1.0;
             }
             Log("End score-getoutofbed");
         }
