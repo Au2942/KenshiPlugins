@@ -1,6 +1,6 @@
 #pragma once
 
-//based on Lucius modified lektor.h
+//based on Lucius and Genpretz lektor.h extension
 
 #include <kenshi/util/lektor.h>
 
@@ -53,4 +53,32 @@ namespace lektorEx
         lek.stuff[lek.count] = val;
         ++lek.count;
     }
+
+    template<typename T>
+    void removeAt(lektor<T>& lek, int index)
+    {
+        if (index + 1 < lek.count)
+        {
+            for (uint32_t i = index + 1; i < lek.count; ++i)
+            {
+                lek[i - 1] = lek[i];
+            }
+        }
+        --lek.count;
+    }
+
+    template<typename T>
+    void remove(lektor<T>& lek, const T& val)
+    {
+        for (uint32_t i = 0; i < lek.count; ++i)
+        {
+            if (lek[i] == val)
+            {
+                removeAt(lek, i);
+                break;
+            }
+        }
+    }
+
+
 }
