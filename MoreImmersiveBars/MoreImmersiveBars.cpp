@@ -6,6 +6,7 @@
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
 #include <kenshi/GameData.h>
+#include <kenshi/Dialogue.h>
 #include <kenshi/Character.h>
 #include <kenshi/RaceData.h>
 #include <kenshi/CharBody.h>
@@ -20,6 +21,8 @@
 #include <kenshi/Town.h>
 #include <kenshi/AI/Blackboard.h>
 #include <kenshi/Building/UseableStuff.h>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/lock_guard.hpp>
 
 #include <core/Functions.h>
 
@@ -30,6 +33,7 @@
 
 
 std::map<hand, float>* rentedBeds = nullptr;
+typedef Ogre::StringConverter stringConverter;
 namespace MoreImmersiveBars
 {
     lektor<UseableStuff*> GetCurrentTownBarsBeds(Character* character)
@@ -126,6 +130,8 @@ namespace MoreImmersiveBars
         UseableStuff* optimalBed = nullptr;
         Building* building = nullptr;
         if (!character) return nullptr;
+        AI* ai = character->ai;
+        if (!ai) return nullptr;
         RaceData* race = character->getRace();
         hand buildingHand = character->isInsideBuilding;
         if (buildingHand) building = buildingHand.getBuilding();
@@ -142,7 +148,7 @@ namespace MoreImmersiveBars
             for (uint32_t i = 0; i < barBeds.size(); ++i)
             {
                 bool isRented = false;
-
+                if (!barBeds[i]) continue;
                 UseableStuff* b = barBeds[i]->getUseableStuff();
                 if (!b) continue;
                 //check if rented by player
@@ -154,7 +160,7 @@ namespace MoreImmersiveBars
                         UseableStuff* rentedBed = nullptr;
                         Building* bedBuilding = nullptr;
                         if (it->first) bedBuilding = it->first.getBuilding();
-                        if (building) rentedBed = bedBuilding->getUseableStuff();
+                        if (bedBuilding) rentedBed = bedBuilding->getUseableStuff();
                         if (rentedBed)
                         {
                             //TODO: check time as well
@@ -167,7 +173,8 @@ namespace MoreImmersiveBars
                                 //DebugLog("Time now: " + Ogre::StringConverter::toString(currentTime) + " rented time: " + Ogre::StringConverter::toString(it->second));
                                 if (currentTime - it->second < 24.0)
                                 {
-                                    return nullptr;
+                                    isRented = true;
+                                    break;
                                 }
                             }
                         }
@@ -175,12 +182,16 @@ namespace MoreImmersiveBars
                 }
                 if (isRented) continue;
                 //try to use the same bed again - prevent beds hopping
-                if (b->getOccupant() == character->getHandle())
+                if (b->getOccupant())
                 {
-                    optimalBed = b;
-                    break;
+                    if (b->getOccupant() == character->getHandle())
+                    {
+                        optimalBed = b;
+                        break;
+                    }
+                    else continue;
                 } 
-                else if (b->getCostToUse(character) >= 0)
+                if (b->getCostToUse(character) >= 0)
                 {
                     float distanceScore = character->ai->scoreDistanceTo(b, false);
                     if (maxScore < distanceScore)
@@ -199,7 +210,7 @@ namespace MoreImmersiveBars
     int (*_NV_getCostToUse_orig)(UseableStuff* thisptr, Character* who);
     int _NV_getCostToUse_hook(UseableStuff* thisptr, Character* who)
     {
-        if (thisptr->specialFunction == BF_BED)
+        if (thisptr && (thisptr->specialFunction == BF_BED || thisptr->specialFunction == BF_SKELETON_BED))
         {
             Blackboard* bb = nullptr; 
             if (who) bb = who->getBlackboard();
@@ -221,11 +232,10 @@ namespace MoreImmersiveBars
                         building = thisptr->furnitureParentBuilding();
                     }
                 }
-                if (building->getBuildingDesignation() == BD_BAR)
+                if (building && building->getBuildingDesignation() == BD_BAR)
                 {
                     if (who && who->getFaction() && who->getFaction()->notARealFaction)
                     {
-                        //TODO: change to getting the squad template data->cost to use bed later
                         return 0;
                     }
                 }
@@ -233,6 +243,10 @@ namespace MoreImmersiveBars
         }
         return _NV_getCostToUse_orig(thisptr, who);
     }
+
+    const float relaxDurationMin = 1.0;
+    const float relaxDurationFuzz = 4.0;
+    const bool relaxDurationBased = false;
 
     //do this in setup parameter for current goal instead?
     void (*_NV_setCurrentGoal_orig)(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri);
@@ -250,22 +264,28 @@ namespace MoreImmersiveBars
         if (character) bb = character->getBlackboard();
         if (bb)
         {
-            std::string aiPackageName = bb->getCurrentAIPackageName();
-            if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" || aiPackageName == "town thugs night patrol + day bar")
+            if (t && t->key() == RELAX_IN_TOWN_PACKAGE)
             {
-                if (t) data = t->taskData;
-                if (data)
+                std::string aiPackageName = bb->getCurrentAIPackageName();
+                if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" 
+                    || aiPackageName == "town thugs night patrol + day bar")
                 {
-                    min = data->durationMin;
-                    fuzz = data->durationFuzz;
-                    isDurationBased = data->isDurationBased;
-                    resetTaskData = true;
-                    data->setDurationBased(0.5, 8.0, false);
+                    data = t->taskData;
+                    if (data)
+                    {
+                        min = data->durationMin;
+                        fuzz = data->durationFuzz;
+                        isDurationBased = data->isDurationBased;
+                        resetTaskData = true;
+                        //DebugLog("Relax Original: " + stringConverter::toString(min) + ' ' + stringConverter::toString(fuzz) + ' ' + stringConverter::toString(isDurationBased));
+                        data->setDurationBased(relaxDurationMin, relaxDurationFuzz, relaxDurationBased);
+                    }
                 }
-
             }
         }
+        /*========Actual Function=======*/
         _NV_setCurrentGoal_orig(thisptr, t, score, pri);
+        /*==============================*/
         if (resetTaskData)
         {
             if (data)
@@ -275,7 +295,111 @@ namespace MoreImmersiveBars
         }
     }
 
-    float (*runTargetFind_orig)(TaskData* thisptr, AI* ai, const hand& _target, hand& out, bool justAsking);
+    void (*setTaskExpiryTimer_orig)(AITaskSytem* thisptr);
+    void setTaskExpiryTimer_hook(AITaskSytem* thisptr)
+    {
+        Blackboard* bb = nullptr;
+        Character* character = nullptr;
+        TaskData* data = nullptr;
+        Tasker* currentDurationTT = nullptr;
+        float min = 0;
+        float fuzz = 0;
+        bool isDurationBased = false;
+        bool resetTaskData = false;
+        if (thisptr)
+        {
+            character = thisptr->character;
+            currentDurationTT = thisptr->getCurrentDurationTimedTask();
+        }
+
+        if (character) bb = character->getBlackboard();
+        if (bb)
+        {
+            if (currentDurationTT && currentDurationTT->key() == RELAX_IN_TOWN_PACKAGE)
+            {
+                std::string aiPackageName = bb->getCurrentAIPackageName();
+                if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering"
+                    || aiPackageName == "town thugs night patrol + day bar")
+                {
+                    data = currentDurationTT->taskData;
+                    if (data)
+                    {
+                        min = data->durationMin;
+                        fuzz = data->durationFuzz;
+                        isDurationBased = data->isDurationBased;
+                        resetTaskData = true;
+                        //DebugLog("Relax Original: " + stringConverter::toString(min) + ' ' + stringConverter::toString(fuzz) + ' ' + stringConverter::toString(isDurationBased));
+                        data->setDurationBased(relaxDurationMin, relaxDurationFuzz, relaxDurationBased);
+                    }
+                }
+            }
+        }
+        /*========Actual Function=======*/
+        setTaskExpiryTimer_orig(thisptr);
+        /*==============================*/
+        if (resetTaskData)
+        {
+            if (data)
+            {
+                data->setDurationBased(min, fuzz, isDurationBased);
+            }
+        }
+    }
+
+    // Hook the method (call interception) — the primary mod mechanism
+    void (*update4Frame_orig)(AITaskSytem* thisptr, Ogre::Vector3 position, float time);
+    void update4Frame_hook(AITaskSytem* thisptr, Ogre::Vector3 position, float time)
+    {
+        Blackboard* bb = nullptr;
+        Character* character = nullptr;
+        TaskData* data = nullptr;
+        Tasker* currentDurationTT = nullptr;
+        float min = 0;
+        float fuzz = 0;
+        bool isDurationBased = false;
+        bool resetTaskData = false;
+        if (thisptr)
+        {
+            character = thisptr->character;
+            currentDurationTT = thisptr->getCurrentDurationTimedTask();
+        }
+
+        if (character) bb = character->getBlackboard();
+        if (bb)
+        {
+            if (currentDurationTT && currentDurationTT->key() == RELAX_IN_TOWN_PACKAGE)
+            {
+                std::string aiPackageName = bb->getCurrentAIPackageName();
+                if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering"
+                    || aiPackageName == "town thugs night patrol + day bar")
+                {
+                    data = currentDurationTT->taskData;
+                    if (data)
+                    {
+                        min = data->durationMin;
+                        fuzz = data->durationFuzz;
+                        isDurationBased = data->isDurationBased;
+                        resetTaskData = true;
+                        //DebugLog("Relax Original: " + stringConverter::toString(min) + ' ' + stringConverter::toString(fuzz) + ' ' + stringConverter::toString(isDurationBased));
+                        data->setDurationBased(relaxDurationMin, relaxDurationFuzz, relaxDurationBased);
+                    }
+                }
+            }
+        }
+        /*========Actual Function=======*/
+        update4Frame_orig(thisptr, position, time);
+        /*==============================*/
+        if (resetTaskData)
+        {
+            if (data)
+            {
+                data->setDurationBased(min, fuzz, isDurationBased);
+            }
+        }
+    }
+    // install (in startPlugin):
+
+    /*float (*runTargetFind_orig)(TaskData* thisptr, AI* ai, const hand& _target, hand& out, bool justAsking);
     float runTargetFind_hook(TaskData* thisptr, AI* ai, const hand& _target, hand& out, bool justAsking)
     {
         float score = runTargetFind_orig(thisptr, ai, _target, out, justAsking);
@@ -284,7 +408,8 @@ namespace MoreImmersiveBars
             if (!ai) return score;
             if (!(ai->getBlackboard())) return score;
             std::string aiPackageName = ai->getBlackboard()->getCurrentAIPackageName();
-            if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" || aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr")
+            if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" || 
+                aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr" || aiPackageName == "Civilian")
             {
                 Character* ch = ai->getCharacter();
                 if (ch)
@@ -296,11 +421,43 @@ namespace MoreImmersiveBars
                         return 1.0f;
                     }
                     out = nullptr;
-                    return -1.0f;
+                    return 0.0f;
                 }
             }
         }
         return score;
+    }*/
+    float (*runTargetFinder_orig)(AI::AIResultsCacher* thisptr, float (AI::* func)(const hand&, hand&, bool), const TaskMatch& key, hand& out);
+    float runTargetFinder_hook(AI::AIResultsCacher* thisptr, float (AI::* func)(const hand&, hand&, bool), const TaskMatch& key, hand& out)
+    {
+        AI* ai = nullptr;
+        Blackboard* bb = nullptr;
+        if (thisptr) ai = thisptr->ai;
+        if (ai)
+        {
+            bb = ai->getBlackboard();
+            if (bb && key && key.key() == GO_HOME_AND_GO_TO_BED)
+            {
+                std::string aiPackageName = bb->getCurrentAIPackageName();
+                if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" ||
+                    aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr" || aiPackageName == "Civilian")
+                {
+                    Character* ch = ai->getCharacter();
+                    if (ch)
+                    {
+                        hand* bed = MoreImmersiveBars::FindOptimalCurrentBarBed(ch);
+                        if (bed)
+                        {
+                            out = *bed;
+                            return 1.0f;
+                        }
+                        out = nullptr;
+                        return 0.0f;
+                    }
+                }
+            }
+        }
+        return runTargetFinder_orig(thisptr, func, key, out);
     }
 
     float (*score_orig)(Tasker* thisptr, AI* ai);
@@ -319,7 +476,7 @@ namespace MoreImmersiveBars
         }
         if (thisptr && thisptr->key() == GO_HOME_AND_GO_TO_BED)
         {
-            if (bb && platoon)
+            if (bb && character && platoon)
             {
                 std::string aiPackageName = bb->getCurrentAIPackageName();
                 StateBroadcastData* state = character->getStateBroadcast();
@@ -328,22 +485,25 @@ namespace MoreImmersiveBars
 
                     //DebugLog(thisptr->character->displayName + " is trying to sleep!");
                     //DebugLog("Squad leader is " + thisptr->character->getSquadLeader()->displayName);
-                    int maxSlackers = (bb->characterCount - 1) / 2;
+                    int maxSlackers = (bb->characterCount) / 2;
                     if (maxSlackers < 1) maxSlackers = 1;
                     int currentSlackers = bb->howManyGuysDoingThisGoal(thisptr, character);
                         
                     //DebugLog(" max slackers: " + Ogre::StringConverter::toString(maxSlackers) + " current: " + Ogre::StringConverter::toString(currentSlackers));
-                    if (currentSlackers >= maxSlackers)
+                    if (currentSlackers > maxSlackers)
                     {
                         return 0.0;
                     }
                 }
-                if (state)
+                if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" 
+                    || aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr")
                 {
-                    if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" || aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr")
+                    if (state)
                     {
-                        if (state->lastSlept < 720.0) return score * 0.1;
-                        if (state->lastSlept > 960.0) return score * 5.0;
+                        if (state->lastSlept < 180.0) return score * 0.1;
+                        if (state->lastSlept < 360.0) return score * 0.3;
+                        if (state->lastSlept < 640.0) return score * 0.5;
+                        if (state->lastSlept > 1080.0) return score * 10.0;
                     }
                 }
             }
@@ -351,6 +511,29 @@ namespace MoreImmersiveBars
         }
         return score;
     }
+
+    bool (*checkTags_orig)(DialogLineData* thisptr, Character* me, Character* target);
+    bool checkTags_hook(DialogLineData* thisptr, Character* me, Character* target)
+    {
+        Blackboard* bb = nullptr;
+        if (target) bb = me->getBlackboard();
+        if (bb) 
+        {
+            std::string aiPackageName = bb->getCurrentAIPackageName();
+            if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" 
+                || aiPackageName == "town thugs night patrol + day bar" || aiPackageName == "Shop-24hr")
+            {
+                StateBroadcastData* statebroadcast = me->getStateBroadcast();
+                if (statebroadcast && statebroadcast->isSleeping)
+                {
+                    return false;
+                }
+            }
+        }
+        return checkTags_orig(thisptr, me, target);
+    }
+
+
 }
 
 
@@ -374,13 +557,24 @@ __declspec(dllexport) void startPlugin()
         }
     }
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&UseableStuff::_NV_getCostToUse), &MoreImmersiveBars::_NV_getCostToUse_hook, &MoreImmersiveBars::_NV_getCostToUse_orig))
-        ErrorLog("Could not add getCostToUse hook!");
+        ErrorLog("Could not add UseableStuff::_NV_getCostToUse hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &MoreImmersiveBars::_NV_setCurrentGoal_hook, &MoreImmersiveBars::_NV_setCurrentGoal_orig))
-        ErrorLog("Could not add setCurrentGoal hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &MoreImmersiveBars::runTargetFind_hook, &MoreImmersiveBars::runTargetFind_orig))
-        ErrorLog("Could not add runTargetFind hook!");
+        ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &MoreImmersiveBars::setTaskExpiryTimer_hook, &MoreImmersiveBars::setTaskExpiryTimer_orig))
+        ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::update4Frame), &MoreImmersiveBars::update4Frame_hook, &MoreImmersiveBars::update4Frame_orig))
+        ErrorLog("Could not add AITaskSytem::update4Frame hook!");
+    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &MoreImmersiveBars::runTargetFind_hook, &MoreImmersiveBars::runTargetFind_orig))
+        ErrorLog("Could not add TaskData::runTargetFind hook!");*/
+
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &MoreImmersiveBars::runTargetFinder_hook, &MoreImmersiveBars::runTargetFinder_orig))
+        ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Tasker::score), &MoreImmersiveBars::score_hook, &MoreImmersiveBars::score_orig))
-        ErrorLog("Could not add runTargetFind hook!");
+        ErrorLog("Could not add Tasker::score hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&DialogLineData::checkTags), &MoreImmersiveBars::checkTags_hook, &MoreImmersiveBars::checkTags_orig))
+        ErrorLog("Could not add DialogLineData::checkTags hook!");
+
+
     KenshiLib::ApplyQueuedHooks();
     DebugLog("Mod started");
 }
