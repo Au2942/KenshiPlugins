@@ -2,6 +2,11 @@
 
 #include <ogre/OgreStringConverter.h>
 
+#include <kenshi/gui/OptionsWindow.h>
+#include <kenshi/gui/ToolTip.h>
+#include <kenshi/gui/DatapanelGUI.h>
+#include <kenshi/gui/DataPanelLine.h>
+
 #include <kenshi/Kenshi.h>
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
@@ -21,8 +26,7 @@
 #include <kenshi/Town.h>
 #include <kenshi/AI/Blackboard.h>
 #include <kenshi/Building/UseableStuff.h>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/lock_guard.hpp>
+
 
 #include <core/Functions.h>
 
@@ -33,6 +37,8 @@
 
 
 std::map<hand, float>* rentedBeds = nullptr;
+std::string* _MainColorCode = nullptr;
+
 typedef Ogre::StringConverter stringConverter;
 namespace MoreImmersiveBars
 {
@@ -512,12 +518,127 @@ namespace MoreImmersiveBars
         return score;
     }
 
+    std::string cfgPath = "";
+
+    bool noSleepTalk = true;
+
+    void (*OptionsWindow_create_orig)(OptionsWindow* thisptr);
+    void OptionsWindow_create_hook(OptionsWindow* thisptr)
+    {
+        OptionsWindow_create_orig(thisptr);
+        auto tabCount = thisptr->tabs->getItemCount();
+        std::vector<int> catList(tabCount);
+        int maxCat = 0;
+        DatapanelGUI* generalPanel = nullptr;
+        for (size_t i = 0; i < tabCount; i++)
+        {
+            auto panel = *(thisptr->tabs->getItemDataAt<DatapanelGUI*>(i, false));
+            //From KEP: general category = 0x1
+            if (panel && panel->getCurrentCategory() == 0x1)
+            {
+                generalPanel = panel;
+            }
+        }
+        if (generalPanel)
+        {
+            auto tooltip = thisptr->tooltip;
+            auto textbox = generalPanel->setLineText("", *_MainColorCode + "[More Immersive Bars]", 0x1, true, MyGUI::Align::Left);
+            auto checkbox = generalPanel->setLineCheckbox("No sleep talking", &noSleepTalk, 0x1);
+            tooltip->setup(checkbox->getTextBox(), "Disable the ability to talk for sleeping NPCs (only those with AI involving bars) for a more immersive experience");
+            
+        }
+    }
+
+    std::string GetCurrentDLLDirectory() {
+        char path[MAX_PATH];
+        HMODULE hModule = NULL;
+
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCSTR)&GetCurrentDLLDirectory, &hModule)) {
+
+            GetModuleFileNameA(hModule, path, MAX_PATH);
+            std::string fullPath(path);
+
+            size_t lastSlash = fullPath.find_last_of("\\/");
+            if (std::string::npos != lastSlash) {
+                return fullPath.substr(0, lastSlash + 1);
+            }
+            return fullPath;
+        }
+        return "";
+    }
+
+    void init()
+    {
+        cfgPath = GetCurrentDLLDirectory() + "MoreImmersiveBars.cfg";
+        std::ifstream cfgFile(cfgPath);
+        if (!cfgFile.is_open())
+        {
+            DebugLog("Loading config: Cannot open file at " + cfgPath);
+        }
+        else
+        {
+            std::string line = "";
+            while (std::getline(cfgFile, line))
+            {
+                std::string dataLine = "";
+                std::string type = "";
+                line.erase(0, line.find_first_not_of(" \t"));
+                size_t colon = line.find(':');
+
+                if (colon == std::string::npos)
+                {
+                    continue;
+                }
+                type = line.substr(0, colon);
+                //DebugLog(type);
+                //get squad
+                if (type == "DialogueWhileSleep")
+                {
+                    dataLine = line.substr(colon + 1);
+                    dataLine.erase(0, dataLine.find_first_not_of(" \t"));
+                    //DebugLog(dataLine);
+                    if (dataLine == "false")
+                    {
+                        noSleepTalk = false;
+                    }
+                    continue;
+                }
+            }
+            DebugLog("Finished loading config file.");
+            cfgFile.close();
+        }
+    }
+
+    void (*saveOptions_orig)(OptionsWindow* thisptr);
+    void saveOptions_hook(OptionsWindow* thisptr)
+    {
+        saveOptions_orig(thisptr);
+        std::ofstream cfgFile(cfgPath, std::fstream::out | std::fstream::trunc);
+        if (!cfgFile.is_open())
+        {
+            cfgFile.open(cfgPath, std::fstream::out | std::fstream::app);
+            if (!cfgFile.is_open())
+            {
+                DebugLog("Config Save: Cannot open file");
+            }
+        }
+        else
+        {
+            cfgFile << "<Options>" << '\n';
+            cfgFile << "DialogueWhileSleep: " << Ogre::StringConverter::toString(noSleepTalk) << '\n';
+            cfgFile << "</Options>";
+            cfgFile.close();
+        }
+    }
+
     bool (*checkTags_orig)(DialogLineData* thisptr, Character* me, Character* target);
     bool checkTags_hook(DialogLineData* thisptr, Character* me, Character* target)
     {
         Blackboard* bb = nullptr;
         if (target) bb = me->getBlackboard();
-        if (bb) 
+        if (noSleepTalk && bb)
         {
             std::string aiPackageName = bb->getCurrentAIPackageName();
             if (aiPackageName == "hang out in a bar" || aiPackageName == "hang out in a bar with slave gathering" 
@@ -532,8 +653,6 @@ namespace MoreImmersiveBars
         }
         return checkTags_orig(thisptr, me, target);
     }
-
-
 }
 
 
@@ -550,12 +669,16 @@ __declspec(dllexport) void startPlugin()
         if (platform == 1)
         {
             *(uintptr_t*)&rentedBeds = baseAddr + 0x212db18;
+            *(uintptr_t*)&_MainColorCode = baseAddr + 0x01f48238;
+
         }
         else if (platform == 0)
         {
             *(uintptr_t*)&rentedBeds = baseAddr + 0x212BA58;
+            *(uintptr_t*)&_MainColorCode = baseAddr + 0x01f46248;
         }
     }
+    MoreImmersiveBars::init();
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&UseableStuff::_NV_getCostToUse), &MoreImmersiveBars::_NV_getCostToUse_hook, &MoreImmersiveBars::_NV_getCostToUse_orig))
         ErrorLog("Could not add UseableStuff::_NV_getCostToUse hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &MoreImmersiveBars::_NV_setCurrentGoal_hook, &MoreImmersiveBars::_NV_setCurrentGoal_orig))
@@ -566,15 +689,16 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AITaskSytem::update4Frame hook!");
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &MoreImmersiveBars::runTargetFind_hook, &MoreImmersiveBars::runTargetFind_orig))
         ErrorLog("Could not add TaskData::runTargetFind hook!");*/
-
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &MoreImmersiveBars::runTargetFinder_hook, &MoreImmersiveBars::runTargetFinder_orig))
         ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Tasker::score), &MoreImmersiveBars::score_hook, &MoreImmersiveBars::score_orig))
         ErrorLog("Could not add Tasker::score hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::create), &MoreImmersiveBars::OptionsWindow_create_hook, &MoreImmersiveBars::OptionsWindow_create_orig))
+        ErrorLog("Could not add OptionsWindow::create constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &MoreImmersiveBars::saveOptions_hook, &MoreImmersiveBars::saveOptions_orig))
+        ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&DialogLineData::checkTags), &MoreImmersiveBars::checkTags_hook, &MoreImmersiveBars::checkTags_orig))
         ErrorLog("Could not add DialogLineData::checkTags hook!");
-
-
     KenshiLib::ApplyQueuedHooks();
     DebugLog("Mod started");
 }
