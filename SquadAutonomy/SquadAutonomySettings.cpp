@@ -65,10 +65,10 @@ void SquadAutonomySettings::_loadConfig()
                 }
 
                 type = line.substr(0, colon);
+                dataLine = line.substr(colon + 1);
                 //DebugLog(type);
                 if (type == "ShowOnMain")
                 {
-                    dataLine = line.substr(colon + 1);
                     dataLine.erase(0, dataLine.find_first_not_of(" \t"));
                     //DebugLog(dataLine);
                     if (dataLine == "false")
@@ -77,20 +77,53 @@ void SquadAutonomySettings::_loadConfig()
                     }
                     continue;
                 }
-                if (type == "UseFloatingPanel")
+                if (type == "LockPosition")
                 {
-                    dataLine = line.substr(colon + 1);
                     dataLine.erase(0, dataLine.find_first_not_of(" \t"));
                     //DebugLog(dataLine);
-                    if (dataLine == "true")
+                    if (dataLine == "false")
                     {
-                        useFloatingPanel = true;
+                        lockPosition = false;
                     }
+                    continue;
+                }
+                if (type == "BtnWidth")
+                {
+                    if (dataLine == "") continue;
+                    std::stringstream ss(dataLine);
+                    ss >> btnWidth;
+                    continue;
+                }
+                if (type == "BtnHeight")
+                {
+                    if (dataLine == "") continue;
+                    std::stringstream ss(dataLine);
+                    ss >> btnHeight;
+                    continue;
+                }
+                if (type == "BtnLeft")
+                {
+                    if (dataLine == "") continue;
+                    std::stringstream ss(dataLine);
+                    ss >> btnLeft;
+                    continue;
+                }
+                if (type == "BtnTop")
+                {
+                    if (dataLine == "") continue;
+                    std::stringstream ss(dataLine);
+                    ss >> btnTop;
+                    continue;
+                }
+                if (type == "BtnFontSize")
+                {
+                    if (dataLine == "") continue;
+                    std::stringstream ss(dataLine);
+                    ss >> btnFontSize;
                     continue;
                 }
                 if (type == "ShowInSquad")
                 {
-                    dataLine = line.substr(colon + 1);
                     dataLine.erase(0, dataLine.find_first_not_of(" \t"));
                     //DebugLog(dataLine);
                     if (dataLine == "false")
@@ -101,7 +134,6 @@ void SquadAutonomySettings::_loadConfig()
                 }
                 if (type == "EnableLogging")
                 {
-                    dataLine = line.substr(colon + 1);
                     dataLine.erase(0, dataLine.find_first_not_of(" \t"));
                     //DebugLog(dataLine);
                     if (dataLine == "true")
@@ -491,7 +523,7 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
             {
                 DebugLog("Load Squad " + squad->activePlatoon->getName());
                 SquadSettingsInfo* settingsInfo = new SquadSettingsInfo(squad);
-                ResetAI(squad);
+                ResetAI(squad, false);
                 settingsInfo->unassignSquadHome();
                 if (home)
                 {
@@ -513,7 +545,7 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
                 settingsInfo->setDoSleep(doSleep);
                 settingsInfo->setRestUntilHealed(restUntilHealed);
                 settingsInfo->setUsePaidBeds(usePaidBeds);
-                settingsInfo->enableAutonomy(enable);
+                settingsInfo->enableAutonomy(enable, false);
                 lektorEx::push_back(squadSettings, settingsInfo);
             }
         }
@@ -666,18 +698,18 @@ std::map<int, lektor<GameData*>> SquadSettingsInfo::getSquadPackages()
     return _squadPackages;
 }
 
-bool SquadSettingsInfo::enableAutonomy(bool enable)
+bool SquadSettingsInfo::enableAutonomy(bool enable, bool endAction)
 {
     bool success = false;
     if (_enabled != enable)
     {
         if (enable)
         {
-            success = SetAI(_squad, _squadPackages);
+            success = SetAI(_squad, _squadPackages, endAction);
         }
         else
         {
-            success = ResetAI(_squad);
+            success = ResetAI(_squad, endAction);
         }
 
         if (success)

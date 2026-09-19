@@ -217,10 +217,10 @@ void SquadAutonomyPanel::refresh()
 
 void SquadAutonomyPanel::AutonomyOptions::refresh()
 {
-    if (this->_panel == nullptr)
+    if (!this->_panel)
         return;
-    if (this->_selectedSquad == nullptr) return;
-    if (!this->_selectedSquad->isFullyLoaded() || !this->_selectedSquad->activePlatoon) return;
+    if (!this->_selectedSquad) return;
+    if (!this->_selectedSquad->activePlatoon) return;
     if (!SquadAutonomySettings::initialized) return;
     this->_panel->setLineSpacing(24.0f);
     this->_panel->clearPage(this->_category);
@@ -267,7 +267,7 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
 void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::initialized) return;
-    if (this->_selectedSquad == nullptr) return;
+    if (!this->_selectedSquad) return;
     auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
     squadSettings->setManTurrets(_manTurrets);
     squadSettings->setStartWorkTime(_startWorkTime);
@@ -279,14 +279,14 @@ void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
 void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::initialized) return;
-    if (!this->_selectedSquad->isFullyLoaded()) return;
+    if (!this->_selectedSquad) return;
     updateOptions(line);
     refresh();
 }
 void SquadAutonomyPanel::show()
 {
     if (!SquadAutonomySettings::initialized) return;
-    if (!this->_selectedSquad->isFullyLoaded()) return;
+    if (!this->_selectedSquad) return;
     this->_panel->changeCategory(this->_category);
     this->_panel->show(true);
     MyGUI::LayerManager::getInstancePtr()->upLayerItem(this->_panel->getWidget());
@@ -307,7 +307,7 @@ bool SquadAutonomyPanel::isVisible()
 void SquadAutonomyPanel::selectSquad(Platoon* squad)
 {
     if (!SquadAutonomySettings::initialized) return;
-    if (!squad->isFullyLoaded()) return;
+    if (!squad) return;
     _selectedSquad = squad;
     _options->setSelectedSquad(squad);
 }
