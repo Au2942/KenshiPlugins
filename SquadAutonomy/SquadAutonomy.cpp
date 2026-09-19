@@ -470,7 +470,7 @@ namespace SquadAutonomy
         OptionsWindow_create_orig(thisptr);
         SquadAutonomyModOptions* modOptions = SquadAutonomyModOptions::getSingletonPtr();
         if (!modOptions) return;
-        DebugLog("mod options initialized!");
+        //DebugLog("mod options initialized!");
         auto tabCount = thisptr->tabs->getItemCount();
         std::vector<int> catList(tabCount);
         int maxCat = 0;

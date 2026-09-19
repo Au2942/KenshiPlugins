@@ -17,7 +17,7 @@ namespace SquadAutonomy
         void setPackages(const std::map<int, lektor<GameData*> >& packages);
         void clearPackages();
         std::map<int, lektor<GameData*>> getSquadPackages();
-        bool enableAutonomy(bool enable);
+        bool enableAutonomy(bool enable, bool endAction = true);
         void updateSquadPackages();
         Building* getBuilding(bool home);
         void setBuilding(Building* building, bool home);
