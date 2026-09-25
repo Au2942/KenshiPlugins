@@ -8,8 +8,11 @@
 
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
+#include <kenshi/Character.h>
 #include <kenshi/Platoon.h>
 #include <kenshi/Faction.h>
+#include <kenshi/AI/AITaskSystem.h>
+#include <kenshi/Tasker.h>
 #include <kenshi/Building/Building.h>
 #include <kenshi/util/lektor.h>
 
@@ -19,9 +22,9 @@ using namespace SquadAutonomy;
 
 bool SquadAutonomySettings::initialized = false;
 
-SquadAutonomySettings::SquadAutonomySettings() : _cfgFileName("SquadAutonomy.cfg")
+SquadAutonomySettings::SquadAutonomySettings() : _cfgFileName(L"SquadAutonomy.cfg")
 {
-    if (modPath != "") _cfgPath = modPath + _cfgFileName;
+    if (modPath != L"") _cfgPath = modPath + _cfgFileName;
     else _cfgPath = GetCurrentDLLDirectory() + _cfgFileName;
     _loadConfig();
     _initGameData();
@@ -36,23 +39,25 @@ SquadAutonomySettings* SquadAutonomySettings::getSingletonPtr()
 }
 void SquadAutonomySettings::_loadConfig()
 {
-    DebugLog("Finding Config file at: " + _cfgPath);
-    std::fstream cfgFile(_cfgPath, std::fstream::in | std::fstream::out | std::fstream::app);
+    DebugLog("Finding Config file at: " + converter.to_bytes(_cfgPath));
+    std::wfstream cfgFile(_cfgPath, std::wfstream::in | std::wfstream::out | std::wfstream::app);
     if (!cfgFile.is_open())
     {
         DebugLog("Load: Cannot open config file");
         return;
     }
     DebugLog("Reading config file...");
-    std::string line;
+    std::wstring wline;
     std::string token;
-    while (std::getline(cfgFile, line))
+    while (std::getline(cfgFile, wline))
     {
+        std::string line = converter.to_bytes(wline);
         //DebugLog(line);
         if (line == "<Options>")
         {
-            while (std::getline(cfgFile, line))
+            while (std::getline(cfgFile, wline))
             {
+                std::string line = converter.to_bytes(wline);
                 if (line == "</Options>") break;
                 int colon = -1;
                 std::string type = "";
@@ -146,8 +151,9 @@ void SquadAutonomySettings::_loadConfig()
         }
         else if (line == "<Packages>")
         {
-            while (std::getline(cfgFile, line))
+            while (std::getline(cfgFile, wline))
             {
+                std::string line = converter.to_bytes(wline);
                 if (line == "</Packages>")
                 {
                     DebugLog("Done reading packages in config");
@@ -219,9 +225,9 @@ void SquadAutonomySettings::_initGameData()
     }
 }
 
-bool SquadAutonomySettings::saveSettings(std::string savePath)
+bool SquadAutonomySettings::saveSettings(std::wstring savePath)
 {
-    std::ofstream saveFile(savePath, std::fstream::out | std::fstream::trunc);
+    std::wofstream saveFile(savePath, std::wfstream::out | std::wfstream::trunc);
     if (!saveFile.is_open())
     {
         DebugLog("Save: Cannot open file");
@@ -229,56 +235,56 @@ bool SquadAutonomySettings::saveSettings(std::string savePath)
     }
     else
     {
-        DebugLog("Saving settings to " + savePath);
+        DebugLog("Saving settings to " + converter.to_bytes(savePath));
         auto settings = SquadAutonomySettings::getSingletonPtr();
         if (!settings) return false;
         //DebugLog("Saving " + Ogre::StringConverter::toString(squadSettings.size()) + " squads");
         for (int i = 0; i < settings->squadSettings.size(); ++i)
         {
-            auto squadSettings = settings->squadSettings[i];
-            Platoon* platoon = squadSettings->getSquad();
-            if (!platoon) continue;
-            if (!platoon->activePlatoon) continue;
+            auto settingsInfo = settings->squadSettings[i];
+            Platoon* squad = settingsInfo->getSquad();
+            if (!squad) continue;
+            if (!squad->activePlatoon) continue;
             //DebugLog("Saving squad " + Ogre::StringConverter::toString(i));
-            hand platoonHand = platoon->getHandle();
+            hand platoonHand = squad->getHandle();
             if (platoonHand)
             {
-                saveFile << "Squad: <" << platoon->activePlatoon->getName() << "> ";
-                saveFile << platoonHand.index << ' ';
-                saveFile << platoonHand.serial << ' ';
-                saveFile << platoonHand.type << ' ';
-                saveFile << platoonHand.container << ' ';
-                saveFile << platoonHand.containerSerial << '\n';
-                saveFile << "\tEnable: " << Ogre::StringConverter::toString(squadSettings->isEnabled()) << '\n';
+                saveFile << converter.from_bytes("Squad: <" + squad->activePlatoon->getName() + "> ");
+                saveFile << platoonHand.index << L' ';
+                saveFile << platoonHand.serial << L' ';
+                saveFile << platoonHand.type << L' ';
+                saveFile << platoonHand.container << L' ';
+                saveFile << platoonHand.containerSerial << L'\n';
+                saveFile << converter.from_bytes("\tEnable: " + Ogre::StringConverter::toString(settingsInfo->isEnabled()) + '\n');
             }
-            Building* home = squadSettings->getBuilding(true);
+            Building* home = settingsInfo->getBuilding(true);
             saveFile << "\tHomeBuilding:";
             if (home)
             {
                 hand homeHand = home->getHandle();
-                saveFile << " <" << home->displayName << "> ";
-                saveFile << homeHand.index << ' ';
-                saveFile << homeHand.serial << ' ';
-                saveFile << homeHand.type << ' ';
-                saveFile << homeHand.container << ' ';
+                saveFile << converter.from_bytes(" <" + home->displayName + "> ");
+                saveFile << homeHand.index << L' ';
+                saveFile << homeHand.serial << L' ';
+                saveFile << homeHand.type << L' ';
+                saveFile << homeHand.container << L' ';
                 saveFile << homeHand.containerSerial;
             }
             saveFile << '\n';
-            Building* work = squadSettings->getBuilding(false);
+            Building* work = settingsInfo->getBuilding(false);
             saveFile << "\tWorkBuilding:";
             if (work)
             {
                 hand workHand = work->getHandle();
-                saveFile << " <" << work->displayName << "> ";
-                saveFile << workHand.index << ' ';
-                saveFile << workHand.serial << ' ';
-                saveFile << workHand.type << ' ';
-                saveFile << workHand.container << ' ';
+                saveFile << converter.from_bytes(" <" + work->displayName + "> ");
+                saveFile << workHand.index << L' ';
+                saveFile << workHand.serial << L' ';
+                saveFile << workHand.type << L' ';
+                saveFile << workHand.container << L' ';
                 saveFile << workHand.containerSerial;
             }
-            saveFile << '\n';
-            auto packages = squadSettings->getSquadPackages();
-            saveFile << "\tPackages:\n";
+            saveFile << L'\n';
+            auto packages = settingsInfo->getSquadPackages();
+            saveFile << converter.from_bytes("\tPackages:\n");
             if (packages.size() > 0)
             {
                 for (auto it = packages.begin(); it != packages.end(); ++it)
@@ -287,44 +293,46 @@ bool SquadAutonomySettings::saveSettings(std::string savePath)
 
                     for (int j = 0; j < data.size(); ++j)
                     {
-                        saveFile << "\t\t" << it->first << ':';
-                        saveFile << " <" << data[j]->name << '>';
-                        saveFile << '\n';
+                        saveFile << converter.from_bytes("\t\t") << it->first << L':';
+                        saveFile << converter.from_bytes(" <" + data[j]->name + '>');
+                        saveFile << L'\n';
                     }
                 }
             }
-            saveFile << "\tEndPackages:" << '\n';
-            saveFile << "\tOptions:" << '\n';
-            saveFile << "\t\tStartWorkTime: " << squadSettings->getStartWorkTime() << '\n';
-            saveFile << "\t\tEndWorkTime: " << squadSettings->getEndWorkTime() << '\n';
-            saveFile << "\t\tManTurrets: " << Ogre::StringConverter::toString(squadSettings->getManTurrets()) << '\n';
-            saveFile << "\t\tDoSleep: " << Ogre::StringConverter::toString(squadSettings->getDoSleep()) << '\n';
-            saveFile << "\t\t\tRestUntilHealed: " << Ogre::StringConverter::toString(squadSettings->getRestUntilHealed()) << '\n';
-            saveFile << "\t\t\tUsePaidBeds: " << Ogre::StringConverter::toString(squadSettings->getUsePaidBeds()) << '\n';
-            saveFile << "\tEndOptions:" << '\n';
-            saveFile << "EndSquad:" << '\n';
+            saveFile << converter.from_bytes("\tEndPackages:") << L'\n';
+            saveFile << converter.from_bytes("\tOptions:") << L'\n';
+            saveFile << converter.from_bytes("\t\tStartWorkTime: ") << settingsInfo->getStartWorkTime() << L'\n';
+            saveFile << converter.from_bytes("\t\tEndWorkTime: ") << settingsInfo->getEndWorkTime() << L'\n';
+            saveFile << converter.from_bytes("\t\tManTurrets: " + Ogre::StringConverter::toString(settingsInfo->getManTurrets())) << L'\n';
+            saveFile << converter.from_bytes("\t\tCloseGate: " + Ogre::StringConverter::toString(settingsInfo->getCloseGate())) << L'\n';
+            saveFile << converter.from_bytes("\t\tDoSleep: " + Ogre::StringConverter::toString(settingsInfo->getDoSleep())) << L'\n';
+            saveFile << converter.from_bytes("\t\t\tRestUntilHealed: " + Ogre::StringConverter::toString(settingsInfo->getRestUntilHealed())) << L'\n';
+            saveFile << converter.from_bytes("\t\t\tUsePaidBeds: " + Ogre::StringConverter::toString(settingsInfo->getUsePaidBeds())) << L'\n';
+            saveFile << converter.from_bytes("\tEndOptions:") << L'\n';
+            saveFile << converter.from_bytes("EndSquad:") << L'\n';
         }
         return true;
     }
 }
 
-bool SquadAutonomySettings::loadSettings(std::string savePath)
+bool SquadAutonomySettings::loadSettings(std::wstring savePath)
 {
     //initialized = false;
-    std::ifstream saveFile(savePath);
+    std::wifstream saveFile(savePath);
     if (!saveFile.is_open())
     {
         DebugLog("Load: Cannot open save file");
         return false;
     }
 
-    DebugLog("Loading settings file at " + savePath);
+    DebugLog("Loading settings file at " + converter.to_bytes(savePath));
     squadSettings.clear();
-    std::string line;
+    std::wstring wline;
     std::string type;
 
-    while (std::getline(saveFile, line))
+    while (std::getline(saveFile, wline))
     {
+        std::string line = converter.to_bytes(wline);
         line.erase(0, line.find_first_not_of(" \t"));
         size_t colon = line.find(':');
 
@@ -347,6 +355,7 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
             float startTime = 0.0f;
             float endTime = 24.0f;
             bool manTurrets = false;
+            bool closeGate = false;
             bool doSleep = false;
             bool restUntilHealed = true;
             bool usePaidBeds = false;
@@ -359,8 +368,9 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
             else continue;
 
             //get home buildings and packages
-            while (std::getline(saveFile, line))
+            while (std::getline(saveFile, wline))
             {
+                std::string line = converter.to_bytes(wline);
                 line.erase(0, line.find_first_not_of(" \t"));
                 colon = line.find(':');
                 if (colon == std::string::npos)
@@ -406,8 +416,9 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
                 }
                 if (type == "Packages")
                 {
-                    while (std::getline(saveFile, line))
+                    while (std::getline(saveFile, wline))
                     {
+                        std::string line = converter.to_bytes(wline);
                         line.erase(0, line.find_first_not_of(" \t"));
                         int priority;
                         colon = line.find(':');
@@ -452,8 +463,9 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
                 }
                 if (type == "Options")
                 {
-                    while (std::getline(saveFile, line))
+                    while (std::getline(saveFile, wline))
                     {
+                        std::string line = converter.to_bytes(wline);
                         line.erase(0, line.find_first_not_of(" \t"));
                         colon = line.find(':');
                         if (colon == std::string::npos)
@@ -484,6 +496,14 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
                             if (dataLine == "true")
                             {
                                 manTurrets = true;
+                            }
+                            continue;
+                        }
+                        if (type == "CloseGate")
+                        {
+                            if (dataLine == "true")
+                            {
+                                closeGate = true;
                             }
                             continue;
                         }
@@ -523,8 +543,6 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
             {
                 DebugLog("Load Squad " + squad->activePlatoon->getName());
                 SquadSettingsInfo* settingsInfo = new SquadSettingsInfo(squad);
-                ResetAI(squad, false);
-                settingsInfo->unassignSquadHome();
                 if (home)
                 {
                     settingsInfo->setBuilding(home, true);
@@ -542,6 +560,7 @@ bool SquadAutonomySettings::loadSettings(std::string savePath)
                 settingsInfo->setStartWorkTime(startTime);
                 settingsInfo->setEndWorkTime(endTime);
                 settingsInfo->setManTurrets(manTurrets);
+                settingsInfo->setCloseGate(closeGate);
                 settingsInfo->setDoSleep(doSleep);
                 settingsInfo->setRestUntilHealed(restUntilHealed);
                 settingsInfo->setUsePaidBeds(usePaidBeds);
@@ -624,13 +643,13 @@ void SquadAutonomySettings::removeSquadSettings(Platoon* squad)
         lektorEx::removeAt(squadSettings, index);
     }
 }
-std::string SquadAutonomySettings::getConfigPath()
+std::wstring SquadAutonomySettings::getConfigPath()
 {
     return _cfgPath;
 }
 
 SquadSettingsInfo::SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr),
-_startWorkTime(0.0), _endWorkTime(24.0), _manTurrets(false), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true)
+_startWorkTime(0.0), _endWorkTime(24.0), _manTurrets(false), _closeGate(false), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true)
 {
     Faction* faction = squad->getFaction();
     if (faction)
@@ -698,6 +717,18 @@ std::map<int, lektor<GameData*>> SquadSettingsInfo::getSquadPackages()
     return _squadPackages;
 }
 
+bool SquadAutonomy::SquadSettingsInfo::hasTask(TaskType)
+{
+    for (int i = 0; i < _squadPackages.size(); ++i)
+    {
+        for (int j = 0; j < _squadPackages.size(); ++j)
+        {
+            lektor<GameData*> goals;
+            _squadPackages[i][j];
+        }
+    }
+}
+
 bool SquadSettingsInfo::enableAutonomy(bool enable, bool endAction)
 {
     bool success = false;
@@ -715,32 +746,21 @@ bool SquadSettingsInfo::enableAutonomy(bool enable, bool endAction)
         if (success)
         {
             _enabled = enable;
-            if (_enabled)
-            {
-                if (!assignSquadHome(false)) //try set home to work
-                {
-                    assignSquadHome(true); //if fail set home to home
-                }
-            }
-            else
-            {
-                unassignSquadHome();
-            }
         }
     }
     return success;
 }
-void SquadSettingsInfo::updateSquadPackages()
+void SquadSettingsInfo::updateSquadPackages(bool endAction)
 {
     if (!_enabled) return;
     bool success = false;
     if (_squadPackages.size() > 0)
     {
-        success = SetAI(_squad, _squadPackages);
+        success = SetAI(_squad, _squadPackages, endAction);
     }
     else
     {
-        success = ResetAI(_squad);
+        success = ResetAI(_squad, endAction);
     }
     if (success)
     {
@@ -773,42 +793,72 @@ void SquadSettingsInfo::setBuilding(Building* building, bool home)
 
 bool SquadSettingsInfo::assignSquadHome(bool home)
 {
+    ActivePlatoon* activeSquad = _squad->getActivePlatoon();
+    hand building = nullptr;
+    TownBase* town = nullptr;
+    bool success = false;
     if (home)
     {
         if (_homeBuilding)
         {
-            _squad->getOwnerships()->setHomeBuilding(_homeBuilding, _squad->getSquadType());
-            TownBase* town = _homeBuilding->getTown();
-            if (town)
-            {
-                _squad->getOwnerships()->setHomeTown(town, _squad->getSquadType());
-            }
-            return true;
+            building = _homeBuilding->getHandle();
+            town = _homeBuilding->getTown();
         }
     }
     else
     {
         if (_workBuilding)
         {
-            _squad->getOwnerships()->setHomeBuilding(_workBuilding, _squad->getSquadType());
-            TownBase* town = _workBuilding->getTown();
-            if (town)
-            {
-                _squad->getOwnerships()->setHomeTown(town, _squad->getSquadType());
-            }
-            return true;
+            building = _workBuilding->getHandle();
+            town = _workBuilding->getTown();
         }
     }
-    return false;
+
+    if (!building.isNull())
+    {
+        _squad->getOwnerships()->setHomeBuilding(building, _squad->getSquadType());
+        _squad->getOwnerships()->setHomeTown(town, _squad->getSquadType());
+        success = true;
+    }
+
+    if (success)
+    {
+        for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
+        {
+            Character* obj = reinterpret_cast<Character*>(*it);
+            Ownerships* own = obj->getOwnerships();
+            if (own)
+            {
+                own->setHomeBuilding(building, _squad->getSquadType());
+                own->setHomeTown(town, _squad->getSquadType());
+            }
+        }
+    }
+    
+    return success;
 }
 void SquadSettingsInfo::unassignSquadHome()
 {
-    _squad->getOwnerships()->setHomeBuilding(nullptr, _squad->getSquadType());
-    _squad->getOwnerships()->setHomeTown(nullptr, _squad->getSquadType());
+    ActivePlatoon* activeSquad = _squad->getActivePlatoon();
+    if (_squad->getOwnerships())
+    {
+        _squad->getOwnerships()->setHomeBuilding(nullptr, _squad->getSquadType());
+        _squad->getOwnerships()->setHomeTown(nullptr, _squad->getSquadType());
+    }
+    for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
+    {
+        Character* obj = reinterpret_cast<Character*>(*it);
+        Ownerships* own = obj->getOwnerships();
+        if (own)
+        {
+            own->setHomeBuilding(nullptr, _squad->getSquadType());
+            own->setHomeTown(nullptr, _squad->getSquadType());
+        }
+    }
 }
 bool SquadSettingsInfo::hasHome()
 {
-    return _homeBuilding != nullptr || _workBuilding != nullptr;
+    return _homeBuilding || _workBuilding;
 }
 bool SquadSettingsInfo::getManTurrets()
 {
@@ -818,9 +868,22 @@ void SquadSettingsInfo::setManTurrets(bool val)
 {
     _manTurrets = val;
 }
+bool SquadAutonomy::SquadSettingsInfo::getCloseGate()
+{
+    return _closeGate;
+}
+void SquadAutonomy::SquadSettingsInfo::setCloseGate(bool val)
+{
+    _closeGate = val;
+    ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
+}
 bool SquadSettingsInfo::getDoSleep()
 {
     return _doSleep;
+}
+void SquadSettingsInfo::setDoSleep(bool val)
+{
+    _doSleep = val;
 }
 bool SquadSettingsInfo::getRestUntilHealed()
 {
@@ -845,10 +908,6 @@ void SquadSettingsInfo::setStartWorkTime(float time)
 void SquadSettingsInfo::setEndWorkTime(float time)
 {
     _endWorkTime = time;
-}
-void SquadSettingsInfo::setDoSleep(bool val)
-{
-    _doSleep = val;
 }
 void SquadSettingsInfo::setRestUntilHealed(bool val)
 {

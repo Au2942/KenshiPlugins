@@ -165,8 +165,8 @@ void SquadAutonomyModOptions::saveOptionsSettings()
         cfgFile.close();
         tempFile.close();
 
-        std::remove(settings->getConfigPath().c_str());
-        std::rename("temp.txt", settings->getConfigPath().c_str());
+        _wremove(settings->getConfigPath().c_str());
+        _wrename(L"temp.txt", settings->getConfigPath().c_str());
     }
 }
 

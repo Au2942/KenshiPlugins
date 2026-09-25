@@ -17,8 +17,9 @@ namespace SquadAutonomy
         void setPackages(const std::map<int, lektor<GameData*> >& packages);
         void clearPackages();
         std::map<int, lektor<GameData*>> getSquadPackages();
+        bool hasTask(TaskType);
         bool enableAutonomy(bool enable, bool endAction = true);
-        void updateSquadPackages();
+        void updateSquadPackages(bool endAction = true);
         Building* getBuilding(bool home);
         void setBuilding(Building* building, bool home);
         bool assignSquadHome(bool home);
@@ -26,6 +27,8 @@ namespace SquadAutonomy
         bool hasHome();
         bool getManTurrets();
         void setManTurrets(bool val);
+        bool getCloseGate();
+        void setCloseGate(bool val);
         bool getDoSleep();
         bool getRestUntilHealed();
         bool getUsePaidBeds();
@@ -48,6 +51,7 @@ namespace SquadAutonomy
         //TownBase* _workTown;
         Building* _workBuilding;
         bool _manTurrets;
+        bool _closeGate;
         bool _doSleep;
         float _endWorkTime;
         float _startWorkTime;
@@ -62,21 +66,21 @@ namespace SquadAutonomy
         static bool initialized;
         lektor<SquadSettingsInfo*> squadSettings;
         SquadAutonomySettings();
-        bool saveSettings(std::string);
-        bool loadSettings(std::string);
+        bool saveSettings(std::wstring);
+        bool loadSettings(std::wstring);
         hand* createHandfromLine(std::string);
         SquadSettingsInfo* getSquadSettings(Platoon*, bool createNew = false);
         lektor<GameData*>* getAIPackageList();
         lektor<GameData*>* getSquadTemplate();
         void removeSquadSettings(Platoon*);
-        std::string getConfigPath();
+        std::wstring getConfigPath();
 
     private:
         lektor<GameData*> _AIPackageList;
         lektor<GameData*> _squadTemplateList;
         lektor<std::string> _cfgPackageList;
-        std::string _cfgFileName;
-        std::string _cfgPath;
+        std::wstring _cfgFileName;
+        std::wstring _cfgPath;
         void _loadConfig();
         void _initGameData();
     };

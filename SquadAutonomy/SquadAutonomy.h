@@ -7,6 +7,7 @@
 #include <mygui/MyGUI_Gui.h>
 #include <mygui/MyGUI_Window.h>
 #include <mygui/MyGUI_Button.h>
+#include <codecvt>
 
 namespace SquadAutonomy
 {
@@ -31,20 +32,22 @@ namespace SquadAutonomy
     extern bool showInSquad;
     extern bool enableLogging;
     void Init();
-    std::string GetCurrentDLLDirectory();
-    extern void Log(std::string line);
-    extern std::string logFileName;
-    extern std::string logBakFileName;
-    extern std::string saveName;
-    extern std::string modPath;
-    extern std::string logPath;
-    extern std::string logBakPath;
-    extern std::ofstream logFile;
-    extern std::string settingsSavePath;
+    std::wstring GetCurrentDLLDirectory();
+    extern void Log(std::wstring line);
+    extern std::wstring logFileName;
+    extern std::wstring logBakFileName;
+    extern std::wstring saveName;
+    extern std::wstring modPath;
+    extern std::wstring logPath;
+    extern std::wstring logBakPath;
+    extern std::wofstream logFile;
+    extern std::wstring settingsSavePath;
+    extern std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     //static int bc;
     //const int buffer;
     bool SetAI(Platoon*, std::map<int, lektor<GameData*>>, bool endAction = true);
     bool ResetAI(Platoon*, bool endAction = true);
+    void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);
     void OpenSquadAutonomyPanelMainBar();
     void RevertTaskDuration(TaskType);

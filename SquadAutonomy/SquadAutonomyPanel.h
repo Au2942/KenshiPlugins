@@ -71,6 +71,7 @@ namespace SquadAutonomy
         Platoon* _selectedSquad;
         DatapanelGUI* _panel;
         bool _manTurrets;
+        bool _closeGate;
         bool _doSleep;
         float _startWorkTime;
         float _endWorkTime;
