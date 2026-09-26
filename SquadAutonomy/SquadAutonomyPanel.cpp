@@ -281,6 +281,7 @@ void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
     squadSettings->setDoSleep(_doSleep);
     squadSettings->setRestUntilHealed(_restUntilHealed);
     squadSettings->setUsePaidBeds(_usePaidBeds);
+    squadSettings->updateSquadPackages();
 }
 void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
 {
@@ -411,7 +412,7 @@ void SquadAutonomyPanel::_addAI(DataPanelLine* line)
             settingsInfo->addPackage(static_cast<int>(_priority), data);
             //DebugLog("Add " + data->name + " package");
 
-            settingsInfo->updateSquadPackages(false);
+            settingsInfo->updateSquadPackages();
 
             refresh();
         }
@@ -548,6 +549,6 @@ void SquadAutonomyPanel::_setBuilding(bool home)
     }
     ou->showPlayerAMessage(report, true);
 
-    settings->updateSquadPackages(false);
+    settings->updateSquadPackages();
     refresh();
 }

@@ -33,7 +33,7 @@ namespace SquadAutonomy
     extern bool enableLogging;
     void Init();
     std::wstring GetCurrentDLLDirectory();
-    extern void Log(std::wstring line);
+    extern void Log(std::string line);
     extern std::wstring logFileName;
     extern std::wstring logBakFileName;
     extern std::wstring saveName;

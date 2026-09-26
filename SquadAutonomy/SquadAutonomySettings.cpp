@@ -9,6 +9,7 @@
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
 #include <kenshi/Character.h>
+#include <kenshi/StateBroadcastData.h>
 #include <kenshi/Platoon.h>
 #include <kenshi/Faction.h>
 #include <kenshi/AI/AITaskSystem.h>
@@ -543,15 +544,17 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             {
                 DebugLog("Load Squad " + squad->activePlatoon->getName());
                 SquadSettingsInfo* settingsInfo = new SquadSettingsInfo(squad);
+                settingsInfo->enableAutonomy(false);
+                settingsInfo->unassignSquadHome();
                 if (home)
                 {
                     settingsInfo->setBuilding(home, true);
-                    //DebugLog("Load home: " + home->displayName);
+                    DebugLog("Load home: " + home->displayName);
                 }
                 if (work)
                 {
                     settingsInfo->setBuilding(work, false);
-                    //DebugLog("Load home: " + work->displayName);
+                    DebugLog("Load work: " + work->displayName);
                 }
                 if (packages.size() > 0)
                 {
@@ -756,6 +759,7 @@ void SquadSettingsInfo::updateSquadPackages(bool endAction)
     bool success = false;
     if (_squadPackages.size() > 0)
     {
+        ResetAI(_squad, endAction);
         success = SetAI(_squad, _squadPackages, endAction);
     }
     else
@@ -802,7 +806,6 @@ bool SquadSettingsInfo::assignSquadHome(bool home)
         if (_homeBuilding)
         {
             building = _homeBuilding->getHandle();
-            town = _homeBuilding->getTown();
         }
     }
     else
@@ -810,29 +813,25 @@ bool SquadSettingsInfo::assignSquadHome(bool home)
         if (_workBuilding)
         {
             building = _workBuilding->getHandle();
-            town = _workBuilding->getTown();
         }
     }
 
     if (!building.isNull())
     {
-        _squad->getOwnerships()->setHomeBuilding(building, _squad->getSquadType());
-        _squad->getOwnerships()->setHomeTown(town, _squad->getSquadType());
-        success = true;
-    }
-
-    if (success)
-    {
         for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
         {
             Character* obj = reinterpret_cast<Character*>(*it);
-            Ownerships* own = obj->getOwnerships();
+            StateBroadcastData* state = obj->getStateBroadcast();
+            if (state) state->homeBuilding = building;
+            /*Ownerships* own = obj->getOwnerships();
             if (own)
             {
                 own->setHomeBuilding(building, _squad->getSquadType());
-                own->setHomeTown(town, _squad->getSquadType());
-            }
+            }*/
         }
+        _squad->getOwnerships()->setHomeBuilding(building, _squad->getSquadType());
+        //DebugLog("Assign " + activeSquad->getName() + " -" + building.getBuilding()->displayName);
+        success = true;
     }
     
     return success;
@@ -842,23 +841,25 @@ void SquadSettingsInfo::unassignSquadHome()
     ActivePlatoon* activeSquad = _squad->getActivePlatoon();
     if (_squad->getOwnerships())
     {
+        for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
+        {
+            Character* obj = reinterpret_cast<Character*>(*it);
+            StateBroadcastData* state = obj->getStateBroadcast();
+            if(state) state->homeBuilding = nullptr;
+            Ownerships* own = obj->getOwnerships();
+            if (own)
+            {
+                own->setHomeBuilding(nullptr, _squad->getSquadType());
+                own->setHomeTown(nullptr, _squad->getSquadType());
+            }
+        }
         _squad->getOwnerships()->setHomeBuilding(nullptr, _squad->getSquadType());
         _squad->getOwnerships()->setHomeTown(nullptr, _squad->getSquadType());
-    }
-    for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
-    {
-        Character* obj = reinterpret_cast<Character*>(*it);
-        Ownerships* own = obj->getOwnerships();
-        if (own)
-        {
-            own->setHomeBuilding(nullptr, _squad->getSquadType());
-            own->setHomeTown(nullptr, _squad->getSquadType());
-        }
     }
 }
 bool SquadSettingsInfo::hasHome()
 {
-    return _homeBuilding || _workBuilding;
+    return (_homeBuilding || _workBuilding);
 }
 bool SquadSettingsInfo::getManTurrets()
 {
