@@ -119,8 +119,8 @@ bool SquadAutonomyModOptions::isVisible()
 void SquadAutonomyModOptions::saveOptionsSettings()
 {
     auto settings = SquadAutonomySettings::getSingletonPtr();
-    std::ifstream cfgFile(settings->getConfigPath(), std::fstream::in);
-    std::ofstream tempFile("temp.txt");
+    std::wifstream cfgFile(settings->getConfigPath(), std::wfstream::in);
+    std::wofstream tempFile(L"temp.txt");
     if (!cfgFile.is_open() || !tempFile.is_open())
     {
         DebugLog("Config Save: Cannot open file");
@@ -128,27 +128,28 @@ void SquadAutonomyModOptions::saveOptionsSettings()
     else
     {
         bool packagesFound = false;
-        std::string line = "";
-        tempFile << "<Options>" << '\n';
-        tempFile << "ShowOnMain: " << Ogre::StringConverter::toString(showOnMain) << '\n';
-        tempFile << "LockPosition: " << Ogre::StringConverter::toString(lockPosition) << '\n';
-        tempFile << "BtnWidth: " << Ogre::StringConverter::toString(btnWidth) << '\n';
-        tempFile << "BtnHeight: " << Ogre::StringConverter::toString(btnHeight) << '\n';
-        tempFile << "BtnLeft: " << Ogre::StringConverter::toString(btnLeft) << '\n';
-        tempFile << "BtnTop: " << Ogre::StringConverter::toString(btnTop) << '\n';
-        tempFile << "BtnFontSize: " << Ogre::StringConverter::toString(btnFontSize) << '\n';
-        tempFile << "ShowInSquad: " << Ogre::StringConverter::toString(showInSquad) << '\n';
-        tempFile << "EnableLogging: " << Ogre::StringConverter::toString(enableLogging) << '\n';
-        tempFile << "</Options>" << '\n';
-        while (std::getline(cfgFile, line))
+        std::wstring wline = L"";
+        tempFile << converter.from_bytes("<Options>") << L'\n';
+        tempFile << converter.from_bytes("ShowOnMain: " + Ogre::StringConverter::toString(showOnMain)) << L'\n';
+        tempFile << converter.from_bytes("LockPosition: " + Ogre::StringConverter::toString(lockPosition)) << L'\n';
+        tempFile << converter.from_bytes("BtnWidth: " + Ogre::StringConverter::toString(btnWidth)) << L'\n';
+        tempFile << converter.from_bytes("BtnHeight: " + Ogre::StringConverter::toString(btnHeight)) << L'\n';
+        tempFile << converter.from_bytes("BtnLeft: " + Ogre::StringConverter::toString(btnLeft)) << L'\n';
+        tempFile << converter.from_bytes("BtnTop: " + Ogre::StringConverter::toString(btnTop)) << L'\n';
+        tempFile << converter.from_bytes("BtnFontSize: " + Ogre::StringConverter::toString(btnFontSize)) << L'\n';
+        tempFile << converter.from_bytes("ShowInSquad: " + Ogre::StringConverter::toString(showInSquad)) << L'\n';
+        tempFile << converter.from_bytes("EnableLogging: " + Ogre::StringConverter::toString(enableLogging)) << L'\n';
+        tempFile << converter.from_bytes("</Options>") << L'\n';
+        while (std::getline(cfgFile, wline))
         {
-            if (line == "<Packages>")
+            //std::string line = converter.to_bytes(wline);
+            if (wline == L"<Packages>")
             {
-                tempFile << line << '\n';
-                while (std::getline(cfgFile, line))
+                tempFile << wline << L'\n';
+                while (std::getline(cfgFile, wline))
                 {
-                    tempFile << line << '\n';
-                    if (line == "</Packages>")
+                    tempFile << wline << L'\n';
+                    if (wline == L"</Packages>")
                     {
                         packagesFound = true;
                         break;
@@ -159,8 +160,8 @@ void SquadAutonomyModOptions::saveOptionsSettings()
         }
         if (!packagesFound)
         {
-            tempFile << "<Packages>" << '\n';
-            tempFile << "</Packages>";
+            tempFile << L"<Packages>" << L'\n';
+            tempFile << L"</Packages>";
         }
         cfgFile.close();
         tempFile.close();
