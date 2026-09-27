@@ -50,8 +50,8 @@ namespace MoreImmersiveBars
     const TaskData* (*getTaskDataConst)(TaskType key) = nullptr;
     std::map<hand, float>* rentedBeds = nullptr;
     std::string* _MainColorCode = nullptr;
-
-    std::string cfgPath = "";
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring cfgPath = L"";
     bool noSleepTalk = true;
 
     class OriginalTaskDataDuration
@@ -541,29 +541,29 @@ namespace MoreImmersiveBars
         }
     }
 
-    std::string GetCurrentDLLDirectory() {
-        char path[MAX_PATH];
+    std::wstring GetCurrentDLLDirectory() {
+        wchar_t path[MAX_PATH];
         HMODULE hModule = NULL;
 
-        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
             GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCSTR)&GetCurrentDLLDirectory, &hModule)) {
+            (LPCWSTR)&GetCurrentDLLDirectory, &hModule)) {
 
-            GetModuleFileNameA(hModule, path, MAX_PATH);
-            std::string fullPath(path);
+            GetModuleFileNameW(hModule, path, MAX_PATH);
+            std::wstring fullPath(path);
 
-            size_t lastSlash = fullPath.find_last_of("\\/");
-            if (std::string::npos != lastSlash) {
+            size_t lastSlash = fullPath.find_last_of(L"\\/");
+            if (std::wstring::npos != lastSlash) {
                 return fullPath.substr(0, lastSlash + 1);
             }
             return fullPath;
         }
-        return "";
+        return L"";
     }
 
     void init()
     {
-        cfgPath = GetCurrentDLLDirectory() + "MoreImmersiveBars.cfg";
+        cfgPath = GetCurrentDLLDirectory() + L"MoreImmersiveBars.cfg";
     }
 
     void (*saveOptions_orig)(OptionsWindow* thisptr);

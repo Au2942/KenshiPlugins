@@ -87,16 +87,17 @@ bool ModOptions::isVisible()
 
 void ModOptions::loadOptionsSettings()
 {
-    std::ifstream cfgFile(cfgPath);
+    std::wifstream cfgFile(cfgPath);
     if (!cfgFile.is_open())
     {
-        DebugLog("Loading config: Cannot open file at " + cfgPath);
+        DebugLog("Loading config: Cannot open file at " + converter.to_bytes(cfgPath));
     }
     else
     {
-        std::string line = "";
-        while (std::getline(cfgFile, line))
+        std::wstring wline = L"";
+        while (std::getline(cfgFile, wline))
         {
+            std::string line = converter.to_bytes(wline);
             std::string dataLine = "";
             std::string type = "";
             line.erase(0, line.find_first_not_of(" \t"));
@@ -128,19 +129,19 @@ void ModOptions::loadOptionsSettings()
 
 void ModOptions::saveOptionsSettings()
 {
-    std::ofstream cfgFile(cfgPath, std::fstream::out | std::fstream::trunc);
+    std::wofstream cfgFile(cfgPath, std::wfstream::out | std::wfstream::trunc);
     if (!cfgFile.is_open())
     {
-        cfgFile.open(cfgPath, std::fstream::out | std::fstream::app);
+        cfgFile.open(cfgPath, std::wfstream::out | std::wfstream::app);
         if (!cfgFile.is_open())
         {
             DebugLog("Config Save: Cannot open file");
             return;
         }
     }
-    cfgFile << "<Options>" << '\n';
-    cfgFile << "DialogueWhileSleep: " << Ogre::StringConverter::toString(noSleepTalk) << '\n';
-    cfgFile << "</Options>";
+    cfgFile << converter.from_bytes("<Options>") << L'\n';
+    cfgFile << converter.from_bytes("DialogueWhileSleep: " + Ogre::StringConverter::toString(noSleepTalk)) << L'\n';
+    cfgFile << converter.from_bytes("</Options>");
     cfgFile.close();
 }
 
