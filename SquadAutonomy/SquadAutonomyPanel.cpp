@@ -1,5 +1,5 @@
+#include "SquadAutonomy.h"
 #include "SquadAutonomyPanel.h"
-#include "SquadAutonomySettings.h"
 
 #include <Debug.h>
 
@@ -35,7 +35,7 @@ SquadAutonomyPanel* SquadAutonomyPanel::getSingletonPtr()
 
 SquadAutonomyPanel::SquadAutonomyPanel() : _selectedSquad(nullptr), _panel(nullptr), _selectedAIPackageIndex(0), _category(0), _priority(0.0f)
 {
-    _options = new AutonomyOptions();
+    
     initLineKey();
     create();
     initialized = true;
@@ -61,8 +61,10 @@ void SquadAutonomyPanel::create()
     this->_panel->setCaption("Squad Autonomy");
     this->_panel->setPanelName("SquadAutonomy");
 
+    _options = new AutonomyOptions();
     if (this->_options != nullptr)
     {
+        this->_options->init();
         this->_options->setPanel(this->_panel);
         this->_options->setSelectedSquad(this->_selectedSquad);
         this->_options->refresh();
@@ -215,81 +217,7 @@ void SquadAutonomyPanel::refresh()
 
 }
 
-void SquadAutonomyPanel::AutonomyOptions::refresh()
-{
-    if (!this->_panel)
-        return;
-    if (!this->_selectedSquad) return;
-    if (!this->_selectedSquad->activePlatoon) return;
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    this->_panel->setLineSpacing(24.0f);
-    this->_panel->clearPage(this->_category);
-    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    Blackboard* bb = _selectedSquad->getBlackboard();
-    //get value from settings
-    _manTurrets = squadSettings->getManTurrets();
-    _closeGate = squadSettings->getCloseGate();
-    _doSleep = squadSettings->getDoSleep();
-    _startWorkTime = squadSettings->getStartWorkTime();
-    _endWorkTime = squadSettings->getEndWorkTime();
-    _usePaidBeds = squadSettings->getUsePaidBeds();
-    _restUntilHealed = squadSettings->getRestUntilHealed();
 
-    this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
-    //DebugLog("refresh options!");
-    auto startSlider = this->_panel->setLineSliderEditable("Start Work Time", this->_category, true, 0.0f, 24.0f, &this->_startWorkTime);
-    startSlider->nameText->setEnabled(false);
-    startSlider->setPrecision(0);
-    startSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-        this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    auto endSlider = this->_panel->setLineSliderEditable("End Work Time", this->_category, true, 0.0f, 24.0f, &this->_endWorkTime);
-    endSlider->nameText->setEnabled(false);
-    endSlider->setPrecision(0);
-    endSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-        this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-
-    auto checkbox = this->_panel->setLineCheckbox("Man Turrets", &_manTurrets, this->_category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-        this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = this->_panel->setLineCheckbox("Close Gate", &_closeGate, this->_category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-        this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = this->_panel->setLineCheckbox("Allow Going to Bed", &_doSleep, this->_category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-        this, &SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh);
-
-
-    if (squadSettings->getDoSleep())
-    {
-        checkbox = this->_panel->setLineCheckbox("Rest until healed", &_restUntilHealed, this->_category);
-        checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-            this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-        checkbox = this->_panel->setLineCheckbox("Allow Using Paid Beds", &_usePaidBeds, this->_category);
-        checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
-            this, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    }
-}
-void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
-{
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    if (!this->_selectedSquad) return;
-    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    squadSettings->setManTurrets(_manTurrets);
-    squadSettings->setCloseGate(_closeGate);
-    squadSettings->setStartWorkTime(_startWorkTime);
-    squadSettings->setEndWorkTime(_endWorkTime);
-    squadSettings->setDoSleep(_doSleep);
-    squadSettings->setRestUntilHealed(_restUntilHealed);
-    squadSettings->setUsePaidBeds(_usePaidBeds);
-    squadSettings->updateSquadPackages();
-}
-void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
-{
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    if (!this->_selectedSquad) return;
-    updateOptions(line);
-    refresh();
-}
 void SquadAutonomyPanel::show()
 {
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
@@ -551,4 +479,216 @@ void SquadAutonomyPanel::_setBuilding(bool home)
 
     settings->updateSquadPackages();
     refresh();
+}
+
+void SquadAutonomyPanel::AutonomyOptions::init()
+{
+    _basic = new BasicOptions();
+    _labour = new LabourOptions();
+    _combat = new CombatOptions();
+    _guard = new GuardOptions();
+}
+
+void SquadAutonomyPanel::AutonomyOptions::refresh()
+{
+    if (!this->_panel)
+        return;
+    if (!this->_selectedSquad) return;
+    if (!this->_selectedSquad->activePlatoon) return;
+    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    this->_panel->setLineSpacing(24.0f);
+    this->_panel->clearPage(this->_category);
+    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    //Blackboard* bb = _selectedSquad->getBlackboard();
+
+    this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+
+    auto dropBox = this->_panel->setLineDropBox("Category", this->_category, &this->_subCategory, false, 1.0f);
+    dropBox->addAValue("Basic", 0);
+    dropBox->addAValue("Labour", 1);
+    dropBox->addAValue("Combat", 2);
+    dropBox->addAValue("Guard", 3);
+    dropBox->setSelectedValue(_subCategory);
+    dropBox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &SquadAutonomyPanel::AutonomyOptions::refreshOptions);
+
+    switch (_subCategory)
+    {
+    case 1: 
+        _labour->refresh(this, _category, _panel, settings); 
+        break;
+    case 2: 
+        _combat->refresh(this, _category, _panel, settings); 
+        break;
+    case 3: 
+        _guard->refresh(this, _category, _panel, settings); 
+        break;
+    default: 
+        _basic->refresh(this, _category, _panel, settings); 
+        break;
+    }
+}
+void SquadAutonomyPanel::AutonomyOptions::refreshOptions(MyGUI::ComboBox* sender, size_t index)
+{
+    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!this->_selectedSquad) return;
+    refresh();
+}
+void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!this->_selectedSquad) return;
+    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    squadSettings->setStartWorkTime(_basic->startWorkTime);
+    squadSettings->setEndWorkTime(_basic->endWorkTime);
+    squadSettings->setDoSleep(_basic->doSleep);
+    squadSettings->setRestUntilHealed(_basic->restUntilHealed);
+    squadSettings->setUsePaidBeds(_basic->usePaidBeds);
+
+    squadSettings->setLabourScience(_labour->science);
+    squadSettings->setLabourLabouring(_labour->labouring);
+    squadSettings->setLabourFarming(_labour->farming);
+    squadSettings->setLabourCooking(_labour->cooking);
+    squadSettings->setLabourMedic(_labour->medic);
+    squadSettings->setLabourEngineer(_labour->engineer);
+    squadSettings->setLabourRobotics(_labour->robotics);
+    squadSettings->setLabourWeaponSmith(_labour->weaponSmith);
+    squadSettings->setLabourArmourSmith(_labour->armourSmith);
+    squadSettings->setLabourCrossbowSmith(_labour->crossbowSmith);
+    squadSettings->setLabourAutomaticMachine(_labour->automaticMachine);
+
+    squadSettings->setAttackEnemies(_combat->attackEnemies);
+    squadSettings->setProtectAllies(_combat->protectAllies);
+    squadSettings->setDoMedic(_combat->doMedic);
+
+    squadSettings->setManTurrets(_guard->manTurrets);
+    squadSettings->setStayInsideGate(_guard->stayInsideGate);
+    squadSettings->setCloseGate(_guard->closeGate);
+    squadSettings->updateSquadPackages();
+}
+void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!this->_selectedSquad) return;
+    updateOptions(line);
+    refresh();
+}
+
+void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
+{
+    startWorkTime = settings->getStartWorkTime();
+    endWorkTime = settings->getEndWorkTime();
+    doSleep = settings->getDoSleep();
+    usePaidBeds = settings->getUsePaidBeds();
+    restUntilHealed = settings->getRestUntilHealed();
+
+    auto startSlider = panel->setLineSliderEditable("Start Work Time", category, true, 0.0f, 24.0f, &this->startWorkTime);
+    startSlider->nameText->setEnabled(false);
+    startSlider->setPrecision(0);
+    startSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    auto endSlider = panel->setLineSliderEditable("End Work Time", category, true, 0.0f, 24.0f, &this->endWorkTime);
+    endSlider->nameText->setEnabled(false);
+    endSlider->setPrecision(0);
+    endSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    auto checkbox = panel->setLineCheckbox("Allow Going to Bed", &doSleep, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh);
+
+    if (settings->getDoSleep())
+    {
+        checkbox = panel->setLineCheckbox("Rest until healed", &restUntilHealed, category);
+        checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+            options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        checkbox = panel->setLineCheckbox("Allow Using Paid Beds", &usePaidBeds, category);
+        checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+            options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    }
+}
+
+void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
+{
+    science = settings->getLabourScience();
+    labouring = settings->getLabourLabouring();
+    farming = settings->getLabourFarming();
+    cooking = settings->getLabourCooking();
+    medic = settings->getLabourMedic();
+    engineer = settings->getLabourEngineer();
+    robotics = settings->getLabourRobotics();
+    weaponSmith = settings->getLabourWeaponSmith();
+    armourSmith = settings->getLabourArmourSmith();
+    crossbowSmith = settings->getLabourCrossbowSmith();
+    automaticMachine = settings->getLabourAutomaticMachine();
+
+    auto textbox = panel->setLineText("", *_MainColorCode + "Stats Used:", category, false, MyGUI::Align::Left);
+    textbox->editBox->setColour(MyGUI::Colour(1.0, 1.0, 1.0));
+    auto checkbox = panel->setLineCheckbox("Science", &science, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Labouring (Mining)", &labouring, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Farming", &farming, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Cooking", &cooking, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Medic", &medic, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Engineer", &engineer, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Robotics", &robotics, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Weapon Smith", &weaponSmith, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Armour Smith", &armourSmith, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Crossbow Smith", &crossbowSmith, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    panel->addSpace(category, 0.25);
+    checkbox = panel->setLineCheckbox("Automatic Machine", &automaticMachine, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+}
+
+void SquadAutonomyPanel::AutonomyOptions::CombatOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
+{
+    attackEnemies = settings->getAttackEnemies();
+    protectAllies = settings->getProtectAllies();
+    doMedic = settings->getDoMedic();
+
+    auto checkbox = panel->setLineCheckbox("Attack Enemies", &attackEnemies, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Protect Allies", &protectAllies, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Do Medic", &doMedic, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+}
+
+void SquadAutonomyPanel::AutonomyOptions::GuardOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
+{
+    manTurrets = settings->getManTurrets();
+    stayInsideGate = settings->getStayInsideGate();
+    closeGate = settings->getCloseGate();
+
+    auto checkbox = panel->setLineCheckbox("Man Turrets", &manTurrets, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    auto textbox = panel->setLineText("", *_MainColorCode + "Gate Guard:", category, false, MyGUI::Align::Left);
+    checkbox = panel->setLineCheckbox("Stay Inside Gate", &stayInsideGate, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Close Gate", &closeGate, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
 }

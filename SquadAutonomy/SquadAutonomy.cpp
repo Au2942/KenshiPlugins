@@ -219,7 +219,14 @@ namespace SquadAutonomy
             //obj->getMovement()->halt();
             obj->clearAllAIGoals();
             //obj->ai->resultsCache.resetAllCaches();
-            if (endAction && obj->getBody()) obj->getBody()->endAction();
+            if (endAction && obj->getBody())
+            {
+                CharBody* body = obj->getBody();
+                StateBroadcastData* stateBroadcast = obj->getStateBroadcast();
+                if (stateBroadcast && (stateBroadcast->isSleeping || stateBroadcast->isSitting))
+                { }
+                else body->endAction();
+            }
         }
         Blackboard* bb = platoon->getBlackboard();
         bb->clearAllPackages();
@@ -258,7 +265,14 @@ namespace SquadAutonomy
             //obj->getMovement()->halt();
             obj->clearAllAIGoals();
             //obj->ai->resultsCache.resetAllCaches();
-            if (endAction && obj->getBody()) obj->getBody()->endAction();
+            if (endAction && obj->getBody())
+            {
+                CharBody* body = obj->getBody();
+                StateBroadcastData* stateBroadcast = obj->getStateBroadcast();
+                if (stateBroadcast && (stateBroadcast->isSleeping || stateBroadcast->isSitting))
+                {}
+                else body->endAction();
+            }
         }
         return true;
     }
@@ -741,10 +755,10 @@ namespace SquadAutonomy
             auto settings = SquadAutonomySettings::getSingletonPtr();
             if (settings->saveSettings(settingsSavePath))
             {
-                shouldSave = false;
                 SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath);
+                SquadAutonomyModOptions::getSingletonPtr()->saveOptionsSettings();
+                shouldSave = false;
             }
-            SquadAutonomyModOptions::getSingletonPtr()->saveOptionsSettings();
         }
         else if (shouldLoad)
         {
@@ -752,8 +766,8 @@ namespace SquadAutonomy
             {
                 if (SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath))
                 {
-                    shouldLoad = false;
                     SquadAutonomySettings::getSingletonPtr()->initialized = true;
+                    shouldLoad = false;
                 }
             }
         }
@@ -1016,6 +1030,8 @@ namespace SquadAutonomy
                 }
                 if (useable->numOperatorsMax <= 0)
                 {
+                    float scoreAutoMachine = ai->scoreAutoMachinery(production, production->getPosition());
+                    if (scoreAutoMachine <= 0) continue;
                     FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
                     if (farmBuilding)
                     {
@@ -1080,7 +1096,7 @@ namespace SquadAutonomy
         return optimalLabour;
     }
 
-    hand FindLabourToDo(Character* character)
+    hand FindLabourToDo(Character* character, SquadSettingsInfo* settings)
     {
         if (!character) return nullptr;
         AI* ai = character->getAI();
@@ -1097,6 +1113,7 @@ namespace SquadAutonomy
                 for (int i = 0; i < researchBuildings->size(); ++i)
                 {
                     auto useable = (*researchBuildings)[i]->getUseableStuff();
+                    if (!settings->CanDoLabour(useable)) continue;
                     auto operators = useable->currentOperators;
                     int opCount = operators.size();
                     if (operators.find(character) != operators.end())
@@ -1113,6 +1130,7 @@ namespace SquadAutonomy
             for (int i = 0; i < refineryBuildings->size(); ++i)
             {
                 auto production = (*refineryBuildings)[i]->getProductionBuilding();
+                if (!settings->CanDoLabour(production)) continue;
                 if (production->couldIOperate(character))
                 {
                     auto operators = production->currentOperators;
@@ -1135,6 +1153,7 @@ namespace SquadAutonomy
             for (int i = 0; i < craftingBuildings->size(); ++i)
             {
                 auto production = (*craftingBuildings)[i]->getProductionBuilding();
+                if (!settings->CanDoLabour(production)) continue;
                 if (production->couldIOperate(character))
                 {
                     auto operators = production->currentOperators;
@@ -1157,6 +1176,7 @@ namespace SquadAutonomy
             for (int i = 0; i < mineBuildings->size(); ++i)
             {
                 auto production = (*mineBuildings)[i]->getProductionBuilding();
+                if (!settings->CanDoLabour(production)) continue;
                 if (production->couldIOperate(character))
                 {
                     auto operators = production->currentOperators;
@@ -1319,7 +1339,7 @@ namespace SquadAutonomy
         {
             if (character)
             {
-                out = FindLabourToDo(character);
+                out = FindLabourToDo(character, settings);
                 if (out)
                 {
                     //DebugLog("Found Labour " + out.getBuilding()->displayName);
@@ -1329,7 +1349,20 @@ namespace SquadAutonomy
             }
         }
 
-        return findMineToWorkAt_orig(thisptr, in, out, justAsking);
+        float score = findMineToWorkAt_orig(thisptr, in, out, justAsking);
+        
+        if (settings && settings->isEnabled())
+        {
+            if (out && out.getBuilding() && out.getBuilding()->getUseableStuff())
+            {
+                if (!settings->CanDoLabour(out.getBuilding()->getUseableStuff()))
+                {
+                    out = nullptr;
+                    return 0.0;
+                }
+            }
+        }
+        return score;
 
     }
 
@@ -1755,7 +1788,7 @@ namespace SquadAutonomy
                         if (door)
                         {
                             Ogre::Vector3 doorPos = door->getDoorPosition();
-                            if (settings->getCloseGate())
+                            if (settings->getStayInsideGate())
                             {
                                 Ogre::Vector3 doorInside = door->getDoorPosInside_extraFarIn(4.0);
                                 Ogre::Vector3 displace = doorInside - doorPos;
@@ -1775,7 +1808,7 @@ namespace SquadAutonomy
                         destGate = nullptr;
                         if (door)
                         {
-                            Ogre::Vector3 doorPos = settings->getCloseGate() ? door->getDoorPosInside_extraFarIn(2.0) : door->getDoorPosOutside();
+                            Ogre::Vector3 doorPos = settings->getStayInsideGate() ? door->getDoorPosInside_extraFarIn(2.0) : door->getDoorPosOutside();
                             currentTask->setLocation(doorPos);
                             _NV_setDestination_orig(thisptr, doorPos, priority, notVertical);
                             return;
@@ -1951,13 +1984,16 @@ namespace SquadAutonomy
                         if (settings->getCloseGate())
                         {
                             bool isInsideGate = true;
-                            for (auto it = squad->activePlatoon->things.begin(); it != squad->activePlatoon->things.end(); ++it)
+                            if (settings->getStayInsideGate())
                             {
-                                Character* obj = reinterpret_cast<Character*>(*it);
-                                if (obj->amInsideTownWalls() == 0)
+                                for (auto it = squad->activePlatoon->things.begin(); it != squad->activePlatoon->things.end(); ++it)
                                 {
-                                    isInsideGate = false;
-                                    break;
+                                    Character* obj = reinterpret_cast<Character*>(*it);
+                                    if (obj->amInsideTownWalls() == 0)
+                                    {
+                                        isInsideGate = false;
+                                        break;
+                                    }
                                 }
                             }
                             //DebugLog("IsInsideGate: " + Ogre::StringConverter::toString(isInsideGate));
@@ -2183,6 +2219,13 @@ namespace SquadAutonomy
                 type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT || type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE ||
                 type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME || type == ATTACK_ENEMIES)
             {
+                if (type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME || type == ATTACK_ENEMIES)
+                {
+                    if (!settings->getAttackEnemies())
+                    {
+                        return 0.0;
+                    }
+                }
                 if (settings->isRestTime())
                 {
                     return 0.0;
@@ -2197,7 +2240,18 @@ namespace SquadAutonomy
             }
             else if (type == PROTECT_ALLIES || type == PROTECT_ALLIES_STAY_IN_TOWN || type == PROTECT_OWN_SQUAD)
             {
+                if (!settings->getProtectAllies())
+                {
+                    return 0.0;
+                }
                 if (stateBroadcast && stateBroadcast->isSleeping && !character->isLiterallyUnderMeleeAttackRightNowForSure())
+                {
+                    return 0.0;
+                }
+            }
+            else if (type == JOB_MEDIC)
+            {
+                if (!settings->getDoMedic())
                 {
                     return 0.0;
                 }
@@ -2510,7 +2564,6 @@ __declspec(dllexport) void startPlugin()
 
         }
     }
-    
     SquadAutonomy::Init();
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&ForgottenGUI::changeFontSize), &SquadAutonomy::ForgottenGUI_changeFontSize_hook, &SquadAutonomy::ForgottenGUI_changeFontSize_orig))
         ErrorLog("Could not add ForgottenGUI::changeFontSize hook!");

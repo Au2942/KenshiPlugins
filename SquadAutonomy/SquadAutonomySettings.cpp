@@ -8,6 +8,7 @@
 
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
+#include <kenshi/Building/UseableStuff.h>
 #include <kenshi/Character.h>
 #include <kenshi/StateBroadcastData.h>
 #include <kenshi/Platoon.h>
@@ -304,11 +305,29 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
             saveFile << converter.from_bytes("\tOptions:") << L'\n';
             saveFile << converter.from_bytes("\t\tStartWorkTime: ") << settingsInfo->getStartWorkTime() << L'\n';
             saveFile << converter.from_bytes("\t\tEndWorkTime: ") << settingsInfo->getEndWorkTime() << L'\n';
-            saveFile << converter.from_bytes("\t\tManTurrets: " + Ogre::StringConverter::toString(settingsInfo->getManTurrets())) << L'\n';
-            saveFile << converter.from_bytes("\t\tCloseGate: " + Ogre::StringConverter::toString(settingsInfo->getCloseGate())) << L'\n';
             saveFile << converter.from_bytes("\t\tDoSleep: " + Ogre::StringConverter::toString(settingsInfo->getDoSleep())) << L'\n';
             saveFile << converter.from_bytes("\t\t\tRestUntilHealed: " + Ogre::StringConverter::toString(settingsInfo->getRestUntilHealed())) << L'\n';
             saveFile << converter.from_bytes("\t\t\tUsePaidBeds: " + Ogre::StringConverter::toString(settingsInfo->getUsePaidBeds())) << L'\n';
+
+            saveFile << converter.from_bytes("\t\tLabourScience: " + Ogre::StringConverter::toString(settingsInfo->getLabourScience())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourLabouring: " + Ogre::StringConverter::toString(settingsInfo->getLabourLabouring())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourFarming: " + Ogre::StringConverter::toString(settingsInfo->getLabourFarming())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourEngineer: " + Ogre::StringConverter::toString(settingsInfo->getLabourEngineer())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourCooking: " + Ogre::StringConverter::toString(settingsInfo->getLabourCooking())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourRobotics: " + Ogre::StringConverter::toString(settingsInfo->getLabourRobotics())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourMedic: " + Ogre::StringConverter::toString(settingsInfo->getLabourMedic())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourWeaponSmith: " + Ogre::StringConverter::toString(settingsInfo->getLabourWeaponSmith())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourArmourSmith: " + Ogre::StringConverter::toString(settingsInfo->getLabourArmourSmith())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourCrossbowSmith: " + Ogre::StringConverter::toString(settingsInfo->getLabourCrossbowSmith())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourAutomaticMachine: " + Ogre::StringConverter::toString(settingsInfo->getLabourAutomaticMachine())) << L'\n';
+
+            saveFile << converter.from_bytes("\t\tAttackEnemies: " + Ogre::StringConverter::toString(settingsInfo->getAttackEnemies())) << L'\n';
+            saveFile << converter.from_bytes("\t\tProtectAllies: " + Ogre::StringConverter::toString(settingsInfo->getProtectAllies())) << L'\n';
+            saveFile << converter.from_bytes("\t\tDoMedic: " + Ogre::StringConverter::toString(settingsInfo->getDoMedic())) << L'\n';
+
+            saveFile << converter.from_bytes("\t\tManTurrets: " + Ogre::StringConverter::toString(settingsInfo->getManTurrets())) << L'\n';
+            saveFile << converter.from_bytes("\t\tStayInsideGate: " + Ogre::StringConverter::toString(settingsInfo->getStayInsideGate())) << L'\n';
+            saveFile << converter.from_bytes("\t\tCloseGate: " + Ogre::StringConverter::toString(settingsInfo->getCloseGate())) << L'\n';
             saveFile << converter.from_bytes("\tEndOptions:") << L'\n';
             saveFile << converter.from_bytes("EndSquad:") << L'\n';
         }
@@ -319,7 +338,7 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
 bool SquadAutonomySettings::loadSettings(std::wstring savePath)
 {
     //initialized = false;
-    std::wifstream saveFile(savePath);
+    std::wfstream saveFile(savePath, std::wfstream::in | std::wfstream::out | std::wfstream::app);
     if (!saveFile.is_open())
     {
         DebugLog("Load: Cannot open save file");
@@ -353,13 +372,31 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             Building* home = nullptr;
             Building* work = nullptr;
             std::map<int, lektor<GameData*>> packages;
-            float startTime = 0.0f;
-            float endTime = 24.0f;
-            bool manTurrets = false;
-            bool closeGate = false;
+            float startWorkTime = 0.0;
+            float endWorkTime = 24.0;
             bool doSleep = false;
             bool restUntilHealed = true;
             bool usePaidBeds = false;
+            // Labour
+            bool science = true;
+            bool labouring = true;
+            bool farming = true;
+            bool engineer = true;
+            bool cooking = true;
+            bool robotics = true;
+            bool medic = true;
+            bool weaponSmith = true;
+            bool armourSmith = true;
+            bool crossbowSmith = true;
+            bool automaticMachine = true;
+            // Combat
+            bool attackEnemies = true;
+            bool protectAllies = true;
+            bool doMedic = true;
+            // Guard
+            bool manTurrets = false;
+            bool stayInsideGate = false;
+            bool closeGate = false;
             /*========================*/
 
             dataLine = line.substr(colon + 1);
@@ -482,30 +519,14 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                         {
                             if (dataLine == "") continue;
                             std::stringstream ss(dataLine);
-                            ss >> startTime;
+                            ss >> startWorkTime;
                             continue;
                         }
                         if (type == "EndWorkTime")
                         {
                             if (dataLine == "") continue;
                             std::stringstream ss(dataLine);
-                            ss >> endTime;
-                            continue;
-                        }
-                        if (type == "ManTurrets")
-                        {
-                            if (dataLine == "true")
-                            {
-                                manTurrets = true;
-                            }
-                            continue;
-                        }
-                        if (type == "CloseGate")
-                        {
-                            if (dataLine == "true")
-                            {
-                                closeGate = true;
-                            }
+                            ss >> endWorkTime;
                             continue;
                         }
                         if (type == "DoSleep")
@@ -529,6 +550,142 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                             if (dataLine == "true")
                             {
                                 usePaidBeds = true;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourScience")
+                        {
+                            if (dataLine == "false")
+                            {
+                                science = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourLabouring")
+                        {
+                            if (dataLine == "false")
+                            {
+                                labouring = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourFarming")
+                        {
+                            if (dataLine == "false")
+                            {
+                                farming = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourEngineer")
+                        {
+                            if (dataLine == "false")
+                            {
+                                engineer = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourCooking")
+                        {
+                            if (dataLine == "false")
+                            {
+                                cooking = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourRobotics")
+                        {
+                            if (dataLine == "false")
+                            {
+                                robotics = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourMedic")
+                        {
+                            if (dataLine == "false")
+                            {
+                                medic = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourWeaponSmith")
+                        {
+                            if (dataLine == "false")
+                            {
+                                weaponSmith = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourArmourSmith")
+                        {
+                            if (dataLine == "false")
+                            {
+                                armourSmith = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourCrossbowSmith")
+                        {
+                            if (dataLine == "false")
+                            {
+                                crossbowSmith = false;
+                            }
+                            continue;
+                        }
+                        if (type == "LabourAutomaticMachine")
+                        {
+                            if (dataLine == "false")
+                            {
+                                automaticMachine = false;
+                            }
+                            continue;
+                        }
+                        if (type == "AttackEnemies")
+                        {
+                            if (dataLine == "false")
+                            {
+                                attackEnemies = false;
+                            }
+                            continue;
+                        }
+                        if (type == "ProtectAllies")
+                        {
+                            if (dataLine == "false")
+                            {
+                                protectAllies = false;
+                            }
+                            continue;
+                        }
+                        if (type == "DoMedic")
+                        {
+                            if (dataLine == "false")
+                            {
+                                doMedic = false;
+                            }
+                            continue;
+                        }
+                        if (type == "ManTurrets")
+                        {
+                            if (dataLine == "true")
+                            {
+                                manTurrets = true;
+                            }
+                            continue;
+                        }
+                        if (type == "StayInsideGate")
+                        {
+                            if (dataLine == "true")
+                            {
+                                stayInsideGate = true;
+                            }
+                            continue;
+                        }
+                        if (type == "CloseGate")
+                        {
+                            if (dataLine == "true")
+                            {
+                                closeGate = true;
                             }
                             continue;
                         }
@@ -560,13 +717,31 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 {
                     settingsInfo->setPackages(packages);
                 }
-                settingsInfo->setStartWorkTime(startTime);
-                settingsInfo->setEndWorkTime(endTime);
-                settingsInfo->setManTurrets(manTurrets);
-                settingsInfo->setCloseGate(closeGate);
+                settingsInfo->setStartWorkTime(startWorkTime);
+                settingsInfo->setEndWorkTime(endWorkTime);
                 settingsInfo->setDoSleep(doSleep);
                 settingsInfo->setRestUntilHealed(restUntilHealed);
                 settingsInfo->setUsePaidBeds(usePaidBeds);
+
+                settingsInfo->setLabourScience(science);
+                settingsInfo->setLabourLabouring(labouring);
+                settingsInfo->setLabourFarming(farming);
+                settingsInfo->setLabourEngineer(engineer);
+                settingsInfo->setLabourCooking(cooking);
+                settingsInfo->setLabourRobotics(robotics);
+                settingsInfo->setLabourMedic(medic);
+                settingsInfo->setLabourWeaponSmith(weaponSmith);
+                settingsInfo->setLabourArmourSmith(armourSmith);
+                settingsInfo->setLabourCrossbowSmith(crossbowSmith);
+                settingsInfo->setLabourAutomaticMachine(automaticMachine);
+
+                settingsInfo->setAttackEnemies(attackEnemies);
+                settingsInfo->setProtectAllies(protectAllies);
+                settingsInfo->setDoMedic(doMedic);
+
+                settingsInfo->setManTurrets(manTurrets);
+                settingsInfo->setStayInsideGate(stayInsideGate);
+                settingsInfo->setCloseGate(closeGate);
                 settingsInfo->enableAutonomy(enable, false);
                 lektorEx::push_back(squadSettings, settingsInfo);
             }
@@ -651,15 +826,7 @@ std::wstring SquadAutonomySettings::getConfigPath()
     return _cfgPath;
 }
 
-SquadSettingsInfo::SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr),
-_startWorkTime(0.0), _endWorkTime(24.0), _manTurrets(false), _closeGate(false), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true)
-{
-    Faction* faction = squad->getFaction();
-    if (faction)
-    {
-        _pi = faction->isPlayer;
-    }
-}
+
 Platoon* SquadSettingsInfo::getSquad()
 {
     return _squad;
@@ -861,23 +1028,6 @@ bool SquadSettingsInfo::hasHome()
 {
     return (_homeBuilding || _workBuilding);
 }
-bool SquadSettingsInfo::getManTurrets()
-{
-    return _manTurrets;
-}
-void SquadSettingsInfo::setManTurrets(bool val)
-{
-    _manTurrets = val;
-}
-bool SquadAutonomy::SquadSettingsInfo::getCloseGate()
-{
-    return _closeGate;
-}
-void SquadAutonomy::SquadSettingsInfo::setCloseGate(bool val)
-{
-    _closeGate = val;
-    ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
-}
 bool SquadSettingsInfo::getDoSleep()
 {
     return _doSleep;
@@ -943,4 +1093,211 @@ bool SquadSettingsInfo::isRestTime()
         }
     }
     return restTime;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourScience()
+{
+    return _science;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourScience(bool val)
+{
+    _science = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourEngineer()
+{
+    return _engineer;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourEngineer(bool val)
+{
+    _engineer = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourRobotics()
+{
+    return _robotics;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourRobotics(bool val)
+{
+    _robotics = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourMedic()
+{
+    return _medic;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourMedic(bool val)
+{
+    _medic = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourLabouring()
+{
+    return _labouring;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourLabouring(bool val)
+{
+    _labouring = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourFarming()
+{
+    return _farming;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourFarming(bool val)
+{
+    _farming = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourCooking()
+{
+    return _cooking;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourCooking(bool val)
+{
+    _cooking = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourWeaponSmith()
+{
+    return _weaponSmith;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourWeaponSmith(bool val)
+{
+    _weaponSmith = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourArmourSmith()
+{
+    return _armourSmith;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourArmourSmith(bool val)
+{
+    _armourSmith = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourCrossbowSmith()
+{
+    return _crossbowSmith;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourCrossbowSmith(bool val)
+{
+    _crossbowSmith = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getLabourAutomaticMachine()
+{
+    return _automaticMachine;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourAutomaticMachine(bool val)
+{
+    _automaticMachine = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::CanDoLabour(UseableStuff* useable)
+{
+    if (useable->numOperatorsMax <= 0)
+    {
+        return _automaticMachine;
+    }
+    auto statUsed = useable->getStatUsed();
+    switch (statUsed)
+    {
+    case STAT_SCIENCE:
+        return _science;
+        break;
+    case STAT_LABOURING:
+        return _labouring;
+        break;
+    case STAT_FARMING:
+        return _farming;
+        break;
+    case STAT_ENGINEERING:
+        return _engineer;
+        break;
+    case STAT_COOKING:
+        return _cooking;
+        break;
+    case STAT_ROBOTICS:
+        return _robotics;
+        break;
+    case STAT_MEDIC:
+        return _medic;
+        break;
+    case STAT_SMITHING_WEAPON:
+        return _weaponSmith;
+        break;
+    case STAT_SMITHING_ARMOUR:
+        return _armourSmith;
+        break;
+    case STAT_SMITHING_BOW:
+        return _crossbowSmith;
+        break;
+    default:
+        return true;
+    }
+    
+}
+
+bool SquadSettingsInfo::getAttackEnemies()
+{
+    return _attackEnemies;
+}
+void SquadSettingsInfo::setAttackEnemies(bool val)
+{
+    _attackEnemies = val;
+}
+bool SquadSettingsInfo::getProtectAllies()
+{
+    return _protectAllies;
+}
+void SquadSettingsInfo::setProtectAllies(bool val)
+{
+    _protectAllies = val;
+}
+bool SquadSettingsInfo::getDoMedic()
+{
+    return _doMedic;
+}
+void SquadSettingsInfo::setDoMedic(bool val)
+{
+    _doMedic = val;
+}
+
+bool SquadSettingsInfo::getManTurrets()
+{
+    return _manTurrets;
+}
+void SquadSettingsInfo::setManTurrets(bool val)
+{
+    _manTurrets = val;
+}
+bool SquadSettingsInfo::getStayInsideGate()
+{
+    return _stayInsideGate;
+}
+void SquadSettingsInfo::setStayInsideGate(bool val)
+{
+    _stayInsideGate = val;
+    ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
+}
+bool SquadAutonomy::SquadSettingsInfo::getCloseGate()
+{
+    return _closeGate;
+}
+void SquadAutonomy::SquadSettingsInfo::setCloseGate(bool val)
+{
+    _closeGate = val;
+    ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
 }

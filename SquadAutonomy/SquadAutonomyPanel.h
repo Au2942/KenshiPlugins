@@ -1,4 +1,5 @@
 #pragma once
+#include "SquadAutonomySettings.h"
 #include <kenshi/Platoon.h>
 #include <kenshi/gui/DataPanelLine.h>
 
@@ -48,11 +49,12 @@ namespace SquadAutonomy
     {
     public:
         void refresh();
+        void refreshOptions(MyGUI::ComboBox*, size_t);
         void updateOptions(DataPanelLine*);
         void updateOptionsAndRefresh(DataPanelLine*);
-        SquadAutonomyPanel::AutonomyOptions() : _category(1), _selectedSquad(nullptr), _panel(nullptr), _startWorkTime(0.0f), _endWorkTime(24.0f), _manTurrets(false), _doSleep(false), _restUntilHealed(true), _usePaidBeds(false)
-        {
-        }
+        AutonomyOptions() : _category(1), _subCategory(0), _selectedSquad(nullptr), _panel(nullptr)
+        {}
+        void init();
         void setPanel(DatapanelGUI* panel)
         {
             _panel = panel;
@@ -65,21 +67,84 @@ namespace SquadAutonomy
         {
             return _category;
         }
+        class BasicOptions;
+        class LabourOptions;
+        class CombatOptions;
+        class GuardOptions;
 
     private:
         int _category;
+        int _subCategory;
         Platoon* _selectedSquad;
         DatapanelGUI* _panel;
-        bool _manTurrets;
-        bool _closeGate;
-        bool _doSleep;
-        float _startWorkTime;
-        float _endWorkTime;
-        bool _restUntilHealed;
-        bool _usePaidBeds;
+        BasicOptions* _basic;
+        LabourOptions* _labour;
+        CombatOptions* _combat;
+        GuardOptions* _guard;
+        //bool _manTurrets;
+        //bool _closeGate;
+        //bool _doSleep;
+        //float _startWorkTime;
+        //float _endWorkTime;
+        //bool _restUntilHealed;
+        //bool _usePaidBeds;
         //bool _buySupplies;
         //item type?
         //bool _sellLoots;
         //item type?
+    };
+
+    class SquadAutonomyPanel::AutonomyOptions::BasicOptions
+    {
+    public:
+        void refresh(AutonomyOptions* ,int, DatapanelGUI*, SquadSettingsInfo *);
+        BasicOptions() : startWorkTime(0.0f), endWorkTime(24.0f), doSleep(false), restUntilHealed(true), usePaidBeds(false)
+        {}
+        float startWorkTime;
+        float endWorkTime;
+        bool doSleep;
+        bool restUntilHealed;
+        bool usePaidBeds;
+    };
+    class SquadAutonomyPanel::AutonomyOptions::LabourOptions
+    {
+    public:
+        void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
+        LabourOptions() : science(true), 
+            labouring(true), farming(true), 
+            medic(true), cooking(true), engineer(true), robotics(true), weaponSmith(true), armourSmith(true), crossbowSmith(true), automaticMachine(true)
+        {}
+        bool science;
+        bool labouring;
+        bool farming;
+        bool cooking;
+        bool medic;
+        bool engineer;
+        bool robotics;
+        bool weaponSmith;
+        bool armourSmith;
+        bool crossbowSmith;
+
+        bool automaticMachine;
+    };
+    class SquadAutonomyPanel::AutonomyOptions::CombatOptions
+    {
+    public:
+        void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
+        CombatOptions() : attackEnemies(true), protectAllies(true), doMedic(true)
+        {}
+        bool attackEnemies;
+        bool protectAllies;
+        bool doMedic;
+    };
+    class SquadAutonomyPanel::AutonomyOptions::GuardOptions
+    {
+    public:
+        void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
+        GuardOptions() : manTurrets(false), stayInsideGate(false), closeGate(false)
+        {}
+        bool manTurrets;
+        bool stayInsideGate;
+        bool closeGate;
     };
 }
