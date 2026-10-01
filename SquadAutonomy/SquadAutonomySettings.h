@@ -11,11 +11,11 @@ namespace SquadAutonomy
     {
     public:
         SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr),
-            _startWorkTime(0.0), _endWorkTime(24.0), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true),
+            _startWorkTime(0.0), _endWorkTime(24.0), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true), _restThreshold(50.0), _healedThreshold(90.0),
             _science(true), 
             _labouring(true), _farming(true), 
             _medic(true), _cooking(true), _engineer(true), _robotics(true), _weaponSmith(true), _armourSmith(true), _crossbowSmith(true), _automaticMachine(true),
-            _attackEnemies(true), _protectAllies(true), _doMedic(true),
+            _attackEnemies(true), _protectAllies(true), _doMedic(true), _doRescue(true),
             _manTurrets(false), _stayInsideGate(false), _closeGate(false)
         {
             Faction* faction = squad->getFaction();
@@ -44,11 +44,17 @@ namespace SquadAutonomy
         float getEndWorkTime();
         bool getDoSleep();
         bool getRestUntilHealed();
+        float getRestThreshold();
+        float getHealedThreshold();
+        float getRestThresholdP();
+        float getHealedThresholdP();
         bool getUsePaidBeds();
         void setStartWorkTime(float time);
         void setEndWorkTime(float time);
         void setDoSleep(bool val);
         void setRestUntilHealed(bool val);
+        void setRestThreshold(float val);
+        void setHealedThreshold(float val);
         void setUsePaidBeds(bool val);
         bool isRestTime();
         
@@ -82,6 +88,8 @@ namespace SquadAutonomy
         void setProtectAllies(bool val);
         bool getDoMedic();
         void setDoMedic(bool val);
+        bool getDoRescue();
+        void setDoRescue(bool val);
 
         bool getManTurrets();
         void setManTurrets(bool val);
@@ -103,6 +111,8 @@ namespace SquadAutonomy
         float _endWorkTime;
         bool _doSleep;
         bool _restUntilHealed;
+        float _restThreshold;
+        float _healedThreshold;
         bool _usePaidBeds;
         // Labour
         bool _science;
@@ -120,6 +130,7 @@ namespace SquadAutonomy
         bool _attackEnemies;
         bool _protectAllies;
         bool _doMedic;
+        bool _doRescue;
         // Guard
         bool _manTurrets;
         bool _stayInsideGate;

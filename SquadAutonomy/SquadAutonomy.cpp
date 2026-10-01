@@ -305,9 +305,6 @@ namespace SquadAutonomy
         }
     }
 
-
-
-
     void OpenSquadAutonomyPanel(Platoon* platoon)
     {
         if (platoon) 
@@ -493,7 +490,7 @@ namespace SquadAutonomy
         }
     private:
     };
-    lektor<AutonomyButton*> autButtons;
+    std::vector<std::unique_ptr<AutonomyButton>> autButtons;
 
     void onPressed(
         MyGUI::Widget* sender,
@@ -629,6 +626,21 @@ namespace SquadAutonomy
             }
         }
     }
+    void (*_NV_autoChangeSelectedObject_orig)(MainBarGUI* thisptr, const hand& obj);
+    void _NV_autoChangeSelectedObject_hook(MainBarGUI* thisptr, const hand& obj)
+    {
+        _NV_autoChangeSelectedObject_orig(thisptr, obj);
+        if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
+        {
+            Platoon* platoon = ou->player->getCurrentPlatoon();
+            if (platoon)
+            {
+                SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
+                SquadAutonomyPanel::getSingletonPtr()->refresh();
+                SquadAutonomyPanel::getSingletonPtr()->getOptionsTab()->refresh();
+            }
+        }
+    }
 
     void (*tabPlatoonChange_orig)(MainBarGUI* thisptr, MyGUI::TabControl* _sender, unsigned __int64 _index);
     void tabPlatoonChange_hook(MainBarGUI* thisptr, MyGUI::TabControl* _sender, unsigned __int64 _index)
@@ -647,6 +659,22 @@ namespace SquadAutonomy
         }
     }
 
+    void (*cycleSquad_orig)(PlayerInterface* thisptr);
+    void cycleSquad_hook(PlayerInterface* thisptr)
+    {
+        // your code before/instead of the original
+        cycleSquad_orig(thisptr);
+        if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
+        {
+            Platoon* platoon = ou->player->getCurrentPlatoon();
+            if (platoon)
+            {
+                SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
+                SquadAutonomyPanel::getSingletonPtr()->refresh();
+                SquadAutonomyPanel::getSingletonPtr()->getOptionsTab()->refresh();
+            }
+        }
+    }
     
     void (*SquadCellView_update_orig)(SquadManagementScreen::SquadCellView* thisptr, const MyGUI::IBDrawItemInfo& _info, SquadManagementScreen::SquadData* _data);
     void SquadCellView_update_hook(SquadManagementScreen::SquadCellView* thisptr, const MyGUI::IBDrawItemInfo& _info, SquadManagementScreen::SquadData* _data)
@@ -674,8 +702,8 @@ namespace SquadAutonomy
                 static_cast<float>(top) / parent->getHeight(), static_cast<float>(width) / parent->getWidth() - 0.1, static_cast<float>(height) / parent->getHeight(), MyGUI::Align::Center, "AutonomyButton");
             autonomyButton->setCaption("AUT");
             autonomyButton->setVisible(showInSquad);
-            AutonomyButton* autButton = new AutonomyButton(autonomyButton, thisptr);
-            lektorEx::push_back_unique(autButtons, autButton);
+            std::unique_ptr<AutonomyButton> autButton = std::unique_ptr<AutonomyButton>(new AutonomyButton(autonomyButton, thisptr));
+            autButtons.push_back(std::move(autButton));
         }
     }
 
@@ -810,6 +838,7 @@ namespace SquadAutonomy
             //if (home) DebugLog("set home to: " + home->displayName);
             //else DebugLog("no home");
             squad->getOwnerships()->setHomeBuilding(home, squad->getSquadType());
+            squad->getOwnerships()->setHomeTown(currentTown, squad->getSquadType());
             if (activeSquad)
             {
                 for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
@@ -820,7 +849,6 @@ namespace SquadAutonomy
                 }
             }
             //DebugLog("set town to: " + currentTown->getKnownName());
-            //squad->getOwnerships()->setHomeTown(currentTown, squad->getSquadType());
             return;
         }
         else
@@ -841,17 +869,21 @@ namespace SquadAutonomy
     }
 
 
-    UseableStuff* FindOptimalBed(Character* character, bool usePaidBeds, lektor<UseableStuff*> beds, bool ownFactionOnly = false)
+    UseableStuff* FindOptimalBed(Character* character, AI* ai, bool usePaidBeds, lektor<UseableStuff*> beds, bool ownFactionOnly = false)
     {
         float minDist = std::numeric_limits<float>::max();
         float maxEfficiency = std::numeric_limits<float>::lowest();
         float minCost = std::numeric_limits<float>::max();
         UseableStuff* optimalBed = nullptr;
         Faction* ownFaction = character->getFaction();
-
+        AITaskSytem* taskSystem = ai->getTaskSystem();
+        if (!taskSystem) return nullptr;
         for (uint32_t i = 0; i < beds.size(); ++i)
         {
             UseableStuff* b = beds[i];
+            if (taskSystem->isPathImpossible(b)) continue;
+            if (b->getBuildState() == 0) continue;
+
             if (b->getOccupant())
             {
                 if (b->getOccupant() == character->getHandle())
@@ -911,7 +943,7 @@ namespace SquadAutonomy
 
             if (cost == -1 || (!usePaidBeds && cost > 0)) continue;
 
-            float distanceScore = character->ai->scoreDistanceTo(b, false);
+            float distanceScore = b->getPosition().squaredDistance(character->getPosition());
 
             bool better = false;
             if (efficiency > maxEfficiency) {
@@ -969,7 +1001,7 @@ namespace SquadAutonomy
             }
             if (currentTown->isTown() && currentTown->isTown()->playerHasBuildingsInThisTown)
             {
-                optimalBed = FindOptimalBed(character, false, beds, true);
+                optimalBed = FindOptimalBed(character, ai, false, beds, true);
             }
             if (optimalBed) return optimalBed->getHandle();
 
@@ -991,7 +1023,7 @@ namespace SquadAutonomy
                 UseableStuff* bed = bedBuildings[i]->getUseableStuff();
                 if (bed) lektorEx::push_back_unique(beds, bed);
             }
-            optimalBed = FindOptimalBed(character, usePaidBeds, beds);
+            optimalBed = FindOptimalBed(character, ai, usePaidBeds, beds);
         }
         if (optimalBed) return optimalBed->getHandle();
         else return nullptr;
@@ -1379,7 +1411,7 @@ namespace SquadAutonomy
             character = ai->getCharacter();
         }
 
-        if (character && settings && settings->isEnabled() && thisptr)
+        if (settings && settings->isEnabled() && character)
         {
             TaskType type = key.key();
             Log("RuntargetFind TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)));
@@ -1417,7 +1449,31 @@ namespace SquadAutonomy
                 }
             }*/
         }
-        return runTargetFinder_orig(thisptr, func, key, out);
+        float score = runTargetFinder_orig(thisptr, func, key, out);
+
+        if (settings && settings->isEnabled() && character)
+        {
+            TaskType type = key.key();
+            if (type == FIND_AND_RESCUE || type == FIND_AND_RESCUE_IF_THERES_BEDS || type == FIND_AND_RESCUE_LEADER)
+            {
+                if (out)
+                {
+                    Blackboard* bb = character->getBlackboard();
+                    if (bb)
+                    {
+                        if (bb->currentPackage && bb->currentPackage->key == SIG_WANDERING_TOWN_TO_TOWN)
+                        {
+                            Character* target = out.getCharacter();
+                            if (target && target->getPlatoon() && target->getPlatoon()->me != settings->getSquad())
+                            {
+                                out = nullptr;
+                                return 0.0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     void (*choosePermaJob_orig)(AITaskSytem* thisptr, std::map<float, Tasker*, std::less<float>, Ogre::STLAllocator<std::pair<float const, Tasker*>, Ogre::GeneralAllocPolicy > >& orderedGoals, TaskMatch& alreadyHasGoal, bool urgentOnes, bool _jobsEnabled);
@@ -1439,12 +1495,8 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             Log("PermaJob");
-            if (urgentOnes && _jobsEnabled)
+            if (!urgentOnes)
             {
-                if (settings->isRestTime())
-                {
-                    _jobsEnabled = false;
-                }
                 if (faction && settings->getPlayerInterface())
                 {
                     origAutoSit = settings->getPlayerInterface()->aiOptions.autoSit;
@@ -1452,8 +1504,13 @@ namespace SquadAutonomy
                     faction->isPlayer->aiOptions.autoSit = false;
                 }
             }
-        }
 
+            if (settings->isRestTime())
+            {
+                _jobsEnabled = false;
+            }
+
+        }
         /*========Orig Function=======*/
         choosePermaJob_orig(thisptr, orderedGoals, alreadyHasGoal, urgentOnes, _jobsEnabled);
         /*========Orig Function=======*/
@@ -1465,24 +1522,24 @@ namespace SquadAutonomy
                 faction->isPlayer = nullptr;
             }
             Log("End PermaJob");
-        }
-        /*if (settings && settings->isEnabled())
-        {
-            if (orderedGoals.size() > 0 && character == gui->selectedObject.getCharacter())
+            /*if (settings && settings->isEnabled())
             {
-                for (auto it = orderedGoals.begin(); it != orderedGoals.end(); ++it)
+                auto currentGoals = thisptr->orderedGoals;
+                if (currentGoals.size() > 0)
                 {
-                    if (it->second)
+                    for (auto it = currentGoals.begin(); it != currentGoals.end(); ++it)
                     {
-                        Log("After Choose PermaJob: " + it->second->getDescription() + " score: " + Ogre::StringConverter::toString(it->first));
+                        if (it->second)
+                        {
+                            DebugLog("After Choose PermaJob: " + it->second->getDescription() + " score: " + Ogre::StringConverter::toString(it->first));
+                        }
                     }
                 }
-            }
-        }*/
+            }*/
+        }
     }
+    
 
-
-    // Hook the method (call interception) — the primary mod mechanism
     void (*currentActionChecks_orig)(AITaskSytem* thisptr);
     void currentActionChecks_hook(AITaskSytem* thisptr)
     {
@@ -1522,7 +1579,7 @@ namespace SquadAutonomy
                             {
                                 MedicalSystem* medical = character->getMedical();
                                 RaceData* race = character->getRace();
-                                if (race && !race->robot && medical && medical->restedState <= 0.9 && medical->scoreFirstAidNeed(false) < 0.1)
+                                if (race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
                                 {
                                     wakeup = false;
                                 }
@@ -1542,7 +1599,6 @@ namespace SquadAutonomy
             }
         }
     }
-    // install (in startPlugin):
 
     void (*chooseGoal_orig)(AITaskSytem* thisptr, bool timedLockOnCurrentGoal);
     void chooseGoal_hook(AITaskSytem* thisptr, bool timedLockOnCurrentGoal)
@@ -1673,6 +1729,7 @@ namespace SquadAutonomy
             RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
             if (faction) faction->isPlayer = settings->getPlayerInterface();
             Log("End periodUpdate");
+
             /*if (thisptr && character == gui->selectedObject.getCharacter())
             {
                 auto currentGoal = thisptr->tryToGetCurrentGoal();
@@ -2124,7 +2181,7 @@ namespace SquadAutonomy
                     //DebugLog("Member is sleeping");
                     return false;
                 }
-                if (medical && (medical->restedState < 0.7))
+                if (medical && (medical->restedState < settings->getHealedThresholdP()))
                 {
                     return false;
                 }
@@ -2230,13 +2287,6 @@ namespace SquadAutonomy
                 {
                     return 0.0;
                 }
-                /*if (type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT || type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE)
-                {
-                    if (settings->getCloseGate())
-                    {
-                        return 0.0;
-                    }
-                }*/
             }
             else if (type == PROTECT_ALLIES || type == PROTECT_ALLIES_STAY_IN_TOWN || type == PROTECT_OWN_SQUAD)
             {
@@ -2279,47 +2329,55 @@ namespace SquadAutonomy
                     }
                 }
             }
-            /*else if (type == TAKE_INTRUDER_OUTSIDE)
+            else if (type == TAKE_INTRUDER_OUTSIDE)
             {
-                Tasker* currentTask = taskSystem->tryToGetCurrentGoal();
-                if (currentTask)
-                {
-                    if (currentTask->key() == TAKE_INTRUDER_OUTSIDE)
-                    {
-                        float score = taskSystem->currentGoalScore;
-                        DebugLog("Patrol score: " + Ogre::StringConverter::toString(score));
-                        score *= 0.8;
-                        DebugLog("Patrol score: " + Ogre::StringConverter::toString(score));
-                        taskSystem->currentGoalScore = std::max(score, 0.0001f);
-                        return taskSystem->currentGoalScore;
-                    }
-                }
-
                 if (settings->isRestTime())
                 {
                     return 0.0;
                 }
-            }*/
-            else if (type == GET_OUT_OF_BED_IF_ITS_EMERGENCY || type == GET_OUT_OF_BED || type == GET_OUT_OF_BED_ONCE_HEALED)
+            }
+            else if (type == GET_OUT_OF_BED_IF_ITS_EMERGENCY || type == GET_OUT_OF_BED)
             {
                 MedicalSystem* medical = nullptr;
                 RaceData* race = nullptr;
-                Faction* faction = nullptr;
                 if (character)
                 {
                     race = character->getRace();
                     medical = character->getMedical();
-                    faction = character->getFaction();
                 }
-                if (settings->getDoSleep() && settings->getRestUntilHealed())
+                if (settings->getDoSleep())
                 {
-                    if (race && !race->robot && medical && medical->restedState <= 0.9 && medical->scoreFirstAidNeed(false) < 0.1 && !character->isLiterallyUnderMeleeAttackRightNowForSure())
+                    if (race && !race->robot && medical && medical->scoreFirstAidNeed(false) < 0.1 && !character->isLiterallyUnderMeleeAttackRightNowForSure())
                     {
-                        return 0.0;
+                        if (settings->getRestUntilHealed() && medical->restedState < settings->getHealedThreshold())
+                        {
+                            return 0.0;
+                        }
+                        if (medical->restedState < settings->getRestThreshold())
+                        {
+                            return 0.0;
+                        }
                     }
                 }
             }
-            
+            else if (type == FIND_AND_RESCUE || type == FIND_AND_RESCUE_IF_THERES_BEDS || type == FIND_AND_RESCUE_LEADER)
+            {
+                if (!settings->getDoRescue())
+                {
+                    return 0.0;
+                }
+            }
+            /*else if (type == AQUIRE_FOOD_AT_HOMEBASE)
+            {
+                MedicalSystem* medical = nullptr;
+                RaceData* race = nullptr;
+                if (character)
+                {
+                    race = character->getRace();
+                    medical = character->getMedical();
+                }
+                DebugLog("Grab food score: " + Ogre::StringConverter::toString(score));
+            }*/
             Log("End score");
         }
         return score;
@@ -2333,16 +2391,18 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = nullptr;
         StateBroadcastData* stateBroadcast = nullptr;
         Character* character = nullptr;
+        AITaskSytem* taskSystem = nullptr;
         if (thisptr)
         {
             squad = thisptr->getPlatoon();
-        }
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
-        if (settings && settings->isEnabled() && thisptr)
-        {
-            Log("score-gotobed");
+            taskSystem = thisptr->getTaskSystem();
             character = thisptr->getCharacter();
             stateBroadcast = thisptr->getStateBroadcast();
+        }
+        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            Log("score-gotobed");
             MedicalSystem* medical = nullptr;
             RaceData* race = nullptr;
             Faction* faction = nullptr;
@@ -2355,33 +2415,34 @@ namespace SquadAutonomy
             //for auto sleep task but idk if it even works
             if (faction && faction->isPlayer)
             {
-                //DebugLog("AutoSleep Task: " + Ogre::StringConverter::toString(score));
+                //DebugLog(character->displayName + "AutoSleep");
                 return _NV_scoreGoToBed_orig(thisptr, subject, _a2);
             }
             if (settings->getDoSleep())
             {
+
                 //if need to continue resting
-                if (race && !race->robot && medical && medical->restedState <= 0.9 && medical->scoreFirstAidNeed(false) < 0.1)
+                if (race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
                 {
                     if (settings->getRestUntilHealed() && stateBroadcast && stateBroadcast->isSleeping)
                     {
+                        //DebugLog("GoToBed continue sleep until healed");
                         //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
                         return 5.0;
                     }
                     if (settings->isRestTime())
                     {
+                        //DebugLog("GoToBed rest");
                         return 5.0;
                     }
-                    else
-                    {
-                        return (1.0 - medical->restedState);
-                    }
+
                 }
                 if (settings->isRestTime())
                 {
                     if (stateBroadcast && !stateBroadcast->isSleeping)
                     {
-                        float minuteSinceLastSlept = thisptr->getStateBroadcast()->lastSlept.getHoursPassed() * 60.0;
+                        //DebugLog(character->displayName + "GoToBed normal");
+                        float minuteSinceLastSlept = stateBroadcast->lastSlept.getHoursPassed() * 60.0;
                         if (minuteSinceLastSlept < 120.0)
                         {
                             return 0.0;
@@ -2398,7 +2459,18 @@ namespace SquadAutonomy
                         {
                             return 0.5;
                         }
-                        else return 1.0;
+                        return 1.0;
+                    }
+                }
+                else
+                {
+                    if (settings->getRestUntilHealed() && medical->restedState <= settings->getHealedThreshold() && medical && medical->scoreFirstAidNeed(false) < 0.1)
+                    {
+                        if (race && !race->robot)
+                        {
+                            if (medical->restedState <= settings->getRestThresholdP()) return 20.0;
+                            else return (1.0 - medical->restedState);
+                        }
                     }
                 }
             }
@@ -2416,9 +2488,11 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = nullptr;
         StateBroadcastData* stateBroadcast = nullptr;
         Character* character = nullptr;
+        AITaskSytem* taskSystem = nullptr;
         if (thisptr)
         {
             squad = thisptr->getPlatoon();
+            taskSystem = thisptr->getTaskSystem();
         }
 
         if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
@@ -2436,46 +2510,34 @@ namespace SquadAutonomy
                 faction = character->getFaction();
                 stateBroadcast = character->getStateBroadcast();
             }
-            if (faction && faction->isPlayer)
+            Tasker* currentGoal = taskSystem->tryToGetCurrentGoal();
+            if (currentGoal && (currentGoal->key() == GO_HOME_AND_GO_TO_BED || currentGoal->key() == GO_HOME_AND_GO_TO_BED_SECURE))
             {
-                //DebugLog("AutoSleep Task: " + Ogre::StringConverter::toString(score));
-                return _NV_scoreGetOutOfBed_orig(thisptr, subject, _a2);
-            }
-            //if still injured and has get rest until healed
-            if (settings->getDoSleep())
-            {
-
-                if (settings->getRestUntilHealed() && race && !race->robot && medical && medical->restedState <= 0.9 && medical->scoreFirstAidNeed(false) < 0.1 && !character->isLiterallyUnderMeleeAttackRightNowForSure())
+                //if still injured and has get rest until healed
+                if (settings->getDoSleep())
                 {
-                    //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
-                    return -1.0;
-                }
-                if (!settings->isRestTime() && stateBroadcast->isSleeping)
-                {
-                    return 1.0;
+                    if (character->isLiterallyUnderMeleeAttackRightNowForSure())
+                    {
+                        //DebugLog("GetOutOfBed under melee attack");
+                        return 1.0;
+                    }
+                    if (settings->getRestUntilHealed() && race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
+                    {
+                        //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
+                        //DebugLog("GetOutOfBed rest until healed");
+                        return 0.0;
+                    }
+                    if (!settings->isRestTime() && stateBroadcast->isSleeping)
+                    {
+                        //DebugLog("GetOutOfBed Sleep outside of rest time");
+                        return 1.0;
+                    }
                 }
             }
             Log("End score-getoutofbed");
         }
         return _NV_scoreGetOutOfBed_orig(thisptr, subject, _a2);
     }
-
-    /*
-    void (*setHomeBuilding_orig)(Ownerships* thisptr, const hand& h, SquadType t);
-    void setHomeBuilding_hook(Ownerships* thisptr, const hand& h, SquadType t)
-    {
-        Platoon* platoon = thisptr->me;
-        SquadSettingsInfo* settings = nullptr;
-        StateBroadcastData* stateBroadcast = nullptr;
-        Character* character = nullptr;
-        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
-        if (settings && settings->isEnabled())
-        {
-            if (h && h.getBuilding()) DebugLog(platoon->displayName + " home got set to " + h.getBuilding()->displayName);
-        }
-        setHomeBuilding_orig(thisptr, h, t);
-    }
-    */
 
     bool (*initialisation_orig)(GameWorld* thisptr);
     bool initialisation_hook(GameWorld* thisptr)
@@ -2567,12 +2629,17 @@ __declspec(dllexport) void startPlugin()
     SquadAutonomy::Init();
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&ForgottenGUI::changeFontSize), &SquadAutonomy::ForgottenGUI_changeFontSize_hook, &SquadAutonomy::ForgottenGUI_changeFontSize_orig))
         ErrorLog("Could not add ForgottenGUI::changeFontSize hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
-        ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR constructor hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::tabPlatoonChange), &SquadAutonomy::tabPlatoonChange_hook, &SquadAutonomy::tabPlatoonChange_orig))
-        ErrorLog("Could not add MainBarGUI::tabPlatoonChange constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_update), &SquadAutonomy::_NV_update_hook, &SquadAutonomy::_NV_update_orig))
         ErrorLog("Could not add MainBarGUI::_NV_update constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
+        ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_autoChangeSelectedObject), &SquadAutonomy::_NV_autoChangeSelectedObject_hook, &SquadAutonomy::_NV_autoChangeSelectedObject_orig))
+        ErrorLog("Could not add MainBarGUI::_NV_autoChangeSelectedObject constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::tabPlatoonChange), &SquadAutonomy::tabPlatoonChange_hook, &SquadAutonomy::tabPlatoonChange_orig))
+        ErrorLog("Could not add MainBarGUI::tabPlatoonChange constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&PlayerInterface::cycleSquad), &SquadAutonomy::cycleSquad_hook, &SquadAutonomy::cycleSquad_orig))
+        ErrorLog("Could not add PlayerInterface::cycleSquad constructor hook!");
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::create), &SquadAutonomy::OptionsWindow_create_hook, &SquadAutonomy::OptionsWindow_create_orig))
         ErrorLog("Could not add OptionsWindow::create constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
@@ -2580,7 +2647,7 @@ __declspec(dllexport) void startPlugin()
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
         ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&GameWorld::initialisation), &SquadAutonomy::initialisation_hook, &SquadAutonomy::initialisation_orig))
-        ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");
+        ErrorLog("Could not add GameWorld::initialisation constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_threadedUpdate), &SquadAutonomy::_NV_threadedUpdate_hook, &SquadAutonomy::_NV_threadedUpdate_orig))
         ErrorLog("Could not add Character::_NV_threadedUpdate constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))

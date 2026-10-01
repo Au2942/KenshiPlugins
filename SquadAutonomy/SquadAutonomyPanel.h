@@ -67,6 +67,7 @@ namespace SquadAutonomy
         {
             return _category;
         }
+        void updateValues(SquadSettingsInfo*);
         class BasicOptions;
         class LabourOptions;
         class CombatOptions;
@@ -98,12 +99,14 @@ namespace SquadAutonomy
     {
     public:
         void refresh(AutonomyOptions* ,int, DatapanelGUI*, SquadSettingsInfo *);
-        BasicOptions() : startWorkTime(0.0f), endWorkTime(24.0f), doSleep(false), restUntilHealed(true), usePaidBeds(false)
+        BasicOptions() : startWorkTime(0.0f), endWorkTime(24.0f), doSleep(false), restUntilHealed(true), restThreshold(50.0), healedThreshold(90.0), usePaidBeds(false)
         {}
         float startWorkTime;
         float endWorkTime;
         bool doSleep;
         bool restUntilHealed;
+        float restThreshold;
+        float healedThreshold;
         bool usePaidBeds;
     };
     class SquadAutonomyPanel::AutonomyOptions::LabourOptions
@@ -131,11 +134,12 @@ namespace SquadAutonomy
     {
     public:
         void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
-        CombatOptions() : attackEnemies(true), protectAllies(true), doMedic(true)
+        CombatOptions() : attackEnemies(true), protectAllies(true), doMedic(true), doRescue(true)
         {}
         bool attackEnemies;
         bool protectAllies;
         bool doMedic;
+        bool doRescue;
     };
     class SquadAutonomyPanel::AutonomyOptions::GuardOptions
     {
