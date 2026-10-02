@@ -2,6 +2,7 @@
 #include "SquadAutonomyPanel.h"
 #include "SquadAutonomySettings.h"
 #include "SquadAutonomyModOptions.h"
+#include "SquadAutonomyButton.h"
 
 #include <Debug.h>
 
@@ -457,24 +458,7 @@ namespace SquadAutonomy
         }
     }
 
-    class AutonomyButton
-    {
-    public:
-        MyGUI::Button* button;
-        SquadManagementScreen::SquadCellView* cellview;
-        AutonomyButton(MyGUI::Button* b, SquadManagementScreen::SquadCellView* c)
-        {
-            button = b;
-            cellview = c;
-            button->eventMouseButtonClick += MyGUI::newDelegate(this, &AutonomyButton::OnClick);
-        }
-        void OnClick(MyGUI::WidgetPtr sender)
-        {
-            OpenSquadAutonomyPanel(cellview->squad->platoon->me);
-        }
-    private:
-    };
-    std::vector<std::unique_ptr<AutonomyButton>> autButtons;
+    std::vector<std::unique_ptr<SquadAutonomyButton>> squadAutButtons;
 
     void onPressed(
         MyGUI::Widget* sender,
@@ -631,28 +615,20 @@ namespace SquadAutonomy
         SquadCellView_update_orig(thisptr, _info, _data);
 
         bool createNew = true;
-        for (int i = 0; i < autButtons.size(); ++i)
+        for (int i = 0; i < squadAutButtons.size(); ++i)
         {
-            if (autButtons[i]->cellview == thisptr)
+            if (squadAutButtons[i]->getSquadCellView() == thisptr)
             {
                 createNew = false;
             }
-            autButtons[i]->button->setVisible(showInSquad);
+
+            squadAutButtons[i]->setVisible(showInSquad);
         }
+
         if(createNew)
         {
-            //DebugLog("Create AUT button");
-            MyGUI::Widget* parent = thisptr->txtName->getParent();
-            int left = thisptr->txtName->getRight();
-            int width = thisptr->txtSquadSize->getLeft() - left;
-            int top = thisptr->txtName->getTop();
-            int height = thisptr->txtName->getHeight();
-            MyGUI::Button* autonomyButton = parent->createWidgetReal<MyGUI::Button>("Kenshi_Button1", static_cast<float>(left) / parent->getWidth() + 0.05,
-                static_cast<float>(top) / parent->getHeight(), static_cast<float>(width) / parent->getWidth() - 0.1, static_cast<float>(height) / parent->getHeight(), MyGUI::Align::Center, "AutonomyButton");
-            autonomyButton->setCaption("AUT");
-            autonomyButton->setVisible(showInSquad);
-            std::unique_ptr<AutonomyButton> autButton = std::unique_ptr<AutonomyButton>(new AutonomyButton(autonomyButton, thisptr));
-            autButtons.push_back(std::move(autButton));
+            squadAutButtons.emplace_back(new SquadAutonomyButton(*thisptr));
+            squadAutButtons.back()->setVisible(showInSquad);
         }
     }
 
