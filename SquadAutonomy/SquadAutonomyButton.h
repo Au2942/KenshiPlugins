@@ -18,7 +18,7 @@ namespace SquadAutonomy
         SquadManagementScreen::SquadCellView* getSquadCellView() const;
 
     private:
-        // Button delegate stores the object pointer in a delegate.
+        // Button delegate stores the object pointer.
         // Disabling copy and move to prevent the object pointer from changing.
         // Move operations with resubscribing could be implemented if needed.
         SquadAutonomyButton(const SquadAutonomyButton& other);
