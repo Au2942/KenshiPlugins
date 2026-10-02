@@ -84,18 +84,13 @@ void SquadAutonomyPanel::refresh()
 {
     if (this->_panel == nullptr)
         return;
-    if (!_selectedSquad || !_selectedSquad->activePlatoon) return;
+    if (!_selectedSquad) return;
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    /*if (shouldLoad)
-    {
-        SquadAutonomySettings::getSingletonPtr()->loadSettings(savePath);
-        shouldLoad = false;
-    }*/
-
+    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
     this->_panel->setLineSpacing(32.0f);
     this->_panel->clearPage(this->_category);
-    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+
+    if (_selectedSquad->activePlatoon) this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
 
     DataPanelLine_Text* textbox;
 
@@ -489,19 +484,61 @@ void SquadAutonomyPanel::AutonomyOptions::init()
     _guard = new GuardOptions();
 }
 
+void SquadAutonomy::SquadAutonomyPanel::AutonomyOptions::updateValues(SquadSettingsInfo* settings)
+{
+    if (_basic)
+    {
+        _basic->startWorkTime = settings->getStartWorkTime();
+        _basic->endWorkTime = settings->getEndWorkTime();
+        _basic->doSleep = settings->getDoSleep();
+        _basic->restUntilHealed = settings->getRestUntilHealed();
+        _basic->restThreshold = settings->getRestThreshold();
+        _basic->healedThreshold = settings->getHealedThreshold();
+        _basic->usePaidBeds = settings->getUsePaidBeds();
+    }
+    if (_labour)
+    {
+        _labour->science = settings->getLabourScience();
+        _labour->labouring = settings->getLabourLabouring();
+        _labour->farming = settings->getLabourFarming();
+        _labour->cooking = settings->getLabourCooking();
+        _labour->medic = settings->getLabourMedic();
+        _labour->engineer = settings->getLabourEngineer();
+        _labour->robotics = settings->getLabourRobotics();
+        _labour->weaponSmith = settings->getLabourWeaponSmith();
+        _labour->armourSmith = settings->getLabourArmourSmith();
+        _labour->crossbowSmith = settings->getLabourCrossbowSmith();
+        _labour->automaticMachine = settings->getLabourAutomaticMachine();
+    }
+    if (_combat)
+    {
+        _combat->attackEnemies = settings->getAttackEnemies();
+        _combat->protectAllies = settings->getProtectAllies();
+        _combat->doMedic = settings->getDoMedic();
+    }
+    if (_guard)
+    {
+        _guard->manTurrets = settings->getManTurrets();
+        _guard->stayInsideGate = settings->getStayInsideGate();
+        _guard->closeGate = settings->getCloseGate();
+    }
+}
+
 void SquadAutonomyPanel::AutonomyOptions::refresh()
 {
     if (!this->_panel)
         return;
     if (!this->_selectedSquad) return;
-    if (!this->_selectedSquad->activePlatoon) return;
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+
     this->_panel->setLineSpacing(24.0f);
     this->_panel->clearPage(this->_category);
-    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    //Blackboard* bb = _selectedSquad->getBlackboard();
 
-    this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+
+    if (_subCategory < 0) _subCategory = 0;
+    else if (_subCategory > 3) _subCategory = 3;
 
     auto dropBox = this->_panel->setLineDropBox("Category", this->_category, &this->_subCategory, false, 1.0f);
     dropBox->addAValue("Basic", 0);
@@ -509,8 +546,10 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     dropBox->addAValue("Combat", 2);
     dropBox->addAValue("Guard", 3);
     dropBox->setSelectedValue(_subCategory);
-    dropBox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &SquadAutonomyPanel::AutonomyOptions::refreshOptions);
 
+    if (!settings) return;
+    dropBox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &SquadAutonomyPanel::AutonomyOptions::refreshOptions);
+    updateValues(settings);
     switch (_subCategory)
     {
     case 1: 
@@ -538,32 +577,43 @@ void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!this->_selectedSquad) return;
     auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    squadSettings->setStartWorkTime(_basic->startWorkTime);
-    squadSettings->setEndWorkTime(_basic->endWorkTime);
-    squadSettings->setDoSleep(_basic->doSleep);
-    squadSettings->setRestUntilHealed(_basic->restUntilHealed);
-    squadSettings->setUsePaidBeds(_basic->usePaidBeds);
-
-    squadSettings->setLabourScience(_labour->science);
-    squadSettings->setLabourLabouring(_labour->labouring);
-    squadSettings->setLabourFarming(_labour->farming);
-    squadSettings->setLabourCooking(_labour->cooking);
-    squadSettings->setLabourMedic(_labour->medic);
-    squadSettings->setLabourEngineer(_labour->engineer);
-    squadSettings->setLabourRobotics(_labour->robotics);
-    squadSettings->setLabourWeaponSmith(_labour->weaponSmith);
-    squadSettings->setLabourArmourSmith(_labour->armourSmith);
-    squadSettings->setLabourCrossbowSmith(_labour->crossbowSmith);
-    squadSettings->setLabourAutomaticMachine(_labour->automaticMachine);
-
-    squadSettings->setAttackEnemies(_combat->attackEnemies);
-    squadSettings->setProtectAllies(_combat->protectAllies);
-    squadSettings->setDoMedic(_combat->doMedic);
-
-    squadSettings->setManTurrets(_guard->manTurrets);
-    squadSettings->setStayInsideGate(_guard->stayInsideGate);
-    squadSettings->setCloseGate(_guard->closeGate);
-    squadSettings->updateSquadPackages();
+    if (_basic)
+    {
+        squadSettings->setStartWorkTime(_basic->startWorkTime);
+        squadSettings->setEndWorkTime(_basic->endWorkTime);
+        squadSettings->setDoSleep(_basic->doSleep);
+        squadSettings->setRestUntilHealed(_basic->restUntilHealed);
+        squadSettings->setRestThreshold(_basic->restThreshold);
+        squadSettings->setHealedThreshold(_basic->healedThreshold);
+        squadSettings->setUsePaidBeds(_basic->usePaidBeds);
+    }
+    if (_labour)
+    {
+        squadSettings->setLabourScience(_labour->science);
+        squadSettings->setLabourLabouring(_labour->labouring);
+        squadSettings->setLabourFarming(_labour->farming);
+        squadSettings->setLabourCooking(_labour->cooking);
+        squadSettings->setLabourMedic(_labour->medic);
+        squadSettings->setLabourEngineer(_labour->engineer);
+        squadSettings->setLabourRobotics(_labour->robotics);
+        squadSettings->setLabourWeaponSmith(_labour->weaponSmith);
+        squadSettings->setLabourArmourSmith(_labour->armourSmith);
+        squadSettings->setLabourCrossbowSmith(_labour->crossbowSmith);
+        squadSettings->setLabourAutomaticMachine(_labour->automaticMachine);
+    }
+    if (_combat)
+    {
+        squadSettings->setAttackEnemies(_combat->attackEnemies);
+        squadSettings->setProtectAllies(_combat->protectAllies);
+        squadSettings->setDoMedic(_combat->doMedic);
+    }
+    if (_guard)
+    {
+        squadSettings->setManTurrets(_guard->manTurrets);
+        squadSettings->setStayInsideGate(_guard->stayInsideGate);
+        squadSettings->setCloseGate(_guard->closeGate);
+        squadSettings->updateSquadPackages();
+    }
 }
 void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
 {
@@ -575,11 +625,6 @@ void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine*
 
 void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
-    startWorkTime = settings->getStartWorkTime();
-    endWorkTime = settings->getEndWorkTime();
-    doSleep = settings->getDoSleep();
-    usePaidBeds = settings->getUsePaidBeds();
-    restUntilHealed = settings->getRestUntilHealed();
 
     auto startSlider = panel->setLineSliderEditable("Start Work Time", category, true, 0.0f, 24.0f, &this->startWorkTime);
     startSlider->nameText->setEnabled(false);
@@ -599,7 +644,30 @@ void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions*
     {
         checkbox = panel->setLineCheckbox("Rest until healed", &restUntilHealed, category);
         checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-            options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+            options, &SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh);
+        if (restUntilHealed)
+        {
+            auto textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
+            textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+            textbox->editBox->setCaption("Rest Health Threshold");
+
+            auto slider = panel->setLineSliderEditable("Rest Health Threshold", category, false, 0.0f, 100.0f, &this->restThreshold);
+            //slider->nameText->setEnabled(false);
+            slider->setPrecision(0);
+            slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+                options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+
+            textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
+            textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+            textbox->editBox->setCaption("Healed Health Threshold");
+
+
+            slider = panel->setLineSliderEditable("Healed Health Threshold", category, false, 0.0f, 100.0f, &this->healedThreshold);
+            //slider->nameText->setEnabled(false);
+            slider->setPrecision(0);
+            slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+                options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        }
         checkbox = panel->setLineCheckbox("Allow Using Paid Beds", &usePaidBeds, category);
         checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
             options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
@@ -608,17 +676,6 @@ void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions*
 
 void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
-    science = settings->getLabourScience();
-    labouring = settings->getLabourLabouring();
-    farming = settings->getLabourFarming();
-    cooking = settings->getLabourCooking();
-    medic = settings->getLabourMedic();
-    engineer = settings->getLabourEngineer();
-    robotics = settings->getLabourRobotics();
-    weaponSmith = settings->getLabourWeaponSmith();
-    armourSmith = settings->getLabourArmourSmith();
-    crossbowSmith = settings->getLabourCrossbowSmith();
-    automaticMachine = settings->getLabourAutomaticMachine();
 
     auto textbox = panel->setLineText("", *_MainColorCode + "Stats Used:", category, false, MyGUI::Align::Left);
     textbox->editBox->setColour(MyGUI::Colour(1.0, 1.0, 1.0));
@@ -660,9 +717,6 @@ void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions
 
 void SquadAutonomyPanel::AutonomyOptions::CombatOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
-    attackEnemies = settings->getAttackEnemies();
-    protectAllies = settings->getProtectAllies();
-    doMedic = settings->getDoMedic();
 
     auto checkbox = panel->setLineCheckbox("Attack Enemies", &attackEnemies, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
@@ -673,13 +727,13 @@ void SquadAutonomyPanel::AutonomyOptions::CombatOptions::refresh(AutonomyOptions
     checkbox = panel->setLineCheckbox("Do Medic", &doMedic, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
         options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+    checkbox = panel->setLineCheckbox("Rescue Downed Allies", &doRescue, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
 }
 
 void SquadAutonomyPanel::AutonomyOptions::GuardOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
-    manTurrets = settings->getManTurrets();
-    stayInsideGate = settings->getStayInsideGate();
-    closeGate = settings->getCloseGate();
 
     auto checkbox = panel->setLineCheckbox("Man Turrets", &manTurrets, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),

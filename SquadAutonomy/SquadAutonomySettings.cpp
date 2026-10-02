@@ -307,6 +307,8 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
             saveFile << converter.from_bytes("\t\tEndWorkTime: ") << settingsInfo->getEndWorkTime() << L'\n';
             saveFile << converter.from_bytes("\t\tDoSleep: " + Ogre::StringConverter::toString(settingsInfo->getDoSleep())) << L'\n';
             saveFile << converter.from_bytes("\t\t\tRestUntilHealed: " + Ogre::StringConverter::toString(settingsInfo->getRestUntilHealed())) << L'\n';
+            saveFile << converter.from_bytes("\t\t\t\tRestThreshold: " + Ogre::StringConverter::toString(settingsInfo->getRestThreshold())) << L'\n';
+            saveFile << converter.from_bytes("\t\t\t\tHealedThreshold: " + Ogre::StringConverter::toString(settingsInfo->getHealedThreshold())) << L'\n';
             saveFile << converter.from_bytes("\t\t\tUsePaidBeds: " + Ogre::StringConverter::toString(settingsInfo->getUsePaidBeds())) << L'\n';
 
             saveFile << converter.from_bytes("\t\tLabourScience: " + Ogre::StringConverter::toString(settingsInfo->getLabourScience())) << L'\n';
@@ -324,6 +326,7 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
             saveFile << converter.from_bytes("\t\tAttackEnemies: " + Ogre::StringConverter::toString(settingsInfo->getAttackEnemies())) << L'\n';
             saveFile << converter.from_bytes("\t\tProtectAllies: " + Ogre::StringConverter::toString(settingsInfo->getProtectAllies())) << L'\n';
             saveFile << converter.from_bytes("\t\tDoMedic: " + Ogre::StringConverter::toString(settingsInfo->getDoMedic())) << L'\n';
+            saveFile << converter.from_bytes("\t\tDoRescue: " + Ogre::StringConverter::toString(settingsInfo->getDoRescue())) << L'\n';
 
             saveFile << converter.from_bytes("\t\tManTurrets: " + Ogre::StringConverter::toString(settingsInfo->getManTurrets())) << L'\n';
             saveFile << converter.from_bytes("\t\tStayInsideGate: " + Ogre::StringConverter::toString(settingsInfo->getStayInsideGate())) << L'\n';
@@ -376,6 +379,8 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             float endWorkTime = 24.0;
             bool doSleep = false;
             bool restUntilHealed = true;
+            float restThreshold = 50.0;
+            float healedThreshold = 90.0;
             bool usePaidBeds = false;
             // Labour
             bool science = true;
@@ -393,6 +398,7 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             bool attackEnemies = true;
             bool protectAllies = true;
             bool doMedic = true;
+            bool doRescue = true;
             // Guard
             bool manTurrets = false;
             bool stayInsideGate = false;
@@ -545,6 +551,20 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                             }
                             continue;
                         }
+                        if (type == "RestThreshold")
+                        {
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> restThreshold;
+                            continue;
+                        }
+                        if (type == "HealedThreshold")
+                        {
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> healedThreshold;
+                            continue;
+                        }
                         if (type == "UsePaidBeds")
                         {
                             if (dataLine == "true")
@@ -665,6 +685,14 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                             }
                             continue;
                         }
+                        if (type == "DoRescue")
+                        {
+                            if (dataLine == "false")
+                            {
+                                doRescue = false;
+                            }
+                            continue;
+                        }
                         if (type == "ManTurrets")
                         {
                             if (dataLine == "true")
@@ -721,6 +749,8 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 settingsInfo->setEndWorkTime(endWorkTime);
                 settingsInfo->setDoSleep(doSleep);
                 settingsInfo->setRestUntilHealed(restUntilHealed);
+                settingsInfo->setRestThreshold(restThreshold);
+                settingsInfo->setHealedThreshold(healedThreshold);
                 settingsInfo->setUsePaidBeds(usePaidBeds);
 
                 settingsInfo->setLabourScience(science);
@@ -738,6 +768,7 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 settingsInfo->setAttackEnemies(attackEnemies);
                 settingsInfo->setProtectAllies(protectAllies);
                 settingsInfo->setDoMedic(doMedic);
+                settingsInfo->setDoRescue(doRescue);
 
                 settingsInfo->setManTurrets(manTurrets);
                 settingsInfo->setStayInsideGate(stayInsideGate);
@@ -1040,6 +1071,22 @@ bool SquadSettingsInfo::getRestUntilHealed()
 {
     return _restUntilHealed;
 }
+float SquadAutonomy::SquadSettingsInfo::getRestThreshold()
+{
+    return _restThreshold;
+}
+float SquadSettingsInfo::getHealedThreshold()
+{
+    return _healedThreshold;
+}
+float SquadAutonomy::SquadSettingsInfo::getRestThresholdP()
+{
+    return _restThreshold/100.0;
+}
+float SquadSettingsInfo::getHealedThresholdP()
+{
+    return _healedThreshold/100.0;
+}
 bool SquadSettingsInfo::getUsePaidBeds()
 {
     return _usePaidBeds;
@@ -1063,6 +1110,14 @@ void SquadSettingsInfo::setEndWorkTime(float time)
 void SquadSettingsInfo::setRestUntilHealed(bool val)
 {
     _restUntilHealed = val;
+}
+void SquadAutonomy::SquadSettingsInfo::setRestThreshold(float val)
+{
+    _restThreshold = val;
+}
+void SquadSettingsInfo::setHealedThreshold(float val)
+{
+    _healedThreshold = val;
 }
 void SquadSettingsInfo::setUsePaidBeds(bool val)
 {
@@ -1273,6 +1328,16 @@ bool SquadSettingsInfo::getDoMedic()
 void SquadSettingsInfo::setDoMedic(bool val)
 {
     _doMedic = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getDoRescue()
+{
+    return _doRescue;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setDoRescue(bool val)
+{
+    _doRescue = val;
 }
 
 bool SquadSettingsInfo::getManTurrets()
