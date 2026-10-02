@@ -84,18 +84,13 @@ void SquadAutonomyPanel::refresh()
 {
     if (this->_panel == nullptr)
         return;
-    if (!_selectedSquad || !_selectedSquad->activePlatoon) return;
+    if (!_selectedSquad) return;
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    /*if (shouldLoad)
-    {
-        SquadAutonomySettings::getSingletonPtr()->loadSettings(savePath);
-        shouldLoad = false;
-    }*/
-
+    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
     this->_panel->setLineSpacing(32.0f);
     this->_panel->clearPage(this->_category);
-    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+
+    if (_selectedSquad->activePlatoon) this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
 
     DataPanelLine_Text* textbox;
 
@@ -534,13 +529,16 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     if (!this->_panel)
         return;
     if (!this->_selectedSquad) return;
-    if (!this->_selectedSquad->activePlatoon) return;
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+
     this->_panel->setLineSpacing(24.0f);
     this->_panel->clearPage(this->_category);
-    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    //Blackboard* bb = _selectedSquad->getBlackboard();
-    this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+
+    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+
+    if (_subCategory < 0) _subCategory = 0;
+    else if (_subCategory > 3) _subCategory = 3;
 
     auto dropBox = this->_panel->setLineDropBox("Category", this->_category, &this->_subCategory, false, 1.0f);
     dropBox->addAValue("Basic", 0);

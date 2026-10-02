@@ -441,22 +441,6 @@ namespace SquadAutonomy
         SquadAutonomyModOptions::getSingletonPtr()->saveOptionsSettings();
     }
 
-    /*void (*hide_orig)(OptionsWindow* thisptr);
-    void hide_hook(OptionsWindow* thisptr)
-    {
-        bool modOptionsVisible = false;
-        auto modOptions = SquadAutonomyModOptions::getSingletonPtr();
-        if (modOptions)
-        {
-            modOptionsVisible = modOptions->isVisible();
-        }
-        hide_orig(thisptr);
-        if (modOptions && modOptionsVisible && !modOptions->isVisible())
-        {
-            modOptions->show();
-        }
-    }*/
-
     void (*closeButton_orig)(OptionsWindow* thisptr, MyGUI::Widget* _sender);
     void closeButton_hook(OptionsWindow* thisptr, MyGUI::Widget* _sender)
     {
@@ -553,7 +537,6 @@ namespace SquadAutonomy
         autBtn = orig->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", btnLeft, btnTop, btnWidth/100.0, btnHeight/100.0, MyGUI::Align::Center, "AUTBtn");
         autBtn->setCaption("AUT");
         autBtn->setFontHeight(btnFontSize);
-        //autBtn->eventMouseButtonClick += MyGUI::newDelegate(OpenSquadAutonomyPanelMainBar);
         autBtn->eventMouseButtonPressed +=
             MyGUI::newDelegate(onPressed);
 
@@ -565,43 +548,9 @@ namespace SquadAutonomy
         
         autBtn->setDepth(0);
 
-
-
-        /*MyGUI::Gui* gui = MyGUI::Gui::getInstancePtr();
-
-        autBtnWindow = orig->getWidget()->createWidgetReal<MyGUI::Window>(
-            "",
-            0.655, 0.727,
-            0.039, 0.065,
-            MyGUI::Align::Center,
-            //"Modal",
-            "AUTBtnWindow"
-        );
-
-        autBtnWindow->changeWidgetSkin("Kenshi_BuildPanelSkin");
-        autBtnWindow->setMovable(false);
-        autBtnWindow->setDepth(0);
-        autBtnWindow->setSnap(true);
-        MyGUI::Widget* dragArea = autBtnWindow->createWidgetReal<MyGUI::Widget>(
-            "PanelEmpty",
-            0, 0,
-            1.0, 1.0,
-            MyGUI::Align::Stretch,
-            "DragArea"
-        );
-        dragArea->eventMouseButtonPressed +=
-            MyGUI::newDelegate(onDragPressed);
-
-        dragArea->eventMouseDrag +=
-            MyGUI::newDelegate(onDrag);
-        MyGUI::Button* btn = dragArea->createWidgetReal<MyGUI::Button>("Kenshi_Button1", 0.2, 0.2, 0.6, 0.6, MyGUI::Align::Center, "AUTBtnWindowBtn");
-        btn->setCaption("AUT");
-        //btn->setCaption("AUT");
-        //btn->eventMouseButtonClick += MyGUI::newDelegate(OpenSquadAutonomyPanelMainBar);*/
         if (!showOnMain)
         {
             autBtn->setVisible(false);
-            //autBtnWindow->setVisible(false);
         }
         return orig;
     }
@@ -1395,7 +1344,6 @@ namespace SquadAutonomy
             }
         }
         return score;
-
     }
 
     float (*runTargetFinder_orig)(AI::AIResultsCacher* thisptr, float (AI::* func)(const hand&, hand&, bool), const TaskMatch& key, hand& out);
@@ -1421,33 +1369,8 @@ namespace SquadAutonomy
                 if (out) return 1.0;
                 else return 0.0;
             }
-            /*if (key == AUTO_LABOURING_MINES)
-            {
-                DebugLog("Find labour");
-                out = FindLabourToDo(character);
-                if (out) return 1.0;
-                else return 0.0;
-            }*/
             Log("EndRuntargetFind");
-            //DebugLog("runtargetFind");
-            /*UseableStuff* bedCandidate = nullptr;
-            Building* building = nullptr;
-            if (out) building = out.getBuilding();
-            if (building) bedCandidate = building->getUseableStuff();
-            if (bedCandidate)
-            {
-                int costToUse = bedCandidate->getCostToUse(character);
-                if (costToUse < 0)
-                {
-                    out = nullptr;
-                    return 0.0f;
-                }
-                if (costToUse > 0 && !settings->getUsePaidBeds())
-                {
-                    out = nullptr;
-                    return 0.0f;
-                }
-            }*/
+
         }
         float score = runTargetFinder_orig(thisptr, func, key, out);
 
@@ -1473,6 +1396,71 @@ namespace SquadAutonomy
                     }
                 }
             }
+        }
+    }
+
+    void (*periodicUpdate_orig)(AITaskSytem* thisptr, float time);
+    void periodicUpdate_hook(AITaskSytem* thisptr, float time)
+    {
+        Character* character = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        PlayerInterface* pi = nullptr;
+        Faction* faction = nullptr;
+        Platoon* platoon = nullptr;
+        Tasker* currentGoal = nullptr;
+        bool resetDuration = false;
+        if (thisptr)
+        {
+            character = thisptr->character;
+            currentGoal = thisptr->tryToGetCurrentGoal();
+        }
+        if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
+        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+
+        if (settings && settings->isEnabled())
+        {
+            Log("PeriodicUpdate");
+
+            TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
+            data->setDurationBased(1.0, 4.0, false);
+            data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
+            data->setDurationBased(4.0, 4.0, false);
+
+            //if (character == gui->selectedObject.getCharacter()) DebugLog("PeriodUpdate: " + character->displayName);
+
+            if (settings->isRestTime())
+            {
+                if (!settings->assignSquadHome(true))
+                {
+                    SetNearestFriendlyTownAsHome(platoon);
+                }
+            }
+            else
+            {
+                if (!settings->assignSquadHome(false))
+                {
+                    if (!settings->assignSquadHome(true))
+                    {
+                        SetNearestFriendlyTownAsHome(platoon);
+                    }
+                }
+            }
+            faction = character->getFaction();
+            if (faction)
+            {
+                faction->isPlayer = nullptr;
+            }
+            //DebugLog("End PeriodicUpdate");
+        }
+        /*========Orig Function=======*/
+        periodicUpdate_orig(thisptr, time);
+        /*========Orig Function=======*/
+        if (settings && settings->isEnabled())
+        {
+            RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
+            RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
+            if (faction) faction->isPlayer = settings->getPlayerInterface();
+            Log("End periodUpdate");
         }
     }
 
@@ -1623,7 +1611,6 @@ namespace SquadAutonomy
         }
     }
 
-
     void (*clearCurrentGoal_orig)(OrdersReceiver* thisptr, bool force);
     void clearCurrentGoal_hook(OrdersReceiver* thisptr, bool force)
     {
@@ -1653,6 +1640,39 @@ namespace SquadAutonomy
         /*========Orig Function=======*/
     }
 
+    void (*update4Frame_orig)(AITaskSytem* thisptr, Ogre::Vector3 position, float time);
+    void update4Frame_hook(AITaskSytem* thisptr, Ogre::Vector3 position, float time)
+    {
+        Character* character = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        Platoon* platoon = nullptr;
+        if (thisptr)
+        {
+            character = thisptr->character;
+        }
+        if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
+        if (platoon)
+        {
+            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+        }
+        if (settings && settings->isEnabled())
+        {
+            Log("update4Frame");
+            TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
+            data->setDurationBased(1.0, 4.0, false);
+            data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
+            data->setDurationBased(4.0, 4.0, false);
+        }
+        /*========Orig Function=======*/
+        update4Frame_orig(thisptr, position, time);
+        /*========Orig Function=======*/
+        if (settings && settings->isEnabled())
+        {
+            RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
+            RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
+        }
+    }
+
     void RevertTaskDuration(TaskType type)
     {
         TaskData* data = taskTypetaskData->find(type)->second;
@@ -1666,107 +1686,6 @@ namespace SquadAutonomy
             data->endsAfterTime = orig->endsAfterTime;
         }
     }
-
-    void (*periodicUpdate_orig)(AITaskSytem* thisptr, float time);
-    void periodicUpdate_hook(AITaskSytem* thisptr, float time)
-    {
-        Character* character = nullptr;
-        SquadSettingsInfo* settings = nullptr;
-        PlayerInterface* pi = nullptr;
-        Faction* faction = nullptr;
-        Platoon* platoon = nullptr;
-        Tasker* currentGoal = nullptr;
-        bool resetDuration = false;
-        if (thisptr)
-        {
-            character = thisptr->character;
-            currentGoal = thisptr->tryToGetCurrentGoal();
-        }
-        if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
-
-        if (settings && settings->isEnabled())
-        {
-            Log("PeriodicUpdate");
-            
-            TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
-            data->setDurationBased(1.0, 4.0, false);
-            data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
-            data->setDurationBased(4.0, 4.0, false);
-
-            //if (character == gui->selectedObject.getCharacter()) DebugLog("PeriodUpdate: " + character->displayName);
-
-            if (settings->isRestTime())
-            {
-                if (!settings->assignSquadHome(true))
-                {
-                    SetNearestFriendlyTownAsHome(platoon);
-                }
-            }
-            else
-            {
-                if (!settings->assignSquadHome(false))
-                {
-                    if (!settings->assignSquadHome(true))
-                    {
-                        SetNearestFriendlyTownAsHome(platoon);
-                    }
-                }
-            }
-            faction = character->getFaction();
-            if (faction)
-            {
-                faction->isPlayer = nullptr;
-            }
-            //DebugLog("End PeriodicUpdate");
-        }
-        /*========Orig Function=======*/
-        periodicUpdate_orig(thisptr, time);
-        /*========Orig Function=======*/
-        if (settings && settings->isEnabled())
-        {
-            RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
-            RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
-            if (faction) faction->isPlayer = settings->getPlayerInterface();
-            Log("End periodUpdate");
-
-            /*if (thisptr && character == gui->selectedObject.getCharacter())
-            {
-                auto currentGoal = thisptr->tryToGetCurrentGoal();
-                if (currentGoal)
-                {
-                    auto taskData = currentGoal->taskData;
-                    if (taskData)
-                    {
-                        std::string description = currentGoal->getDescription();
-                        float durationMin = taskData->durationMin;
-                        float durationFuzz = taskData->durationFuzz;
-                        bool isDurationBased = taskData->isDurationBased;
-                        bool infrequentGoalChecks = taskData->infrequentGoalChecks;
-                        bool endsAfterTime = taskData->endsAfterTime;
-                        bool isUnstoppable = taskData->isUnstoppableTask;
-                        bool forDirectPlayerOrdersOnly = taskData->forDirectPlayerOrdersOnly;
-                        bool forFulfillPlayerOrdersOrNPCOnly = taskData->forFulfillPlayerOrdersOrNPCOnly;
-                        bool cantEndPrematurely = taskData->getRequirementsCantEndActionPrematurely();
-                        bool isPermaJob = taskData->isPermaJob();
-                        DebugLog(description + " Duration Min: " + Ogre::StringConverter::toString(durationMin) + " Duration Fuzz: " + Ogre::StringConverter::toString(durationFuzz) +
-                            " Is Duration Based: " + Ogre::StringConverter::toString(isDurationBased) +
-                            " Infrequent Goal Checks: " + Ogre::StringConverter::toString(infrequentGoalChecks) +
-                            " Ends After Time: " + Ogre::StringConverter::toString(endsAfterTime) +
-                            " Is Unstoppable Task: " + Ogre::StringConverter::toString(isUnstoppable) +
-                            " For Direct Player Orders: " + Ogre::StringConverter::toString(forDirectPlayerOrdersOnly) +
-                            " For Fulfil Player Orders or NPC: " + Ogre::StringConverter::toString(forFulfillPlayerOrdersOrNPCOnly) +
-                            " Can't End Prematurely: " + Ogre::StringConverter::toString(cantEndPrematurely) +
-                            " Is Permajob: " + Ogre::StringConverter::toString(isPermaJob));
-                    }
-                    DebugLog("Time Remaining: " + Ogre::StringConverter::toString(thisptr->getGOalExpiryTimeRemaining()));
-                    DebugLog("Completed: " + Ogre::StringConverter::toString(thisptr->_taskCompletedFlag));
-                    DebugLog("Impossible: " + Ogre::StringConverter::toString(thisptr->_taskImpossibleFlag));
-                }
-            }*/
-        }
-    }
-
 
 #pragma region MAN THE GATE target fix
     Building* destGate = nullptr;
@@ -2064,13 +1983,13 @@ namespace SquadAutonomy
                                 thisptr->addOrder(door, OPEN_DOOR, door, false, true, door->pos);
                             }
                         }
-                        else
+                        /*else
                         {
                             if (door->getDoorState() == DOORSTATE_CLOSED)
                             {
                                 thisptr->addOrder(door, OPEN_DOOR, door, false, true, door->pos);
                             }
-                        }
+                        }*/
                     }
 
                 }
@@ -2079,84 +1998,10 @@ namespace SquadAutonomy
     }
 #pragma endregion
 
-    //void (*_NV_setCurrentGoal_orig)(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri);
-    //void _NV_setCurrentGoal_hook(AITaskSytem* thisptr, Tasker* t, float score, taskPriority pri)
-    //{
-    //    Character* character = nullptr;
-    //    SquadSettingsInfo* settings = nullptr;
-    //    Platoon* platoon = nullptr;
-    //    TaskData* data = nullptr;
-    //    float min = 0;
-    //    float fuzz = 0;
-    //    bool isDurationBased = false;
-    //    bool resetTaskData = false;
-    //    if (thisptr) character = thisptr->character;
-    //    if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-    //    if (platoon)
-    //    {
-    //        settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
-    //    }
-    //    if (t)
-    //    {
-    //        data = t->taskData;
-    //    }
-    //    if (data)
-    //    {
-    //        TaskType type = t->key();
-    //        if (settings && settings->isEnabled())
-    //        {
-    //            Log("SetCurrentGoal TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)));
-    //            if (type == MAN_A_TURRET || type == MAN_A_TURRET_ON_BUILDING || type == MAN_THE_GATE || type == AUTO_LABOURING_MINES ||
-    //                type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT ||
-    //                type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE)
-    //            {
 
-    //                t->subject == platoon->getOwnerships()->_homeBuilding;
-    //            }
 
-    //        }
-    //    }
-    //    /*========Orig Function=======*/
-    //    _NV_setCurrentGoal_orig(thisptr, t, score, pri);
-    //    /*========Orig Function=======*/
-    //}
-
-    // Hook the method (call interception) — the primary mod mechanism
-    void (*update4Frame_orig)(AITaskSytem* thisptr, Ogre::Vector3 position, float time);
-    void update4Frame_hook(AITaskSytem* thisptr, Ogre::Vector3 position, float time)
-    {
-        Character* character = nullptr;
-        SquadSettingsInfo* settings = nullptr;
-        Platoon* platoon = nullptr;
-        if (thisptr)
-        {
-            character = thisptr->character;
-        }
-        if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-        if (platoon)
-        {
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
-        }
-        if (settings && settings->isEnabled())
-        {
-            Log("update4Frame");
-            TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
-            data->setDurationBased(1.0, 4.0, false);
-            data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
-            data->setDurationBased(4.0, 4.0, false);
-        }
-        /*========Orig Function=======*/
-        update4Frame_orig(thisptr, position, time);
-        /*========Orig Function=======*/
-        if (settings && settings->isEnabled())
-        {
-            RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
-            RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
-        }
-    }
-
-    bool (*signalStart_orig)(AIPackage* thisptr);
-    bool signalStart_hook(AIPackage* thisptr)
+    bool (*Package_WanderingTrader_signalStart_orig)(AIPackage* thisptr);
+    bool Package_WanderingTrader_signalStart_hook(AIPackage* thisptr)
     {
 
         Platoon* squad = thisptr->squad;
@@ -2190,28 +2035,8 @@ namespace SquadAutonomy
             //DebugLog("wasASuccessEnd");
         }
 
-        return signalStart_orig(thisptr);
+        return Package_WanderingTrader_signalStart_orig(thisptr);
     }
-   
-    // Hook the method (call interception) — the primary mod mechanism
-    bool (*_NV_signalStart_orig)(AIPackage* thisptr);
-    bool _NV_signalStart_hook(AIPackage* thisptr)
-    {
-
-        bool result = _NV_signalStart_orig(thisptr);
-
-        return result;
-    }
-    // Hook the method (call interception) — the primary mod mechanism
-    bool (*_NV_wasASuccess_orig)(AIPackage* thisptr);
-    bool _NV_wasASuccess_hook(AIPackage* thisptr)
-    {
-
-        bool result = _NV_wasASuccess_orig(thisptr);
-        return result;
-    }
-    // install (in startPlugin):
-    //KenshiLib::AddHook(KenshiLib::GetRealAddress(&AIPackage::_NV_wasASuccess), &_NV_wasASuccess_hook, &_NV_wasASuccess_orig);
 
     float (*score_orig)(Tasker* thisptr, AI* ai);
     float score_hook(Tasker* thisptr, AI* ai)
@@ -2412,7 +2237,7 @@ namespace SquadAutonomy
                 medical = character->getMedical();
                 faction = character->getFaction();
             }
-            //for auto sleep task but idk if it even works
+            //for auto sleep task
             if (faction && faction->isPlayer)
             {
                 //DebugLog(character->displayName + "AutoSleep");
@@ -2653,8 +2478,6 @@ __declspec(dllexport) void startPlugin()
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
         ErrorLog("Could not add CharMovement::_NV_setDestination hook!");
 
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::_NV_update), &SquadAutonomy::OptionsWindow_NV_update_hook, &SquadAutonomy::OptionsWindow_NV_update_orig))
-        ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");*/
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::saveGame), &SquadAutonomy::saveGame_hook, &SquadAutonomy::saveGame_orig))
 		ErrorLog("Could not add SaveManager::saveGame hook!");
 	if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::loadGame), &SquadAutonomy::loadGame_hook, &SquadAutonomy::loadGame_orig))
@@ -2672,10 +2495,11 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add UseableStuff::_NV_couldIOperate hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Tasker::score), &SquadAutonomy::score_hook, &SquadAutonomy::score_orig))
         ErrorLog("Could not add Tasker::score hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &SquadAutonomy::runTargetFind_hook, &SquadAutonomy::runTargetFind_orig))
-        ErrorLog("Could not add runTargetFind hook!");*/
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::_isRequirementsComplete), &SquadAutonomy::_isRequirementsComplete_hook, &SquadAutonomy::_isRequirementsComplete_orig))
         ErrorLog("Could not add TaskData::_isRequirementsComplete hook!");
+    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &SquadAutonomy::runTargetFind_hook, &SquadAutonomy::runTargetFind_orig))
+        ErrorLog("Could not add runTargetFind hook!");*/
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGetOutOfBed), &SquadAutonomy::_NV_scoreGetOutOfBed_hook, &SquadAutonomy::_NV_scoreGetOutOfBed_orig))
         ErrorLog("Could not add AI::_NV_scoreGetOutOfBed hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGoToBed), &SquadAutonomy::_NV_scoreGoToBed_hook, &SquadAutonomy::_NV_scoreGoToBed_orig))
@@ -2684,30 +2508,31 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AI::findMineToWorkAt hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
         ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OrdersReceiver::clearCurrentGoal), &SquadAutonomy::clearCurrentGoal_hook, &SquadAutonomy::clearCurrentGoal_orig))
         ErrorLog("Could not add OrdersReceiver::clearCurrentGoal hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGoals), &SquadAutonomy::runGoals_hook, &SquadAutonomy::runGoals_orig))
-        ErrorLog("Could not add runGoals hook!");*/
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::periodicUpdate), &SquadAutonomy::periodicUpdate_hook, &SquadAutonomy::periodicUpdate_orig))
+        ErrorLog("Could not add AITaskSytem::periodicUpdate hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::choosePermaJob), &SquadAutonomy::choosePermaJob_hook, &SquadAutonomy::choosePermaJob_orig))
         ErrorLog("Could not add AITaskSytem::choosePermaJob hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::currentActionChecks), &SquadAutonomy::currentActionChecks_hook, &SquadAutonomy::currentActionChecks_orig))
+        ErrorLog("Could not add AITaskSytem::currentActionChecks hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::update4Frame), &SquadAutonomy::update4Frame_hook, &SquadAutonomy::update4Frame_orig))
+        ErrorLog("Could not add AITaskSytem::update4Frame hook!");
+    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGoals), &SquadAutonomy::runGoals_hook, &SquadAutonomy::runGoals_orig))
+        ErrorLog("Could not add runGoals hook!");*/
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoalFrom), &SquadAutonomy::chooseGoalFrom_hook, &SquadAutonomy::chooseGoalFrom_orig))
         ErrorLog("Could not add chooseGoalFrom hook!");*/
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoal), &SquadAutonomy::chooseGoal_hook, &SquadAutonomy::chooseGoal_orig))
         ErrorLog("Could not add AITaskSytem::chooseGoal hook!");*/
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGOAP) , &SquadAutonomy::runGOAP_hook, &SquadAutonomy::runGOAP_orig))
         ErrorLog("Could not add AITaskSytem::runGOAP hook!");*/
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::periodicUpdate), &SquadAutonomy::periodicUpdate_hook, &SquadAutonomy::periodicUpdate_orig))
-        ErrorLog("Could not add AITaskSytem::periodicUpdate hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::currentActionChecks), &SquadAutonomy::currentActionChecks_hook, &SquadAutonomy::currentActionChecks_orig))
-        ErrorLog("Could not add AITaskSytem::currentActionChecks hook!");
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &SquadAutonomy::_NV_setCurrentGoal_hook, &SquadAutonomy::_NV_setCurrentGoal_orig))
         ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");*/
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &SquadAutonomy::setTaskExpiryTimer_hook, &SquadAutonomy::setTaskExpiryTimer_orig))
         ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");*/
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalStart, &SquadAutonomy::signalStart_hook, &SquadAutonomy::signalStart_orig))
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalStart, &SquadAutonomy::Package_WanderingTrader_signalStart_hook, &SquadAutonomy::Package_WanderingTrader_signalStart_orig))
         ErrorLog("Could not add Wandering::signal_start hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::update4Frame), &SquadAutonomy::update4Frame_hook, &SquadAutonomy::update4Frame_orig))
-        ErrorLog("Could not add AITaskSytem::update4Frame hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig))
         ErrorLog("Could not add Task_MoveToDoor_Gate_ChooseSide_gatePosition hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_ManTheGate_Update, &SquadAutonomy::Task_ManTheGate_Update_hook, &SquadAutonomy::Task_ManTheGate_Update_orig))
