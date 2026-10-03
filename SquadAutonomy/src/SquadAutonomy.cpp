@@ -3,6 +3,7 @@
 #include "SquadAutonomySettings.h"
 #include "SquadAutonomyModOptions.h"
 #include "SquadAutonomyButton.h"
+#include "SquadAutonomyLocalization.h"
 
 #include <Debug.h>
 
@@ -138,6 +139,11 @@ namespace SquadAutonomy
     MyGUI::IntPoint mWindowStart(0, 0);
     bool mClicked = false;
     bool mDragged = false;
+
+    Building* destGate = nullptr;
+    float closeGateCD = 1.0;
+    float closeGateCDTimer = 0;
+    bool closeGateTimerOn = false;
 
     class OriginalTaskDataDuration
     {
@@ -427,9 +433,10 @@ namespace SquadAutonomy
                 float left = right - 0.1;
                 float top = static_cast<float>(modLine->w2->getTop())/settingsPanel->getWidget()->getSize().height;
                 float height = static_cast<float>(modLine->w2->getHeight()) / settingsPanel->getWidget()->getSize().height;
+                float extendedHeight = height * 1.5;
                 //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
-                auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top, 0.1, height, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
-                btn->setCaption("Settings");
+                auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight-height)/2.0, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
+                btn->setCaption(Localization::gettext("Settings"));
                 btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModOptions);
             }
         }
@@ -519,7 +526,7 @@ namespace SquadAutonomy
     {
         MainBarGUI* orig = MainbarGUICONSTRUCTOR_orig(thisptr);
         autBtn = orig->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", btnLeft, btnTop, btnWidth/100.0, btnHeight/100.0, MyGUI::Align::Center, "AUTBtn");
-        autBtn->setCaption("AUT");
+        autBtn->setCaption(Localization::gettext("AUT"));
         autBtn->setFontHeight(btnFontSize);
         autBtn->eventMouseButtonPressed +=
             MyGUI::newDelegate(onPressed);
@@ -669,7 +676,6 @@ namespace SquadAutonomy
     int (*saveGame_orig)(SaveManager* thisptr, const std::string& location, const std::string& name);
     int saveGame_hook(SaveManager* thisptr, const std::string& location, const std::string& name)
     {
-        settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/' + saveName;
         auto settings = SquadAutonomySettings::getSingletonPtr();
         for (int i = 0; i < settings->squadSettings.size(); ++i)
         {
@@ -678,13 +684,11 @@ namespace SquadAutonomy
             ResetAI(squadSettings->getSquad());
             squadSettings->unassignSquadHome();
         }
+        shouldSave = true;
+        settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/' + saveName;
         
         int result = saveGame_orig(thisptr, location, name);
 
-        if (result == 0)
-        {
-            shouldSave = true;
-        }
         return result;
     }
 
@@ -717,11 +721,9 @@ namespace SquadAutonomy
         {
             if (!ou->isLoadingFromASaveGame())
             {
-                if (SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath))
-                {
-                    SquadAutonomySettings::getSingletonPtr()->initialized = true;
-                    shouldLoad = false;
-                }
+                SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath);
+                SquadAutonomySettings::getSingletonPtr()->initialized = true;
+                shouldLoad = false;
             }
         }
     }
@@ -1282,6 +1284,18 @@ namespace SquadAutonomy
         return _NV_couldIOperate_orig(thisptr, h);
     }
 
+    float (*findKOIntruder_town_orig)(AI* thisptr, const hand& _a1, hand& out, bool justAsking);
+    float findKOIntruder_town_hook(AI* thisptr, const hand& _a1, hand& out, bool justAsking)
+    {
+        float score = findKOIntruder_town_orig(thisptr, _a1, out, justAsking);
+        if (out && out.getCharacter() && out.getCharacter()->isBeingCarried())
+        {
+            out = nullptr;
+            return 0.0;
+        }
+        return score;
+    }
+
     float (*findMineToWorkAt_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
     float findMineToWorkAt_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
     {
@@ -1521,10 +1535,13 @@ namespace SquadAutonomy
             {
                 TaskType type = currentAction->key();
 
+                //is player order?
+                if (thisptr->hasPlayerOrder(type)) return;
+
                 Log("CurrentActionChecks TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)));
                 if (type == MAN_A_TURRET || type == MAN_A_TURRET_ON_BUILDING || type == MAN_THE_GATE || type == AUTO_LABOURING_MINES ||
                     type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT ||
-                    type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE)
+                    type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE || type == REPAIR || type == BUILD)
                 {
                     if (settings->isRestTime())
                     {
@@ -1638,6 +1655,16 @@ namespace SquadAutonomy
             data->setDurationBased(1.0, 4.0, false);
             data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
             data->setDurationBased(4.0, 4.0, false);
+
+            if (settings->getCloseGate())
+            {
+                auto currentTask = thisptr->getCurrentGoal();
+                if (currentTask && currentTask.key() == MAN_THE_GATE && closeGateTimerOn)
+                {
+                    closeGateCDTimer -= time;
+                    DebugLog("Close Gate Timer: " + Ogre::StringConverter::toString(closeGateCDTimer));
+                }
+            }
         }
         /*========Orig Function=======*/
         update4Frame_orig(thisptr, position, time);
@@ -1664,7 +1691,7 @@ namespace SquadAutonomy
     }
 
 #pragma region MAN THE GATE target fix
-    Building* destGate = nullptr;
+    
 
     void (*Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig)(Tasker* thisptr, Ogre::Vector3& val, CharBody* body);
     void Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook(Tasker* thisptr, Ogre::Vector3& val, CharBody* body)
@@ -1819,26 +1846,27 @@ namespace SquadAutonomy
         if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            if (thisptr)
+            if (settings->getStayInsideGate() && thisptr)
             {
-                TaskType key = thisptr->key;
-                if (thisptr->key == MAN_THE_GATE)
+                //TaskType key = thisptr->key;
+
+                //idk how this works
+                //from what I can tell, it keeps returning false because something about Task StateType requirement failing
+                //seemingly something to do with function AI::stateIsTrue and func 61e990 and DAT_141e45450
+                Character* character = ai->getCharacter();
+                CharMovement* movement = nullptr;
+                if (character) movement = character->getMovement();
+                if (movement && movement->isDestinationReached())
                 {
-                    //idk how this works
-                    //from what I can tell, it keeps returning false because something about Task StateType requirement failing
-                    //seemingly something to do with function AI::stateIsTrue and func 61e990 and DAT_141e45450
-                    Character* character = ai->getCharacter();
-                    CharMovement* movement = nullptr;
-                    if (character) movement = character->getMovement();
-                    /*if (movement && movement->isDestinationReached())
-                    {
-                        return true;
-                    }*/
-                    if (character->pos.squaredDistance(location) <= 100.0f)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
+                else return false;
+                /*if (character->pos.squaredDistance(location) <= 50.0f)
+                {
+                    return true;
+                }
+                else return false;*/
+
             }
         }
         return _isRequirementsComplete_orig(thisptr, ai, target, location, subTarget, autoTargetFinder, failedOn);
@@ -1914,6 +1942,7 @@ namespace SquadAutonomy
         {
             Tasker* currentTask = nullptr;
             OrdersReceiver* order = thisptr->getOrdersReciever();
+            CharBody* body = thisptr->getBody();
             if (order) currentTask = order->tryToGetCurrentGoal();
             if (currentTask)
             {
@@ -1921,11 +1950,12 @@ namespace SquadAutonomy
                 if (key == MAN_THE_GATE)
                 {
                     //DebugLog("ManTheGate");
-
+                    //const TaskData* taskData = currentTask->getTaskData();
+                    //if (taskData) DebugLog("Man The Gate Permajob Associate: " + Ogre::StringConverter::toString(taskData->getPermaJobType()) + ", " + Ogre::StringConverter::toString(taskData->getPermaJobAssociation()) + ", " + Ogre::StringConverter::toString(taskData->getPermaJobAssociation_secondary()));
                     Building* gate = nullptr;
                     if (squad->getOwnerships() && squad->getOwnerships()->_homeBuilding) gate = squad->getOwnerships()->_homeBuilding.getBuilding();
                     DoorStuff* door = nullptr;
-                    if (gate && squad->activePlatoon)
+                    if (gate)
                     {
                         door = gate->getDoor();
                     }
@@ -1933,10 +1963,16 @@ namespace SquadAutonomy
                     {
                         //currentTask->subject = gate->getHandle();
                         //currentTask->setLocation(gate->pos);
-                        if (settings->getCloseGate())
+                        if (door->isDamaged())
+                        {
+                            if (body) body->setCurrentAction(REPAIR, door);
+                            //thisptr->addJob(REPAIR, door, false, false, door->pos);
+                            //thisptr->addOrder(door, REPAIR, door, false, true, door->pos);
+                        }
+                        else if (settings->getCloseGate())
                         {
                             bool isInsideGate = true;
-                            if (settings->getStayInsideGate())
+                            if (settings->getStayInsideGate() && squad->activePlatoon)
                             {
                                 for (auto it = squad->activePlatoon->things.begin(); it != squad->activePlatoon->things.end(); ++it)
                                 {
@@ -1949,14 +1985,36 @@ namespace SquadAutonomy
                                 }
                             }
                             //DebugLog("IsInsideGate: " + Ogre::StringConverter::toString(isInsideGate));
-                            if (isInsideGate && (door->getDoorState() == DOORSTATE_OPEN))
+                            if (isInsideGate)
                             {
-                                //DebugLog("Closing GATE");
-                                thisptr->addOrder(door, CLOSE_DOOR, door, false, true, door->pos);
+                                if (door->getDoorState() == DOORSTATE_OPEN)
+                                {
+                                    //DebugLog("Closing GATE");
+                                    if (!closeGateTimerOn)
+                                    {
+                                        closeGateTimerOn = true;
+                                        closeGateCDTimer = closeGateCD;
+                                    }
+                                    else if (closeGateCDTimer <= 0.0)
+                                    {
+                                        if (body) body->setCurrentAction(CLOSE_DOOR, door);
+                                        //thisptr->addOrder(door, CLOSE_DOOR, door, false, true, door->pos);
+                                        //thisptr->addGoal(CLOSE_DOOR, door);
+                                        closeGateCDTimer = 0.0;
+                                        closeGateTimerOn = false;
+                                    }
+                                }
+                                else
+                                {
+                                    closeGateCDTimer = 0.0;
+                                    closeGateTimerOn = false;
+                                }
                             }
                             else if (!isInsideGate && (door->getDoorState() == DOORSTATE_CLOSED))
                             {
-                                thisptr->addOrder(door, OPEN_DOOR, door, false, true, door->pos);
+                                if (body) body->setCurrentAction(OPEN_DOOR, door);
+                                //thisptr->addGoal(OPEN_DOOR, door);
+                                //thisptr->addOrder(door, OPEN_DOOR, door, false, true, door->pos);
                             }
                         }
                         /*else
@@ -2035,6 +2093,9 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled() && thisptr)
         {
             TaskType type = thisptr->key();
+            const TaskData* taskData = thisptr->getTaskData();
+            if (taskData && taskData->isPermaJob()) return score;
+
             Log("score TaskType: " +Ogre::StringConverter::toString(static_cast<int>(type)) + " - "  +Ogre::StringConverter::toString(score));
             if (type == STAY_IN_HOME || type == SIT_AROUND)
             {
@@ -2073,9 +2134,9 @@ namespace SquadAutonomy
                     }
                 }
             }
-            else if (type == MAN_THE_GATE || type == AUTO_LABOURING_MINES || type == AUTO_LABOURING_MINES_PRETEND ||
-                type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT || type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE ||
-                type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME || type == ATTACK_ENEMIES)
+            else if (type == MAN_THE_GATE || type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT || type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE ||
+                type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME || type == ATTACK_ENEMIES ||
+                type == AUTO_LABOURING_MINES || type == AUTO_LABOURING_MINES_PRETEND)
             {
                 if (type == TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME || type == ATTACK_ENEMIES)
                 {
@@ -2106,6 +2167,14 @@ namespace SquadAutonomy
                 {
                     return 0.0;
                 }
+                MedicalSystem* medical = nullptr;
+                RaceData* race = nullptr;
+                if (character)
+                {
+                    race = character->getRace();
+                    medical = character->getMedical();
+                }
+                return (medical->scoreFirstAidNeed(race->robot)) * 2.0;
             }
             else if (type == PATROL_TOWN)
             {
@@ -2115,7 +2184,6 @@ namespace SquadAutonomy
                     if (currentTask->key() == PATROL_TOWN)
                     {
                         float score = taskSystem->currentGoalScore;
-                        //DebugLog("Patrol score: " + Ogre::StringConverter::toString(score));
                         score *= 0.98;
                         //DebugLog("Patrol score: " + Ogre::StringConverter::toString(score));
                         taskSystem->currentGoalScore = std::max(score, 0.0001f);
@@ -2137,7 +2205,7 @@ namespace SquadAutonomy
                     return 0.0;
                 }
             }
-            else if (type == GET_OUT_OF_BED_IF_ITS_EMERGENCY || type == GET_OUT_OF_BED)
+            /*else if (type == GET_OUT_OF_BED_IF_ITS_EMERGENCY || type == GET_OUT_OF_BED)
             {
                 MedicalSystem* medical = nullptr;
                 RaceData* race = nullptr;
@@ -2160,7 +2228,7 @@ namespace SquadAutonomy
                         }
                     }
                 }
-            }
+            }*/
             else if (type == FIND_AND_RESCUE || type == FIND_AND_RESCUE_IF_THERES_BEDS || type == FIND_AND_RESCUE_LEADER)
             {
                 if (!settings->getDoRescue())
@@ -2168,17 +2236,6 @@ namespace SquadAutonomy
                     return 0.0;
                 }
             }
-            /*else if (type == AQUIRE_FOOD_AT_HOMEBASE)
-            {
-                MedicalSystem* medical = nullptr;
-                RaceData* race = nullptr;
-                if (character)
-                {
-                    race = character->getRace();
-                    medical = character->getMedical();
-                }
-                DebugLog("Grab food score: " + Ogre::StringConverter::toString(score));
-            }*/
             Log("End score");
         }
         return score;
@@ -2328,7 +2385,7 @@ namespace SquadAutonomy
                         //DebugLog("GetOutOfBed rest until healed");
                         return 0.0;
                     }
-                    if (!settings->isRestTime() && stateBroadcast->isSleeping)
+                    if (!settings->isRestTime())
                     {
                         //DebugLog("GetOutOfBed Sleep outside of rest time");
                         return 1.0;
@@ -2367,6 +2424,7 @@ namespace SquadAutonomy
         modPath = GetCurrentDLLDirectory();
         logPath = modPath + logFileName;
         logBakPath = modPath + logBakFileName;
+        Localization::init();
         SquadAutonomySettings::getSingletonPtr();
         Log("=====================New Session=====================");
     }
@@ -2482,6 +2540,8 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AI::_NV_scoreGoToBed hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findMineToWorkAt), &SquadAutonomy::findMineToWorkAt_hook, &SquadAutonomy::findMineToWorkAt_orig))
         ErrorLog("Could not add AI::findMineToWorkAt hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findKOIntruder_town), &SquadAutonomy::findKOIntruder_town_hook, &SquadAutonomy::findKOIntruder_town_orig))
+        ErrorLog("Could not add AI::findKOIntruder_town hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
         ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
 
@@ -2507,6 +2567,7 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");*/
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &SquadAutonomy::setTaskExpiryTimer_hook, &SquadAutonomy::setTaskExpiryTimer_orig))
         ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");*/
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalStart, &SquadAutonomy::Package_WanderingTrader_signalStart_hook, &SquadAutonomy::Package_WanderingTrader_signalStart_orig))
         ErrorLog("Could not add Wandering::signal_start hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig))

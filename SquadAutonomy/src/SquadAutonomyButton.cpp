@@ -1,5 +1,7 @@
 #include "SquadAutonomyButton.h"
 
+#include "SquadAutonomyLocalization.h"
+
 #include <kenshi/Platoon.h>
 
 #include <mygui/MyGUI_Button.h>
@@ -28,7 +30,7 @@ namespace SquadAutonomy
             "AutonomyButton"
         );
 
-        button->setCaption("AUT");
+        button->setCaption(Localization::gettext("AUT"));
         button->eventMouseButtonClick += MyGUI::newDelegate(this, &SquadAutonomyButton::onClick);
     }
 

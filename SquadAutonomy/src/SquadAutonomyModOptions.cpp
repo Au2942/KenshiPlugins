@@ -1,6 +1,7 @@
 #include "SquadAutonomy.h"
 #include "SquadAutonomySettings.h"
 #include "SquadAutonomyModOptions.h"
+#include "SquadAutonomyLocalization.h"
 #include <Debug.h>
 #include <ogre/OgreStringConverter.h>
 #include <boost/scoped_ptr.hpp>
@@ -40,7 +41,7 @@ void SquadAutonomyModOptions::create()
         gui->destroy(this->_panel);
     }
     this->_panel = gui->createDatapanel(0.25f, 0.35f, 0.3f, 0.5f, true, "Window", true);
-    this->_panel->setCaption("Squad Autonomy Mod Options");
+    this->_panel->setCaption(Localization::gettext("Squad Autonomy Mod Options"));
     this->_panel->setPanelName("SquadAutonomyModOptions");
 
     refresh();
@@ -76,24 +77,24 @@ void SquadAutonomyModOptions::refresh()
     this->_panel->clearPage(this->_category);
     this->_panel->setLineSpacing(24.0f);
     //auto textbox = this->_panel->setLineText("", *_MainColorCode + "[Squad Autonomy]", _category, true, MyGUI::Align::Left);
-    auto checkbox = this->_panel->setLineCheckbox("Show button on Mainbar", &showOnMain, _category);
-    if (tooltip) tooltip->setup(checkbox->getTextBox(), "Show AUT button on the Mainbar");
-    checkbox = this->_panel->setLineCheckbox("Lock button position", &lockPosition, _category);
-    if (tooltip) tooltip->setup(checkbox->getTextBox(), "Lock/Unlock button position (can be dragged around to change position when unlocked)");
-    auto slider = this->_panel->setLineSliderEditable("Button Width", _category, true, 0.0, 100.0, &btnWidth);
+    auto checkbox = this->_panel->setLineCheckbox(Localization::gettext("Show button on Mainbar"), &showOnMain, _category);
+    if (tooltip) tooltip->setup(checkbox->getTextBox(), Localization::gettext("Show AUT button on the Mainbar"));
+    checkbox = this->_panel->setLineCheckbox(Localization::gettext("Lock button position"), &lockPosition, _category);
+    if (tooltip) tooltip->setup(checkbox->getTextBox(), Localization::gettext("Lock/Unlock button position (can be dragged around to change position when unlocked)"));
+    auto slider = this->_panel->setLineSliderEditable(Localization::gettext("Button Width"), _category, true, 0.0, 100.0, &btnWidth);
     slider->setPrecision(2);
-    if (tooltip) tooltip->setup(slider->nameText, "Set the button width relative to the screen width");
-    slider = this->_panel->setLineSliderEditable("Button Height", _category, true, 0.0, 100.0, &btnHeight);
+    if (tooltip) tooltip->setup(slider->nameText, Localization::gettext("Set the button width relative to the screen width"));
+    slider = this->_panel->setLineSliderEditable(Localization::gettext("Button Height"), _category, true, 0.0, 100.0, &btnHeight);
     slider->setPrecision(2);
-    if (tooltip) tooltip->setup(slider->nameText, "Set the button height relative to the screen height");
-    slider = this->_panel->setLineSliderEditable("Button Font Size", _category, true, 0.0, 100.0, &btnFontSize);
+    if (tooltip) tooltip->setup(slider->nameText, Localization::gettext("Set the button height relative to the screen height"));
+    slider = this->_panel->setLineSliderEditable(Localization::gettext("Button Font Size"), _category, true, 0.0, 100.0, &btnFontSize);
     slider->setPrecision(0);
-    if (tooltip) tooltip->setup(slider->nameText, "Set the button font size");
-    checkbox = this->_panel->setLineCheckbox("Show button in Squad screen", &showInSquad, _category);
-    if (tooltip) tooltip->setup(checkbox->getTextBox(), "Show AUT button in the Squad Management screen");
-    checkbox = this->_panel->setLineCheckbox("Enable logging", &enableLogging, _category);
-    if (tooltip) tooltip->setup(checkbox->getTextBox(), "Write to log. Turn on if experiencing frequent crashes and include the last few lines with your bug report.");
-    auto button = this->_panel->setLineButton("", "Reset to Default", _category);
+    if (tooltip) tooltip->setup(slider->nameText, Localization::gettext("Set the button font size"));
+    checkbox = this->_panel->setLineCheckbox(Localization::gettext("Show button in Squad screen"), &showInSquad, _category);
+    if (tooltip) tooltip->setup(checkbox->getTextBox(), Localization::gettext("Show AUT button in the Squad Management screen"));
+    checkbox = this->_panel->setLineCheckbox(Localization::gettext("Enable logging"), &enableLogging, _category);
+    if (tooltip) tooltip->setup(checkbox->getTextBox(), Localization::gettext("Write to log. Turn on if experiencing frequent crashes and include the last few lines with your bug report."));
+    auto button = this->_panel->setLineButton("", Localization::gettext("Reset to Default"), _category);
     button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &SquadAutonomyModOptions::resetSettingsToDefault);
 
 }

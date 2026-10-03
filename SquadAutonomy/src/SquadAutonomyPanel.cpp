@@ -1,5 +1,6 @@
 #include "SquadAutonomy.h"
 #include "SquadAutonomyPanel.h"
+#include "SquadAutonomyLocalization.h"
 
 #include <Debug.h>
 
@@ -24,7 +25,7 @@ std::string lineBoxAIPackage;
 
 void initLineKey()
 {
-    lineBoxAIPackage = "AI package";
+    lineBoxAIPackage = Localization::gettext("AI package");
 }
 
 SquadAutonomyPanel* SquadAutonomyPanel::getSingletonPtr()
@@ -58,7 +59,7 @@ void SquadAutonomyPanel::create()
     }
 
     this->_panel = gui->createDatapanel(0.25f, 0.375f, 0.25f, 0.5f, true, "Window", true);
-    this->_panel->setCaption("Squad Autonomy");
+    this->_panel->setCaption(Localization::gettext("Squad Autonomy"));
     this->_panel->setPanelName("SquadAutonomy");
 
     _options = new AutonomyOptions();
@@ -71,8 +72,8 @@ void SquadAutonomyPanel::create()
     }
 
     this->_panel->showTabs(true);
-    this->_panel->addTab(this->_category, "Main", "");
-    this->_panel->addTab(_options->getCategory(), "Options", "");
+    this->_panel->addTab(this->_category, Localization::gettext("Main"), "");
+    this->_panel->addTab(_options->getCategory(), Localization::gettext("Options"), "");
     this->_panel->changeCategory(this->_category);
 
     refresh();
@@ -90,11 +91,11 @@ void SquadAutonomyPanel::refresh()
     this->_panel->setLineSpacing(32.0f);
     this->_panel->clearPage(this->_category);
 
-    if (_selectedSquad->activePlatoon) this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+    if (_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::gettext("Squad Autonomy:") + ' ' + _selectedSquad->activePlatoon->getName());
 
     DataPanelLine_Text* textbox;
 
-    auto button = this->_panel->setLineToggleButton("", "Enable Autonomy", this->_category);
+    auto button = this->_panel->setLineToggleButton("", Localization::gettext("Enable Autonomy"), this->_category);
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_toggleAI);
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
@@ -105,13 +106,13 @@ void SquadAutonomyPanel::refresh()
     }
     this->_panel->addSpace(this->_category, 0.25f);
 
-    button = this->_panel->setLineTextButton("", "Set Squad Home Building", this->_category, 1.0f, "Kenshi_Button2");
+    button = this->_panel->setLineTextButton("", Localization::gettext("Set Squad Home Building"), this->_category, 1.0f, "Kenshi_Button2");
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_setHome);
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
     button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
 
-    button = this->_panel->setLineTextButton("", "Set Squad Work Building", this->_category, 1.0f, "Kenshi_Button2");
+    button = this->_panel->setLineTextButton("", Localization::gettext("Set Squad Work Building"), this->_category, 1.0f, "Kenshi_Button2");
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_setWork);
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
@@ -123,14 +124,14 @@ void SquadAutonomyPanel::refresh()
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
     button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());*/
 
-    button = this->_panel->setLineTextButton("", "Clear Buildings", this->_category, 1.0f, "Kenshi_Button2");
+    button = this->_panel->setLineTextButton("", Localization::gettext("Clear Buildings"), this->_category, 1.0f, "Kenshi_Button2");
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_clearBuildings);
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
     button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
     this->_panel->addSpace(this->_category, 0.25f);
 
-    auto editbox = this->_panel->setLineTextEditable("Search", "", this->_category, true, false, MyGUI::Align::Left, 0.95f);
+    auto editbox = this->_panel->setLineTextEditable(Localization::gettext("Search"), "", this->_category, true, false, MyGUI::Align::Left, 0.95f);
     editbox->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_changeAIPackageSearchText);
 
@@ -140,18 +141,18 @@ void SquadAutonomyPanel::refresh()
     editbox->getEditBox()->setSize(dropbox->listBox->getSize());
     this->_panel->addSpace(this->_category, 0.25f);
 
-    auto slider = this->_panel->setLineSliderEditable("Priority", this->_category, true, 0.0f, 5.0f, &this->_priority);
+    auto slider = this->_panel->setLineSliderEditable(Localization::gettext("Priority"), this->_category, true, 0.0f, 5.0f, &this->_priority);
     slider->nameText->setEnabled(false);
     slider->setPrecision(0);
     this->_panel->addSpace(this->_category, 0.25f);
 
-    button = this->_panel->setLineTextButton("", "Add AI Package", this->_category, 1.0f, "Kenshi_Button2");
+    button = this->_panel->setLineTextButton("", Localization::gettext("Add AI Package"), this->_category, 1.0f, "Kenshi_Button2");
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_addAI);
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
     button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
 
-    button = this->_panel->setLineTextButton("", "Clear AI Packages", this->_category, 1.0f, "Kenshi_Button2");
+    button = this->_panel->setLineTextButton("", Localization::gettext("Clear AI Packages"), this->_category, 1.0f, "Kenshi_Button2");
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_clearAI);
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
@@ -166,7 +167,7 @@ void SquadAutonomyPanel::refresh()
             std::string townText;
             textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left);
             textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-            townText = "Home: " + building->displayName;
+            townText = Localization::gettext("Home:") + ' ' + building->displayName;
             town = building->getTown();
             if (town)
             {
@@ -180,7 +181,7 @@ void SquadAutonomyPanel::refresh()
             std::string townText;
             textbox = this->_panel->setLineText("", "", this->_category, true, MyGUI::Align::Left);
             textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-            townText = "Work: " + squadSettings->getBuilding(false)->displayName;
+            townText = Localization::gettext("Work:") + ' ' + squadSettings->getBuilding(false)->displayName;
             town = building->getTown();
             if (town)
             {
@@ -306,18 +307,18 @@ void SquadAutonomyPanel::_toggleAI(DataPanelLine* line)
                 refresh();
                 if (settings->isEnabled())
                 {
-                    ou->showPlayerAMessage(_selectedSquad->activePlatoon->getName() + ": Autonomy enable", true);
+                    ou->showPlayerAMessage(_selectedSquad->activePlatoon->getName() + Localization::gettext(": Autonomy enable"), true);
                 }
                 else
                 {
-                    ou->showPlayerAMessage(_selectedSquad->activePlatoon->getName() + ": Autonomy disable", true);
+                    ou->showPlayerAMessage(_selectedSquad->activePlatoon->getName() + Localization::gettext(": Autonomy disable"), true);
                 }
             }
         }
     }
     else
     {
-        ou->showPlayerAMessage("No squad selected/invalid squad", true);
+        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
     }
 }
 
@@ -342,7 +343,7 @@ void SquadAutonomyPanel::_addAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage("No squad selected/invalid squad", true);
+        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
     }
 }
 
@@ -363,7 +364,7 @@ void SquadAutonomyPanel::_clearAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage("No squad selected/invalid squad", true);
+        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
     }
 }
 
@@ -379,12 +380,12 @@ void SquadAutonomyPanel::_setWork(DataPanelLine* line)
 
 void SquadAutonomyPanel::_setBar(DataPanelLine* line)
 {
-    //use platoon->sethomebuildingdesignation instead
+/*    //use platoon->sethomebuildingdesignation instead
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     Building* building = gui->selectedObject.getBuilding();
     if (!building)
     {
-        ou->showPlayerAMessage("Select a building!", true);
+        ou->showPlayerAMessage(Localization::gettext("Select a building!"), true);
         return;
     }
     if (building->isFurnitureOrDoor())
@@ -403,7 +404,7 @@ void SquadAutonomyPanel::_setBar(DataPanelLine* line)
     GameData* squadTemplate = (*SquadAutonomySettings::getSingletonPtr()->getSquadTemplate())[0];
     building->residentSquadTemplate = squadTemplate;
     //DebugLog("Designation: " + Ogre::StringConverter::toString(squadTemplate->idata["building designation"]));
-    building->setDesignation(static_cast<BuildingDesignation>(squadTemplate->idata["building designation"]));
+    building->setDesignation(static_cast<BuildingDesignation>(squadTemplate->idata["building designation"]));*/
 }
 
 void SquadAutonomyPanel::_clearBuildings(DataPanelLine* line)
@@ -411,14 +412,14 @@ void SquadAutonomyPanel::_clearBuildings(DataPanelLine* line)
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!_selectedSquad)
     {
-        ou->showPlayerAMessage("No squad selected/invalid squad", true);
+        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
         return;
     }
     auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
     settings->setBuilding(nullptr, true);
     settings->setBuilding(nullptr, false);
     settings->unassignSquadHome();
-    ou->showPlayerAMessage("Clear buildings", true);
+    ou->showPlayerAMessage(Localization::gettext("Buildings cleared"), true);
 
     refresh();
 
@@ -429,12 +430,12 @@ void SquadAutonomyPanel::_setBuilding(bool home)
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!_selectedSquad || !_selectedSquad->activePlatoon)
     {
-        ou->showPlayerAMessage("No squad selected/invalid squad", true);
+        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
         return;
     }
     if (!gui->selectedObject)
     {
-        ou->showPlayerAMessage("No object selected!", true);
+        ou->showPlayerAMessage(Localization::gettext("No object selected!"), true);
         return;
     }
     auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
@@ -442,7 +443,7 @@ void SquadAutonomyPanel::_setBuilding(bool home)
     Building* building = gui->selectedObject.getBuilding();
     if (!building)
     {
-        ou->showPlayerAMessage("Select a building!", true);
+        ou->showPlayerAMessage(Localization::gettext("Select a building!"), true);
         return;
     }
     if (building->isFurnitureOrDoor())
@@ -461,9 +462,9 @@ void SquadAutonomyPanel::_setBuilding(bool home)
 
     //_selectedSquad->me->getOwnerships()->setHomeBuilding(building, _selectedSquad->me->getSquadType());
     settings->setBuilding(building, home);
-    std::string report = "Set " + _selectedSquad->activePlatoon->getName();
-    if (home) report += " home building: " + building->displayName;
-    else report += " work building: " + building->displayName;
+    std::string report = Localization::gettext("Set") + ' ' + _selectedSquad->activePlatoon->getName();
+    if (home) report += ' ' + Localization::gettext("home building:") + ' ' + building->displayName;
+    else report += ' ' + Localization::gettext("work building:") + ' ' + building->displayName;
     TownBase* town = building->getCurrentTownLocation();
     if (town)
     {
@@ -484,7 +485,7 @@ void SquadAutonomyPanel::AutonomyOptions::init()
     _guard = new GuardOptions();
 }
 
-void SquadAutonomy::SquadAutonomyPanel::AutonomyOptions::updateValues(SquadSettingsInfo* settings)
+void SquadAutonomy::SquadAutonomyPanel::AutonomyOptions::updateOptions(SquadSettingsInfo* settings)
 {
     if (_basic)
     {
@@ -515,6 +516,7 @@ void SquadAutonomy::SquadAutonomyPanel::AutonomyOptions::updateValues(SquadSetti
         _combat->attackEnemies = settings->getAttackEnemies();
         _combat->protectAllies = settings->getProtectAllies();
         _combat->doMedic = settings->getDoMedic();
+        _combat->doRescue = settings->getDoRescue();
     }
     if (_guard)
     {
@@ -535,21 +537,22 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     this->_panel->setLineSpacing(24.0f);
     this->_panel->clearPage(this->_category);
 
-    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption("Squad Autonomy: " + _selectedSquad->activePlatoon->getName());
+    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::gettext("Squad Autonomy:") + ' ' + _selectedSquad->activePlatoon->getName());
 
+
+    auto dropBox = this->_panel->setLineDropBox(Localization::gettext("Category"), this->_category, &this->_subCategory, false, 1.0f);
+    //dropBox->clearValues();
     if (_subCategory < 0) _subCategory = 0;
     else if (_subCategory > 3) _subCategory = 3;
-
-    auto dropBox = this->_panel->setLineDropBox("Category", this->_category, &this->_subCategory, false, 1.0f);
-    dropBox->addAValue("Basic", 0);
-    dropBox->addAValue("Labour", 1);
-    dropBox->addAValue("Combat", 2);
-    dropBox->addAValue("Guard", 3);
+    dropBox->addAValue(Localization::gettext("Basic"), 0);
+    dropBox->addAValue(Localization::gettext("Labour"), 1);
+    dropBox->addAValue(Localization::gettext("Combat"), 2);
+    dropBox->addAValue(Localization::gettext("Guard"), 3);
     dropBox->setSelectedValue(_subCategory);
 
     if (!settings) return;
     dropBox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &SquadAutonomyPanel::AutonomyOptions::refreshOptions);
-    updateValues(settings);
+    updateOptions(settings);
     switch (_subCategory)
     {
     case 1: 
@@ -572,7 +575,7 @@ void SquadAutonomyPanel::AutonomyOptions::refreshOptions(MyGUI::ComboBox* sender
     if (!this->_selectedSquad) return;
     refresh();
 }
-void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
+void SquadAutonomyPanel::AutonomyOptions::updateSettings(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!this->_selectedSquad) return;
@@ -606,6 +609,7 @@ void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
         squadSettings->setAttackEnemies(_combat->attackEnemies);
         squadSettings->setProtectAllies(_combat->protectAllies);
         squadSettings->setDoMedic(_combat->doMedic);
+        squadSettings->setDoRescue(_combat->doRescue);
     }
     if (_guard)
     {
@@ -615,134 +619,134 @@ void SquadAutonomyPanel::AutonomyOptions::updateOptions(DataPanelLine* line)
         squadSettings->updateSquadPackages();
     }
 }
-void SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh(DataPanelLine* line)
+void SquadAutonomyPanel::AutonomyOptions::updateSettingsAndRefresh(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!this->_selectedSquad) return;
-    updateOptions(line);
+    updateSettings(line);
     refresh();
 }
 
 void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
 
-    auto startSlider = panel->setLineSliderEditable("Start Work Time", category, true, 0.0f, 24.0f, &this->startWorkTime);
+    auto startSlider = panel->setLineSliderEditable(Localization::gettext("Start Work Time"), category, true, 0.0f, 24.0f, &this->startWorkTime);
     startSlider->nameText->setEnabled(false);
     startSlider->setPrecision(0);
     startSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    auto endSlider = panel->setLineSliderEditable("End Work Time", category, true, 0.0f, 24.0f, &this->endWorkTime);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    auto endSlider = panel->setLineSliderEditable(Localization::gettext("End Work Time"), category, true, 0.0f, 24.0f, &this->endWorkTime);
     endSlider->nameText->setEnabled(false);
     endSlider->setPrecision(0);
     endSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    auto checkbox = panel->setLineCheckbox("Allow Going to Bed", &doSleep, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    auto checkbox = panel->setLineCheckbox(Localization::gettext("Allow Going to Bed"), &doSleep, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettingsAndRefresh);
 
     if (settings->getDoSleep())
     {
-        checkbox = panel->setLineCheckbox("Rest until healed", &restUntilHealed, category);
+        checkbox = panel->setLineCheckbox(Localization::gettext("Rest until healed"), &restUntilHealed, category);
         checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-            options, &SquadAutonomyPanel::AutonomyOptions::updateOptionsAndRefresh);
+            options, &SquadAutonomyPanel::AutonomyOptions::updateSettingsAndRefresh);
         if (restUntilHealed)
         {
             auto textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
             textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-            textbox->editBox->setCaption("Rest Health Threshold");
+            textbox->editBox->setCaption(Localization::gettext("Rest Health Threshold"));
 
             auto slider = panel->setLineSliderEditable("Rest Health Threshold", category, false, 0.0f, 100.0f, &this->restThreshold);
             //slider->nameText->setEnabled(false);
             slider->setPrecision(0);
             slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-                options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+                options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
 
             textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
             textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-            textbox->editBox->setCaption("Healed Health Threshold");
+            textbox->editBox->setCaption(Localization::gettext("Healed Health Threshold"));
 
 
             slider = panel->setLineSliderEditable("Healed Health Threshold", category, false, 0.0f, 100.0f, &this->healedThreshold);
             //slider->nameText->setEnabled(false);
             slider->setPrecision(0);
             slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-                options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+                options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
         }
-        checkbox = panel->setLineCheckbox("Allow Using Paid Beds", &usePaidBeds, category);
+        checkbox = panel->setLineCheckbox(Localization::gettext("Allow Using Paid Beds"), &usePaidBeds, category);
         checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-            options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+            options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
     }
 }
 
 void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
 
-    auto textbox = panel->setLineText("", *_MainColorCode + "Stats Used:", category, false, MyGUI::Align::Left);
+    auto textbox = panel->setLineText("", *_MainColorCode + Localization::gettext("Stats Used:"), category, false, MyGUI::Align::Left);
     textbox->editBox->setColour(MyGUI::Colour(1.0, 1.0, 1.0));
-    auto checkbox = panel->setLineCheckbox("Science", &science, category);
+    auto checkbox = panel->setLineCheckbox(Localization::gettext("Science"), &science, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Labouring (Mining)", &labouring, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Labouring (Mining)"), &labouring, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Farming", &farming, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Farming"), &farming, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Cooking", &cooking, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Cooking"), &cooking, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Medic", &medic, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Medic"), &medic, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Engineer", &engineer, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Engineer"), &engineer, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Robotics", &robotics, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Robotics"), &robotics, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Weapon Smith", &weaponSmith, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Weapon Smith"), &weaponSmith, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Armour Smith", &armourSmith, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Armour Smith"), &armourSmith, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Crossbow Smith", &crossbowSmith, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Crossbow Smith"), &crossbowSmith, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
     panel->addSpace(category, 0.25);
-    checkbox = panel->setLineCheckbox("Automatic Machine", &automaticMachine, category);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Automatic Machine"), &automaticMachine, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
 }
 
 void SquadAutonomyPanel::AutonomyOptions::CombatOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
 
-    auto checkbox = panel->setLineCheckbox("Attack Enemies", &attackEnemies, category);
+    auto checkbox = panel->setLineCheckbox(Localization::gettext("Attack Enemies"), &attackEnemies, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Protect Allies", &protectAllies, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Protect Allies"), &protectAllies, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Do Medic", &doMedic, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Do Medic"), &doMedic, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Rescue Downed Allies", &doRescue, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Rescue Downed Allies"), &doRescue, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
 }
 
 void SquadAutonomyPanel::AutonomyOptions::GuardOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
 
-    auto checkbox = panel->setLineCheckbox("Man Turrets", &manTurrets, category);
+    auto checkbox = panel->setLineCheckbox(Localization::gettext("Man Turrets"), &manTurrets, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    auto textbox = panel->setLineText("", *_MainColorCode + "Gate Guard:", category, false, MyGUI::Align::Left);
-    checkbox = panel->setLineCheckbox("Stay Inside Gate", &stayInsideGate, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    auto textbox = panel->setLineText("", *_MainColorCode + Localization::gettext("Gate Guard:"), category, false, MyGUI::Align::Left);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Stay Inside Gate"), &stayInsideGate, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
-    checkbox = panel->setLineCheckbox("Close Gate", &closeGate, category);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Close Gate"), &closeGate, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateOptions);
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
 }

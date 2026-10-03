@@ -50,8 +50,8 @@ namespace SquadAutonomy
     public:
         void refresh();
         void refreshOptions(MyGUI::ComboBox*, size_t);
-        void updateOptions(DataPanelLine*);
-        void updateOptionsAndRefresh(DataPanelLine*);
+        void updateSettings(DataPanelLine*);
+        void updateSettingsAndRefresh(DataPanelLine*);
         AutonomyOptions() : _category(1), _subCategory(0), _selectedSquad(nullptr), _panel(nullptr)
         {}
         void init();
@@ -67,7 +67,7 @@ namespace SquadAutonomy
         {
             return _category;
         }
-        void updateValues(SquadSettingsInfo*);
+        void updateOptions(SquadSettingsInfo*);
         class BasicOptions;
         class LabourOptions;
         class CombatOptions;
