@@ -1,5 +1,6 @@
 ﻿#include "MoreImmersiveBars.h"
 #include "ModOptions.h"
+#include "Localization.h"
 #include <Debug.h>
 
 #include <ogre/OgreStringConverter.h>
@@ -51,6 +52,7 @@ namespace MoreImmersiveBars
     std::map<hand, float>* rentedBeds = nullptr;
     std::string* _MainColorCode = nullptr;
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring modPath = L"";
     std::wstring cfgPath = L"";
     bool noSleepTalk = true;
 
@@ -69,7 +71,9 @@ namespace MoreImmersiveBars
             endsAfterTime = ends;
         }
     };
+
     std::unordered_map<TaskType, OriginalTaskDataDuration*> taskTypeOrigDataDuration;
+
 
     lektor<UseableStuff*> GetCurrentTownBarsBeds(Character* character)
     {
@@ -533,9 +537,10 @@ namespace MoreImmersiveBars
                 float left = right - 0.1;
                 float top = static_cast<float>(modLine->w2->getTop()) / settingsPanel->getWidget()->getSize().height;
                 float height = static_cast<float>(modLine->w2->getHeight()) / settingsPanel->getWidget()->getSize().height;
+                float extendedHeight = height * 1.5;
                 //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
-                auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top, 0.1, height, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
-                btn->setCaption("Settings");
+                auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight - height) / 2.0, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
+                btn->setCaption(Localization::gettext("Settings"));
                 btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModOptions);
             }
         }
@@ -563,7 +568,9 @@ namespace MoreImmersiveBars
 
     void init()
     {
-        cfgPath = GetCurrentDLLDirectory() + L"MoreImmersiveBars.cfg";
+        modPath = GetCurrentDLLDirectory();
+        cfgPath = modPath + L"MoreImmersiveBars.cfg";
+        Localization::init();
     }
 
     void (*saveOptions_orig)(OptionsWindow* thisptr);

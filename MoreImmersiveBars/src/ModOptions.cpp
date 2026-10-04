@@ -1,5 +1,6 @@
 #include "MoreImmersiveBars.h"
 #include "ModOptions.h"
+#include "Localization.h"
 #include <Debug.h>
 #include <ogre/OgreStringConverter.h>
 #include <boost/scoped_ptr.hpp>
@@ -40,7 +41,7 @@ void ModOptions::create()
         gui->destroy(this->_panel);
     }
     this->_panel = gui->createDatapanel(0.4f, 0.4f, 0.2f, 0.2f, true, "Window", true);
-    this->_panel->setCaption("More Immersive Bars Mod Options");
+    this->_panel->setCaption(Localization::gettext("More Immersive Bars Mod Options"));
     this->_panel->setPanelName("ModOptions");
 
     refresh();
@@ -62,8 +63,8 @@ void ModOptions::refresh()
     this->_panel->clearPage(this->_category);
     this->_panel->setLineSpacing(24.0f);
     //auto textbox = this->_panel->setLineText("", *_MainColorCode + "[Squad Autonomy]", _category, true, MyGUI::Align::Left);
-    auto checkbox = this->_panel->setLineCheckbox("No sleep talking", &noSleepTalk, this->_category);
-    if (tooltip) tooltip->setup(checkbox->getTextBox(), "Disable the ability to talk for sleeping NPCs (only those with AI involving bars) for a more immersive experience");
+    auto checkbox = this->_panel->setLineCheckbox(Localization::gettext("No sleep talking"), &noSleepTalk, this->_category);
+    if (tooltip) tooltip->setup(checkbox->getTextBox(), Localization::gettext("Disable the ability to talk for sleeping NPCs (only those with AI involving bars) for a more immersive experience"));
 
 }
 
