@@ -1,5 +1,6 @@
 #include "SquadAutonomy.h"
 #include "SquadAutonomySettings.h"
+#include "SquadAutonomyModSettings.h"
 
 #include <Debug.h>
 
@@ -22,11 +23,8 @@ using namespace SquadAutonomy;
 
 bool SquadAutonomySettings::initialized = false;
 
-SquadAutonomySettings::SquadAutonomySettings() : _cfgFileName(L"SquadAutonomy.cfg")
+SquadAutonomySettings::SquadAutonomySettings()
 {
-    if (modPath != L"") _cfgPath = modPath + _cfgFileName;
-    else _cfgPath = GetCurrentDLLDirectory() + _cfgFileName;
-    _loadConfig();
     _initGameData();
     initialized = true;
 }
@@ -34,150 +32,13 @@ SquadAutonomySettings::SquadAutonomySettings() : _cfgFileName(L"SquadAutonomy.cf
 
 SquadAutonomySettings* SquadAutonomySettings::getSingletonPtr()
 {
-    static boost::scoped_ptr<SquadAutonomySettings> singleton(new SquadAutonomySettings());
+    static std::unique_ptr<SquadAutonomySettings> singleton;
+    if (!singleton)
+    {
+        singleton.reset(new SquadAutonomySettings());
+    }
+
     return singleton.get();
-}
-void SquadAutonomySettings::_loadConfig()
-{
-    DebugLog("Finding Config file at: " + converter.to_bytes(_cfgPath));
-    std::wfstream cfgFile(_cfgPath, std::wfstream::in | std::wfstream::out | std::wfstream::app);
-    if (!cfgFile.is_open())
-    {
-        DebugLog("Load: Cannot open config file");
-        return;
-    }
-    DebugLog("Reading config file...");
-    std::wstring wline;
-    std::string token;
-    while (std::getline(cfgFile, wline))
-    {
-        std::string line = converter.to_bytes(wline);
-        //DebugLog(line);
-        if (line == "<Options>")
-        {
-            while (std::getline(cfgFile, wline))
-            {
-                std::string line = converter.to_bytes(wline);
-                if (line == "</Options>") break;
-                int colon = -1;
-                std::string type = "";
-                std::string dataLine = "";
-                line.erase(0, line.find_first_not_of(" \t"));
-                colon = line.find(':');
-                if (colon == std::string::npos)
-                {
-                    continue;
-                }
-
-                type = line.substr(0, colon);
-                dataLine = line.substr(colon + 1);
-                //DebugLog(type);
-                if (type == "ShowOnMain")
-                {
-                    dataLine.erase(0, dataLine.find_first_not_of(" \t"));
-                    //DebugLog(dataLine);
-                    if (dataLine == "false")
-                    {
-                        showOnMain = false;
-                    }
-                    continue;
-                }
-                if (type == "LockPosition")
-                {
-                    dataLine.erase(0, dataLine.find_first_not_of(" \t"));
-                    //DebugLog(dataLine);
-                    if (dataLine == "false")
-                    {
-                        lockPosition = false;
-                    }
-                    continue;
-                }
-                if (type == "BtnWidth")
-                {
-                    if (dataLine == "") continue;
-                    std::stringstream ss(dataLine);
-                    ss >> btnWidth;
-                    continue;
-                }
-                if (type == "BtnHeight")
-                {
-                    if (dataLine == "") continue;
-                    std::stringstream ss(dataLine);
-                    ss >> btnHeight;
-                    continue;
-                }
-                if (type == "BtnLeft")
-                {
-                    if (dataLine == "") continue;
-                    std::stringstream ss(dataLine);
-                    ss >> btnLeft;
-                    continue;
-                }
-                if (type == "BtnTop")
-                {
-                    if (dataLine == "") continue;
-                    std::stringstream ss(dataLine);
-                    ss >> btnTop;
-                    continue;
-                }
-                if (type == "BtnFontSize")
-                {
-                    if (dataLine == "") continue;
-                    std::stringstream ss(dataLine);
-                    ss >> btnFontSize;
-                    continue;
-                }
-                if (type == "ShowInSquad")
-                {
-                    dataLine.erase(0, dataLine.find_first_not_of(" \t"));
-                    //DebugLog(dataLine);
-                    if (dataLine == "false")
-                    {
-                        showInSquad = false;
-                    }
-                    continue;
-                }
-                if (type == "EnableLogging")
-                {
-                    dataLine.erase(0, dataLine.find_first_not_of(" \t"));
-                    //DebugLog(dataLine);
-                    if (dataLine == "true")
-                    {
-                        enableLogging = true;
-                    }
-                    continue;
-                }
-            }
-        }
-        else if (line == "<Packages>")
-        {
-            while (std::getline(cfgFile, wline))
-            {
-                std::string line = converter.to_bytes(wline);
-                if (line == "</Packages>")
-                {
-                    DebugLog("Done reading packages in config");
-                    break;
-                }
-                bool insideQuote = false;
-                std::stringstream ssline(line);
-                while (std::getline(ssline, token, '"'))
-                {
-                    if (!token.empty())
-                    {
-                        if (insideQuote)
-                        {
-                            _cfgPackageList.push_back(token);
-                            DebugLog("Detected package in config: " + token);
-                        }
-                    }
-                    insideQuote = !insideQuote;
-                }
-            }
-        }
-
-    }
-    cfgFile.close();
 }
 
 void SquadAutonomySettings::_initGameData()
@@ -188,23 +49,15 @@ void SquadAutonomySettings::_initGameData()
     DebugLog("Initialized AI Packages");
     for (uint32_t i = 0; i < datas.size(); ++i)
     {
-        std::string packageName = datas[i]->name;
+        const std::string& packageName = datas[i]->name;
+        const std::vector<std::string>& configPackages = ModSettings::getSingleton().getConfigPackages();
 
-        bool addedFromConfig = false;
+        auto packageIt = std::find(configPackages.begin(), configPackages.end(), packageName);
 
-        for (uint32_t j = 0; j < _cfgPackageList.size(); ++j)
+        if (packageIt != configPackages.end())
         {
-            if (packageName == _cfgPackageList[j])
-            {
-                DebugLog("Load package: " + packageName);
-                _AIPackageList.push_back(datas[i]);
-                addedFromConfig = true;
-                break;
-            }
-        }
-
-        if (addedFromConfig)
-        {
+            DebugLog("Load package (cfg): " + packageName);
+            _AIPackageList.push_back(datas[i]);
             continue;
         }
 
@@ -844,10 +697,6 @@ void SquadAutonomySettings::removeSquadSettings(Platoon* squad)
     {
         squadSettings.erase(squadSettings.begin() + index);
     }
-}
-std::wstring SquadAutonomySettings::getConfigPath()
-{
-    return _cfgPath;
 }
 
 

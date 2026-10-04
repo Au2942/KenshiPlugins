@@ -151,15 +151,10 @@ namespace SquadAutonomy
         std::vector<GameData*>* getAIPackageList();
         std::vector<GameData*>* getSquadTemplate();
         void removeSquadSettings(Platoon*);
-        std::wstring getConfigPath();
 
     private:
         std::vector<GameData*> _AIPackageList;
         std::vector<GameData*> _squadTemplateList;
-        std::vector<std::string> _cfgPackageList;
-        std::wstring _cfgFileName;
-        std::wstring _cfgPath;
-        void _loadConfig();
         void _initGameData();
     };
 
