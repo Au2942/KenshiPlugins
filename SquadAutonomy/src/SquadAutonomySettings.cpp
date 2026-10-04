@@ -18,8 +18,6 @@
 #include <kenshi/Building/Building.h>
 #include <kenshi/util/lektor.h>
 
-#include "lektorExtension.h"
-
 using namespace SquadAutonomy;
 
 bool SquadAutonomySettings::initialized = false;
@@ -169,7 +167,7 @@ void SquadAutonomySettings::_loadConfig()
                     {
                         if (insideQuote)
                         {
-                            lektorEx::push_back(_cfgPackageList, token);
+                            _cfgPackageList.push_back(token);
                             DebugLog("Detected package in config: " + token);
                         }
                     }
@@ -192,26 +190,38 @@ void SquadAutonomySettings::_initGameData()
     {
         std::string packageName = datas[i]->name;
 
+        bool addedFromConfig = false;
+
         for (uint32_t j = 0; j < _cfgPackageList.size(); ++j)
         {
             if (packageName == _cfgPackageList[j])
             {
                 DebugLog("Load package: " + packageName);
-                lektorEx::push_back_unique(_AIPackageList, datas[i]);
+                _AIPackageList.push_back(datas[i]);
+                addedFromConfig = true;
                 break;
             }
+        }
+
+        if (addedFromConfig)
+        {
+            continue;
         }
 
         if (packageName.size() >= identifier.size() && packageName.compare(packageName.size() - identifier.size(), identifier.size(), identifier) == 0)
         {
             DebugLog("Load package: " + packageName);
-            lektorEx::push_back_unique(_AIPackageList, datas[i]);
+            _AIPackageList.push_back(datas[i]);
         }
     }
     std::sort(_AIPackageList.begin(), _AIPackageList.end(), [](GameData* a, GameData* b)
     {
         return a->name < b->name;
     });
+
+    auto newEndIt = std::unique(_AIPackageList.begin(), _AIPackageList.end());
+    _AIPackageList.erase(newEndIt, _AIPackageList.end());
+
     datas.clear();
     ou->gamedata.getDataOfType(datas, SQUAD_TEMPLATE);
     {
@@ -221,7 +231,7 @@ void SquadAutonomySettings::_initGameData()
             if (packageName.size() >= identifier.size() && packageName.compare(packageName.size() - identifier.size(), identifier.size(), identifier) == 0)
             {
                 DebugLog("Load package: " + packageName);
-                lektorEx::push_back(_squadTemplateList, datas[i]);
+                _squadTemplateList.push_back(datas[i]);
             }
         }
     }
@@ -243,7 +253,7 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
         //DebugLog("Saving " + Ogre::StringConverter::toString(squadSettings.size()) + " squads");
         for (int i = 0; i < settings->squadSettings.size(); ++i)
         {
-            auto settingsInfo = settings->squadSettings[i];
+            SquadSettingsInfo* settingsInfo = settings->squadSettings[i].get();
             Platoon* squad = settingsInfo->getSquad();
             if (!squad) continue;
             if (!squad->activePlatoon) continue;
@@ -374,7 +384,7 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             Platoon* squad = nullptr;
             Building* home = nullptr;
             Building* work = nullptr;
-            std::map<int, lektor<GameData*>> packages;
+            std::map<int, std::vector<GameData*>> packages;
             float startWorkTime = 0.0;
             float endWorkTime = 24.0;
             bool doSleep = false;
@@ -481,23 +491,17 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                         size_t start = line.find('<', colon);
                         size_t end = line.rfind('>');
 
-                        if (start != std::string::npos && end > start)
+                        if (start != std::string::npos && end != std::string::npos && end > start)
                         {
                             std::string packageName = line.substr(start + 1, end - start - 1);
                             for (int i = 0; i < _AIPackageList.size(); ++i)
                             {
                                 if (packageName == _AIPackageList[i]->name)
                                 {
-                                    auto find = packages.find(priority);
-                                    if (packages.size() > 0 && find != packages.end())
+                                    const bool alreadyHasPackage = std::find(packages[priority].begin(), packages[priority].end(), _AIPackageList[i]) != packages[priority].end();
+                                    if (!alreadyHasPackage)
                                     {
-                                        lektorEx::push_back_unique(find->second, _AIPackageList[i]);
-                                    }
-                                    else
-                                    {
-                                        lektor<GameData*> dataList;
-                                        lektorEx::push_back_unique(dataList, _AIPackageList[i]);
-                                        packages[priority] = dataList;
+                                        packages[priority].push_back(_AIPackageList[i]);
                                     }
                                     break;
                                 }
@@ -728,7 +732,7 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             if (squad)
             {
                 DebugLog("Load Squad " + squad->activePlatoon->getName());
-                SquadSettingsInfo* settingsInfo = new SquadSettingsInfo(squad);
+                std::unique_ptr<SquadSettingsInfo> settingsInfo(new SquadSettingsInfo(squad));
                 settingsInfo->enableAutonomy(false);
                 settingsInfo->unassignSquadHome();
                 if (home)
@@ -774,7 +778,7 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 settingsInfo->setStayInsideGate(stayInsideGate);
                 settingsInfo->setCloseGate(closeGate);
                 settingsInfo->enableAutonomy(enable, false);
-                lektorEx::push_back(squadSettings, settingsInfo);
+                squadSettings.push_back(std::move(settingsInfo));
             }
         }
     }
@@ -817,22 +821,22 @@ SquadSettingsInfo* SquadAutonomySettings::getSquadSettings(Platoon* squad, bool 
     {
         if (squad == squadSettings[i]->getSquad())
         {
-            return squadSettings[i];
+            return squadSettings[i].get();
         }
     }
     if (createNew)
     {
-        SquadSettingsInfo* newSettings = new SquadSettingsInfo(squad);
-        lektorEx::push_back(squadSettings, newSettings);
-        return newSettings;
+        std::unique_ptr<SquadSettingsInfo> newSettings(new SquadSettingsInfo(squad));
+        squadSettings.push_back(std::move(newSettings));
+        return squadSettings.back().get();
     }
     return nullptr;
 }
-lektor<GameData*>* SquadAutonomySettings::getAIPackageList()
+std::vector<GameData*>* SquadAutonomySettings::getAIPackageList()
 {
     return &_AIPackageList;
 }
-lektor<GameData*>* SquadAutonomySettings::getSquadTemplate()
+std::vector<GameData*>* SquadAutonomySettings::getSquadTemplate()
 {
     return &_squadTemplateList;
 }
@@ -849,7 +853,7 @@ void SquadAutonomySettings::removeSquadSettings(Platoon* squad)
     }
     if (index > -1)
     {
-        lektorEx::removeAt(squadSettings, index);
+        squadSettings.erase(squadSettings.begin() + index);
     }
 }
 std::wstring SquadAutonomySettings::getConfigPath()
@@ -873,47 +877,28 @@ bool SquadSettingsInfo::isEnabled()
 void SquadSettingsInfo::addPackage(int priority, GameData* data)
 {
     auto find = _squadPackages.find(priority);
-    if (_squadPackages.size() > 0 && find != _squadPackages.end())
+    if (find != _squadPackages.end())
     {
-        lektorEx::push_back_unique(find->second, data);
+        const bool alreadyHasPackage = std::find(find->second.begin(), find->second.end(), data) != find->second.end();
+        if (!alreadyHasPackage)
+        {
+            find->second.push_back(data);
+        }
     }
     else
     {
-        lektor<GameData*> dataList;
-        _squadPackages[priority] = dataList;
-        lektorEx::push_back_unique(_squadPackages[priority], data);
+        _squadPackages[priority].push_back(data);
     }
 }
-void SquadSettingsInfo::setPackages(const std::map<int, lektor<GameData*> >& packages)
+void SquadSettingsInfo::setPackages(const std::map<int, std::vector<GameData*>>& packages)
 {
-    _squadPackages.clear();
-    for (auto it = packages.begin(); it != packages.end(); ++it)
-    {
-        auto gameDatas = it->second;
-        auto find = _squadPackages.find(it->first);
-        if (_squadPackages.size() > 0 && find != _squadPackages.end())
-        {
-            for (int i = 0; i < gameDatas.size(); ++i)
-            {
-                lektorEx::push_back_unique(find->second, gameDatas[i]);
-            }
-        }
-        else
-        {
-            lektor<GameData*> dataList;
-            for (int i = 0; i < gameDatas.size(); ++i)
-            {
-                lektorEx::push_back_unique(dataList, gameDatas[i]);
-            }
-            _squadPackages[it->first] = dataList;
-        }
-    }
+    _squadPackages = packages;
 }
 void SquadSettingsInfo::clearPackages()
 {
     _squadPackages.clear();
 }
-std::map<int, lektor<GameData*>> SquadSettingsInfo::getSquadPackages()
+const std::map<int, std::vector<GameData*>>& SquadSettingsInfo::getSquadPackages()
 {
     return _squadPackages;
 }

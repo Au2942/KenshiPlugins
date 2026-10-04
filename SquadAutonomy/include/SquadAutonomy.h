@@ -45,7 +45,7 @@ namespace SquadAutonomy
     extern std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     //static int bc;
     //const int buffer;
-    bool SetAI(Platoon*, std::map<int, lektor<GameData*>>, bool endAction = true);
+    bool SetAI(Platoon*, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction = true);
     bool ResetAI(Platoon*, bool endAction = true);
     void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);

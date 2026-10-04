@@ -28,9 +28,9 @@ namespace SquadAutonomy
         PlayerInterface* getPlayerInterface();
         bool isEnabled();
         void addPackage(int priority, GameData* data);
-        void setPackages(const std::map<int, lektor<GameData*> >& packages);
+        void setPackages(const std::map<int, std::vector<GameData*>> &packages);
         void clearPackages();
-        std::map<int, lektor<GameData*>> getSquadPackages();
+        const std::map<int, std::vector<GameData*>>& getSquadPackages();
         bool hasTask(TaskType);
         bool enableAutonomy(bool enable, bool endAction = true);
         void updateSquadPackages(bool endAction = true);
@@ -101,7 +101,7 @@ namespace SquadAutonomy
         Platoon* _squad;
         PlayerInterface* _pi;
         bool _enabled;
-        std::map<int, lektor<GameData*>> _squadPackages;
+        std::map<int, std::vector<GameData*>> _squadPackages;
         //TownBase* _homeTown;
         Building* _homeBuilding;
         //TownBase* _workTown;
@@ -142,21 +142,21 @@ namespace SquadAutonomy
     public:
         static SquadAutonomySettings* getSingletonPtr();
         static bool initialized;
-        lektor<SquadSettingsInfo*> squadSettings;
+        std::vector<std::unique_ptr<SquadSettingsInfo>> squadSettings;
         SquadAutonomySettings();
         bool saveSettings(std::wstring);
         bool loadSettings(std::wstring);
         hand* createHandfromLine(std::string);
         SquadSettingsInfo* getSquadSettings(Platoon*, bool createNew = false);
-        lektor<GameData*>* getAIPackageList();
-        lektor<GameData*>* getSquadTemplate();
+        std::vector<GameData*>* getAIPackageList();
+        std::vector<GameData*>* getSquadTemplate();
         void removeSquadSettings(Platoon*);
         std::wstring getConfigPath();
 
     private:
-        lektor<GameData*> _AIPackageList;
-        lektor<GameData*> _squadTemplateList;
-        lektor<std::string> _cfgPackageList;
+        std::vector<GameData*> _AIPackageList;
+        std::vector<GameData*> _squadTemplateList;
+        std::vector<std::string> _cfgPackageList;
         std::wstring _cfgFileName;
         std::wstring _cfgPath;
         void _loadConfig();

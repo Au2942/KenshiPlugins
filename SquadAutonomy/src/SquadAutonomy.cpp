@@ -65,8 +65,6 @@
 #include <core/Functions.h>
 #include <fstream>
 
-#include "lektorExtension.h"
-
 #include <codecvt>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -212,7 +210,7 @@ namespace SquadAutonomy
         logFile.flush();
     }
     
-    bool SetAI(Platoon* platoon, std::map<int, lektor<GameData*>> aiPackages, bool endAction)
+    bool SetAI(Platoon* platoon, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction)
     {
         //DebugLog("Set AI");
         if (!platoon || !platoon->activePlatoon)
@@ -245,7 +243,7 @@ namespace SquadAutonomy
         for (auto pack = aiPackages.begin(); pack != aiPackages.end(); ++pack)
         {
             auto data = pack->second;
-            for (int i = 0; i < data.count; ++i)
+            for (int i = 0; i < data.size(); ++i)
             {
                 bb->_addPackage(data[i], pack->first);
                 //DebugLog("Adding " + data[i]->name + " to " + platoon->activePlatoon->getName());
@@ -679,7 +677,7 @@ namespace SquadAutonomy
         auto settings = SquadAutonomySettings::getSingletonPtr();
         for (int i = 0; i < settings->squadSettings.size(); ++i)
         {
-            auto squadSettings = settings->squadSettings[i];
+            SquadSettingsInfo* squadSettings = settings->squadSettings[i].get();
             if (!squadSettings->isEnabled()) continue;
             ResetAI(squadSettings->getSquad());
             squadSettings->unassignSquadHome();
@@ -796,7 +794,7 @@ namespace SquadAutonomy
     }
 
 
-    UseableStuff* FindOptimalBed(Character* character, AI* ai, bool usePaidBeds, lektor<UseableStuff*> beds, bool ownFactionOnly = false)
+    UseableStuff* FindOptimalBed(Character* character, AI* ai, bool usePaidBeds, const std::vector<UseableStuff*> beds, bool ownFactionOnly = false)
     {
         float minDist = std::numeric_limits<float>::max();
         float maxEfficiency = std::numeric_limits<float>::lowest();
@@ -908,7 +906,7 @@ namespace SquadAutonomy
         UseableStuff* optimalBed = nullptr;
 
         RaceData* race = character->getRace();
-        lektor<UseableStuff*> beds;
+        std::vector<UseableStuff*> beds;
 
         TownBase* currentTown = character->getCurrentTownLocation();
         if (currentTown)
@@ -924,10 +922,14 @@ namespace SquadAutonomy
             {
                 if (!bedBuildings->at(i)) continue;
                 UseableStuff* bed = bedBuildings->at(i)->getUseableStuff();
-                if (bed) lektorEx::push_back_unique(beds, bed);
+                if (bed) beds.push_back(bed);
             }
             if (currentTown->isTown() && currentTown->isTown()->playerHasBuildingsInThisTown)
             {
+                std::sort(beds.begin(), beds.end());
+                auto newEndIt = std::unique(beds.begin(), beds.end());
+                beds.erase(newEndIt, beds.end());
+
                 optimalBed = FindOptimalBed(character, ai, false, beds, true);
             }
             if (optimalBed) return optimalBed->getHandle();
@@ -948,8 +950,13 @@ namespace SquadAutonomy
             {
                 if (!bedBuildings[i]) continue;
                 UseableStuff* bed = bedBuildings[i]->getUseableStuff();
-                if (bed) lektorEx::push_back_unique(beds, bed);
+                if (bed) beds.push_back(bed);
             }
+
+            std::sort(beds.begin(), beds.end());
+            auto newEndIt = std::unique(beds.begin(), beds.end());
+            beds.erase(newEndIt, beds.end());
+
             optimalBed = FindOptimalBed(character, ai, usePaidBeds, beds);
         }
         if (optimalBed) return optimalBed->getHandle();
