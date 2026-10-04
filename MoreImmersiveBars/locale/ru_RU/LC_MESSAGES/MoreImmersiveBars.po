@@ -1,0 +1,36 @@
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2026-10-03 20:36+0700\n"
+"PO-Revision-Date: 2026-10-03 20:36+0700\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.9\n"
+"X-Poedit-Basepath: ../../../src\n"
+"X-Poedit-KeywordsList: Localization::getttext:1\n"
+"X-Poedit-SearchPath-0: .\n"
+
+#: ModOptions.cpp:44
+msgid "More Immersive Bars Mod Options"
+msgstr "Настройки мода More Immersive Bars"
+
+#: ModOptions.cpp:66
+msgid "No sleep talking"
+msgstr "Запрет разговоров со спящими"
+
+#: ModOptions.cpp:67
+msgid ""
+"Disable the ability to talk for sleeping NPCs (only those with AI involving "
+"bars) for a more immersive experience"
+msgstr ""
+"Отключить возможность говорить со спящими NPC, (только с теми, чей ИИ связан "
+"с барами) для большего погружения в игру"
+
+#: MoreImmersiveBars.cpp:543
+msgid "Settings"
+msgstr "Настройки"
