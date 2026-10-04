@@ -88,7 +88,7 @@ void SquadAutonomyPanel::refresh()
     if (!_selectedSquad) return;
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
-    this->_panel->setLineSpacing(32.0f);
+    this->_panel->setLineSpacing(32.0);
     this->_panel->clearPage(this->_category);
 
     if (_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::gettext("Squad Autonomy:") + ' ' + _selectedSquad->activePlatoon->getName());
@@ -130,13 +130,13 @@ void SquadAutonomyPanel::refresh()
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
     button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
     this->_panel->addSpace(this->_category, 0.25f);
-
+    this->_panel->setLineSpacing(24.0);
     auto editbox = this->_panel->setLineTextEditable(Localization::gettext("Search"), "", this->_category, true, false, MyGUI::Align::Left, 0.95f);
     editbox->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_changeAIPackageSearchText);
 
     auto dropbox = this->_panel->setLineDropBox(lineBoxAIPackage, this->_category, &this->_selectedAIPackageIndex, false, 1.0f);
-
+    dropbox->w1->setSize(dropbox->w1->getWidth(), editbox->editBox->getHeight());
     _updateAIPackageList("");
     editbox->getEditBox()->setSize(dropbox->listBox->getSize());
     this->_panel->addSpace(this->_category, 0.25f);
@@ -145,7 +145,7 @@ void SquadAutonomyPanel::refresh()
     slider->nameText->setEnabled(false);
     slider->setPrecision(0);
     this->_panel->addSpace(this->_category, 0.25f);
-
+    this->_panel->setLineSpacing(32.0);
     button = this->_panel->setLineTextButton("", Localization::gettext("Add AI Package"), this->_category, 1.0f, "Kenshi_Button2");
     button->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_addAI);
@@ -158,6 +158,7 @@ void SquadAutonomyPanel::refresh()
     button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
     button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
     this->_panel->addSpace(this->_category, 0.25f);
+    this->_panel->setLineSpacing(24.0);
     if (squadSettings)
     {
         Building* building = squadSettings->getBuilding(true);
@@ -534,8 +535,9 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
 
-    this->_panel->setLineSpacing(24.0f);
+    this->_panel->setLineSpacing(24.0);
     this->_panel->clearPage(this->_category);
+    
 
     if (this->_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::gettext("Squad Autonomy:") + ' ' + _selectedSquad->activePlatoon->getName());
 
@@ -568,6 +570,7 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
         _basic->refresh(this, _category, _panel, settings); 
         break;
     }
+    
 }
 void SquadAutonomyPanel::AutonomyOptions::refreshOptions(MyGUI::ComboBox* sender, size_t index)
 {
@@ -678,11 +681,81 @@ void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions*
     }
 }
 
+DataPanelLine_SliderEditable* SquadAutonomyPanel::AutonomyOptions::createOptionsSlider(const char* key, float* var, int precision, float min, float max, bool seperateTextLine)
+{
+    DataPanelLine_Text* textbox;
+    if (seperateTextLine)
+    {
+        textbox = _panel->setLineText("", "", _category, true, MyGUI::Align::Left);
+        textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+        textbox->editBox->setCaption(Localization::gettext(key));
+    }
+    auto slider = _panel->setLineSliderEditable(Localization::gettext(key), _category, !seperateTextLine, min, max, var);
+    slider->setPrecision(precision);
+    int wrapCount = slider->nameText->getTextSize().width / slider->nameText->getTextRegion().width;
+    int margin = slider->nameText->getHeight() - slider->nameText->getTextRegion().height;
+    /*DebugLog(slider->nameText->getCaption().asUTF8() + " textbox size : " + Ogre::StringConverter::toString(slider->nameText->getTextRegion().width) + " text size: " + Ogre::StringConverter::toString(slider->nameText->getTextSize().width)
+    + " wrapCount: " + Ogre::StringConverter::toString(wrapCount));*/
+    slider->nameText->setSize(slider->nameText->getWidth(), margin + slider->nameText->getTextRegion().height*(wrapCount+1));
+    slider->nameText->setEditWordWrap(true);
+    int nameTextMid = slider->nameText->getTop() + slider->nameText->getHeight() * 0.5;
+    slider->sliderBar->setPosition(slider->sliderBar->getLeft(), nameTextMid - slider->sliderBar->getHeight() * 0.5);
+    slider->valueEditBox->setPosition(slider->valueEditBox->getLeft(), nameTextMid - slider->valueEditBox->getHeight() * 0.5);
+    slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
+        this, &AutonomyOptions::updateSettings);
+    return slider;
+}
+
+void SquadAutonomyPanel::AutonomyOptions::LabourOptions::setAllTo(MyGUI::Widget* sender)
+{
+    science = setAll;
+    labouring = setAll;
+    farming = setAll;
+    cooking = setAll;
+    medic = setAll;
+    engineer = setAll;
+    robotics = setAll;
+    weaponSmith = setAll;
+    armourSmith = setAll;
+    crossbowSmith = setAll;
+    automaticMachine = setAll;
+    auto options = *(sender->getUserData<AutonomyOptions*>());
+    if (options) options->updateSettingsAndRefresh(nullptr);
+}
+
 void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)
 {
-
-    auto textbox = panel->setLineText("", *_MainColorCode + Localization::gettext("Stats Used:"), category, false, MyGUI::Align::Left);
+    panel->setLineSpacing(28.0);
+    auto textbox = panel->setLineText("", *_MainColorCode + Localization::gettext("Stats Used:") + ' ' + Localization::gettext("(bigger number = higher priority, 0 = forbid)"), category, false, MyGUI::Align::Left);
     textbox->editBox->setColour(MyGUI::Colour(1.0, 1.0, 1.0));
+    const float maxPriority = 10.0;
+    options->createOptionsSlider("Science", &science, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Labouring (Mining)", &labouring, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Farming", &farming, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Cooking", &cooking, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Medic", &medic, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Engineer", &engineer, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Robotics", &robotics, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Weapon Smith", &weaponSmith, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Armour Smith", &armourSmith, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Crossbow Smith", &crossbowSmith, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider("Automatic Machine", &automaticMachine, 0, 0.0, maxPriority, false);
+
+    panel->addSpace(category, 0.25);
+    auto slider = panel->setLineSliderEditable(Localization::gettext("Set All"), category, true, 0.0, maxPriority, &setAll);
+    slider->setPrecision(0);
+    auto editBox = slider->valueEditBox;
+    auto valueEditPos = editBox->getPosition();
+    auto button = panel->setLineButton("SetAll", Localization::gettext("Set"), category);
+    button->button->setPosition(valueEditPos.left, valueEditPos.top + editBox->getHeight());
+    button->button->setSize(editBox->getWidth(), editBox->getHeight());
+    slider->sliderBar->setPosition(slider->sliderBar->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->sliderBar->getHeight() * 0.5);
+    slider->nameText->setPosition(slider->nameText->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->nameText->getHeight() * 0.5);
+    button->button->setCaption(Localization::gettext("Set"));
+    button->button->setUserData(options);
+    button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &LabourOptions::setAllTo);
+    panel->addSpace(category, 1.0);
+    /*
     auto checkbox = panel->setLineCheckbox(Localization::gettext("Science"), &science, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
         options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
@@ -717,6 +790,7 @@ void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions
     checkbox = panel->setLineCheckbox(Localization::gettext("Automatic Machine"), &automaticMachine, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
         options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    */
 }
 
 void SquadAutonomyPanel::AutonomyOptions::CombatOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)

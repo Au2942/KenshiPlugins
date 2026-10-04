@@ -579,90 +579,79 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                         }
                         if (type == "LabourScience")
                         {
-                            if (dataLine == "false")
-                            {
-                                science = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> science;
                             continue;
                         }
                         if (type == "LabourLabouring")
                         {
-                            if (dataLine == "false")
-                            {
-                                labouring = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> labouring;
                             continue;
                         }
                         if (type == "LabourFarming")
                         {
-                            if (dataLine == "false")
-                            {
-                                farming = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> farming;
                             continue;
                         }
                         if (type == "LabourEngineer")
                         {
-                            if (dataLine == "false")
-                            {
-                                engineer = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> engineer;
                             continue;
                         }
                         if (type == "LabourCooking")
                         {
-                            if (dataLine == "false")
-                            {
-                                cooking = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> cooking;
                             continue;
                         }
                         if (type == "LabourRobotics")
                         {
-                            if (dataLine == "false")
-                            {
-                                robotics = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> robotics;
                             continue;
                         }
                         if (type == "LabourMedic")
                         {
-                            if (dataLine == "false")
-                            {
-                                medic = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> medic;
                             continue;
                         }
                         if (type == "LabourWeaponSmith")
                         {
-                            if (dataLine == "false")
-                            {
-                                weaponSmith = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> weaponSmith;
                             continue;
                         }
                         if (type == "LabourArmourSmith")
                         {
-                            if (dataLine == "false")
-                            {
-                                armourSmith = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> armourSmith;
                             continue;
                         }
                         if (type == "LabourCrossbowSmith")
                         {
-                            if (dataLine == "false")
-                            {
-                                crossbowSmith = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> crossbowSmith;
                             continue;
                         }
                         if (type == "LabourAutomaticMachine")
                         {
-                            if (dataLine == "false")
-                            {
-                                automaticMachine = false;
-                            }
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> automaticMachine;
                             continue;
                         }
                         if (type == "AttackEnemies")
@@ -1135,117 +1124,117 @@ bool SquadSettingsInfo::isRestTime()
     return restTime;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourScience()
+float SquadAutonomy::SquadSettingsInfo::getLabourScience()
 {
     return _science;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourScience(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourScience(float val)
 {
     _science = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourEngineer()
+float SquadAutonomy::SquadSettingsInfo::getLabourEngineer()
 {
     return _engineer;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourEngineer(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourEngineer(float val)
 {
     _engineer = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourRobotics()
+float SquadAutonomy::SquadSettingsInfo::getLabourRobotics()
 {
     return _robotics;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourRobotics(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourRobotics(float val)
 {
     _robotics = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourMedic()
+float SquadAutonomy::SquadSettingsInfo::getLabourMedic()
 {
     return _medic;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourMedic(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourMedic(float val)
 {
     _medic = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourLabouring()
+float SquadAutonomy::SquadSettingsInfo::getLabourLabouring()
 {
     return _labouring;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourLabouring(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourLabouring(float val)
 {
     _labouring = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourFarming()
+float SquadAutonomy::SquadSettingsInfo::getLabourFarming()
 {
     return _farming;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourFarming(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourFarming(float val)
 {
     _farming = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourCooking()
+float SquadAutonomy::SquadSettingsInfo::getLabourCooking()
 {
     return _cooking;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourCooking(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourCooking(float val)
 {
     _cooking = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourWeaponSmith()
+float SquadAutonomy::SquadSettingsInfo::getLabourWeaponSmith()
 {
     return _weaponSmith;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourWeaponSmith(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourWeaponSmith(float val)
 {
     _weaponSmith = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourArmourSmith()
+float SquadAutonomy::SquadSettingsInfo::getLabourArmourSmith()
 {
     return _armourSmith;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourArmourSmith(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourArmourSmith(float val)
 {
     _armourSmith = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourCrossbowSmith()
+float SquadAutonomy::SquadSettingsInfo::getLabourCrossbowSmith()
 {
     return _crossbowSmith;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourCrossbowSmith(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourCrossbowSmith(float val)
 {
     _crossbowSmith = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getLabourAutomaticMachine()
+float SquadAutonomy::SquadSettingsInfo::getLabourAutomaticMachine()
 {
     return _automaticMachine;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setLabourAutomaticMachine(bool val)
+void SquadAutonomy::SquadSettingsInfo::setLabourAutomaticMachine(float val)
 {
     _automaticMachine = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::CanDoLabour(UseableStuff* useable)
+int SquadAutonomy::SquadSettingsInfo::getLabourPriority(UseableStuff* useable)
 {
     if (useable->numOperatorsMax <= 0)
     {
@@ -1285,7 +1274,7 @@ bool SquadAutonomy::SquadSettingsInfo::CanDoLabour(UseableStuff* useable)
         return _crossbowSmith;
         break;
     default:
-        return true;
+        return 0.0;
     }
     
 }

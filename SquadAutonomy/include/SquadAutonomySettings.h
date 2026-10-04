@@ -12,9 +12,9 @@ namespace SquadAutonomy
     public:
         SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr),
             _startWorkTime(0.0), _endWorkTime(24.0), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true), _restThreshold(50.0), _healedThreshold(90.0),
-            _science(true), 
-            _labouring(true), _farming(true), 
-            _medic(true), _cooking(true), _engineer(true), _robotics(true), _weaponSmith(true), _armourSmith(true), _crossbowSmith(true), _automaticMachine(true),
+            _science(1.0), 
+            _labouring(1.0), _farming(1.0), 
+            _medic(1.0), _cooking(1.0), _engineer(1.0), _robotics(1.0), _weaponSmith(1.0), _armourSmith(1.0), _crossbowSmith(1.0), _automaticMachine(1.0),
             _attackEnemies(true), _protectAllies(true), _doMedic(true), _doRescue(true),
             _manTurrets(false), _stayInsideGate(false), _closeGate(false)
         {
@@ -58,29 +58,29 @@ namespace SquadAutonomy
         void setUsePaidBeds(bool val);
         bool isRestTime();
         
-        bool getLabourScience();
-        void setLabourScience(bool val);
-        bool getLabourLabouring();
-        void setLabourLabouring(bool val);
-        bool getLabourFarming();
-        void setLabourFarming(bool val);
-        bool getLabourEngineer();
-        void setLabourEngineer(bool val);
-        bool getLabourRobotics();
-        void setLabourRobotics(bool val);
-        bool getLabourMedic();
-        void setLabourMedic(bool val);
-        bool getLabourCooking();
-        void setLabourCooking(bool val);
-        bool getLabourWeaponSmith();
-        void setLabourWeaponSmith(bool val);
-        bool getLabourArmourSmith();
-        void setLabourArmourSmith(bool val);
-        bool getLabourCrossbowSmith();
-        void setLabourCrossbowSmith(bool val);
-        bool getLabourAutomaticMachine();
-        void setLabourAutomaticMachine(bool val);
-        bool CanDoLabour(UseableStuff*);
+        float getLabourScience();
+        void setLabourScience(float val);
+        float getLabourLabouring();
+        void setLabourLabouring(float val);
+        float getLabourFarming();
+        void setLabourFarming(float val);
+        float getLabourEngineer();
+        void setLabourEngineer(float val);
+        float getLabourRobotics();
+        void setLabourRobotics(float val);
+        float getLabourMedic();
+        void setLabourMedic(float val);
+        float getLabourCooking();
+        void setLabourCooking(float val);
+        float getLabourWeaponSmith();
+        void setLabourWeaponSmith(float val);
+        float getLabourArmourSmith();
+        void setLabourArmourSmith(float val);
+        float getLabourCrossbowSmith();
+        void setLabourCrossbowSmith(float val);
+        float getLabourAutomaticMachine();
+        void setLabourAutomaticMachine(float val);
+        int getLabourPriority(UseableStuff*);
 
         bool getAttackEnemies();
         void setAttackEnemies(bool val);
@@ -115,17 +115,17 @@ namespace SquadAutonomy
         float _healedThreshold;
         bool _usePaidBeds;
         // Labour
-        bool _science;
-        bool _labouring;
-        bool _farming;
-        bool _engineer;
-        bool _cooking;
-        bool _robotics;
-        bool _medic;
-        bool _weaponSmith;
-        bool _armourSmith;
-        bool _crossbowSmith;
-        bool _automaticMachine;
+        float _science;
+        float _labouring;
+        float _farming;
+        float _engineer;
+        float _cooking;
+        float _robotics;
+        float _medic;
+        float _weaponSmith;
+        float _armourSmith;
+        float _crossbowSmith;
+        float _automaticMachine;
         // Combat
         bool _attackEnemies;
         bool _protectAllies;

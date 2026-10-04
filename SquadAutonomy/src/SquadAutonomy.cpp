@@ -1069,6 +1069,7 @@ namespace SquadAutonomy
         if (!ai) return nullptr;
         hand optimalLabour = nullptr;
         std::unordered_map<UseableStuff*, int> labourCandidates;
+        int minPriority = 0.0;
         TownBase* currentTown = character->getCurrentTownLocation();
         Log("Find Labour To Do");
         if (currentTown)
@@ -1079,7 +1080,9 @@ namespace SquadAutonomy
                 for (int i = 0; i < researchBuildings->size(); ++i)
                 {
                     auto useable = (*researchBuildings)[i]->getUseableStuff();
-                    if (!settings->CanDoLabour(useable)) continue;
+                    int priority = settings->getLabourPriority(useable);
+                    if (priority <= 0.0) continue;
+                    else if (priority < minPriority) continue;
                     auto operators = useable->currentOperators;
                     int opCount = operators.size();
                     if (operators.find(character) != operators.end())
@@ -1088,6 +1091,11 @@ namespace SquadAutonomy
                     }
                     if (opCount < useable->numOperatorsMax)
                     {
+                        if (priority > minPriority)
+                        {
+                            labourCandidates.clear();
+                            minPriority = priority;
+                        }
                         labourCandidates[useable] = opCount;
                     }
                 }
@@ -1096,7 +1104,9 @@ namespace SquadAutonomy
             for (int i = 0; i < refineryBuildings->size(); ++i)
             {
                 auto production = (*refineryBuildings)[i]->getProductionBuilding();
-                if (!settings->CanDoLabour(production)) continue;
+                int priority = settings->getLabourPriority(production);
+                if (priority <= 0.0) continue;
+                else if (priority < minPriority) continue;
                 if (production->couldIOperate(character))
                 {
                     auto operators = production->currentOperators;
@@ -1107,11 +1117,21 @@ namespace SquadAutonomy
                     }
                     if (opCount < production->numOperatorsMax)
                     {
+                        if (priority > minPriority)
+                        {
+                            labourCandidates.clear();
+                            minPriority = priority;
+                        }
                         labourCandidates[production] = opCount;
                     }
                 }
                 else if (production->numOperatorsMax <= 0 && production->getConsumtionItems(0))
                 {
+                    if (priority > minPriority)
+                    {
+                        labourCandidates.clear();
+                        minPriority = priority;
+                    }
                     labourCandidates[production] = 1;
                 }
             }
@@ -1119,7 +1139,9 @@ namespace SquadAutonomy
             for (int i = 0; i < craftingBuildings->size(); ++i)
             {
                 auto production = (*craftingBuildings)[i]->getProductionBuilding();
-                if (!settings->CanDoLabour(production)) continue;
+                int priority = settings->getLabourPriority(production);
+                if (priority <= 0.0) continue;
+                else if (priority < minPriority) continue;
                 if (production->couldIOperate(character))
                 {
                     auto operators = production->currentOperators;
@@ -1130,11 +1152,21 @@ namespace SquadAutonomy
                     }
                     if (opCount < production->numOperatorsMax)
                     {
+                        if (priority > minPriority)
+                        {
+                            labourCandidates.clear();
+                            minPriority = priority;
+                        }
                         labourCandidates[production] = opCount;
                     }
                 }
                 else if (production->numOperatorsMax <= 0 && production->getConsumtionItems(0))
                 {
+                    if (priority > minPriority)
+                    {
+                        labourCandidates.clear();
+                        minPriority = priority;
+                    }
                     labourCandidates[production] = 1;
                 }
             }
@@ -1142,7 +1174,9 @@ namespace SquadAutonomy
             for (int i = 0; i < mineBuildings->size(); ++i)
             {
                 auto production = (*mineBuildings)[i]->getProductionBuilding();
-                if (!settings->CanDoLabour(production)) continue;
+                int priority = settings->getLabourPriority(production);
+                if (priority <= 0.0) continue;
+                else if (priority < minPriority) continue;
                 if (production->couldIOperate(character))
                 {
                     auto operators = production->currentOperators;
@@ -1153,15 +1187,27 @@ namespace SquadAutonomy
                     }
                     if (opCount < production->numOperatorsMax)
                     {
+                        if (priority > minPriority)
+                        {
+                            labourCandidates.clear();
+                            minPriority = priority;
+                        }
                         labourCandidates[production] = opCount;
                     }
                 }
                 else if (production->numOperatorsMax <= 0 && production->getConsumtionItems(0))
                 {
+                    if (priority > minPriority)
+                    {
+                        labourCandidates.clear();
+                        minPriority = priority;
+                    }
                     labourCandidates[production] = 1;
                 }
             }
+
             UseableStuff* optimalLabour = FindOptimalLabourFromList(character, ai, &labourCandidates);
+
             if (optimalLabour)
             {
                 /*FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(optimalLabour);
@@ -1333,7 +1379,7 @@ namespace SquadAutonomy
         {
             if (out && out.getBuilding() && out.getBuilding()->getUseableStuff())
             {
-                if (!settings->CanDoLabour(out.getBuilding()->getUseableStuff()))
+                if (!settings->getLabourPriority(out.getBuilding()->getUseableStuff()))
                 {
                     out = nullptr;
                     return 0.0;

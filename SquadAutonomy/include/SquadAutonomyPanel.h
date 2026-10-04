@@ -74,6 +74,7 @@ namespace SquadAutonomy
         class GuardOptions;
 
     private:
+        DataPanelLine_SliderEditable* createOptionsSlider(const char*, float*, int, float, float, bool = false);
         int _category;
         int _subCategory;
         Platoon* _selectedSquad;
@@ -113,22 +114,23 @@ namespace SquadAutonomy
     {
     public:
         void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
-        LabourOptions() : science(true), 
-            labouring(true), farming(true), 
-            medic(true), cooking(true), engineer(true), robotics(true), weaponSmith(true), armourSmith(true), crossbowSmith(true), automaticMachine(true)
+        LabourOptions() : setAll(0.0), science(1.0),
+            labouring(1.0), farming(1.0), 
+            medic(1.0), cooking(1.0), engineer(1.0), robotics(1.0), weaponSmith(1.0), armourSmith(1.0), crossbowSmith(1.0), automaticMachine(1.0)
         {}
-        bool science;
-        bool labouring;
-        bool farming;
-        bool cooking;
-        bool medic;
-        bool engineer;
-        bool robotics;
-        bool weaponSmith;
-        bool armourSmith;
-        bool crossbowSmith;
-
-        bool automaticMachine;
+        void setAllTo(MyGUI::Widget*);
+        float setAll;
+        float science;
+        float labouring;
+        float farming;
+        float cooking;
+        float medic;
+        float engineer;
+        float robotics;
+        float weaponSmith;
+        float armourSmith;
+        float crossbowSmith;
+        float automaticMachine;
     };
     class SquadAutonomyPanel::AutonomyOptions::CombatOptions
     {
