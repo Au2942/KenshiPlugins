@@ -1,9 +1,10 @@
 ﻿#include "SquadAutonomy.h"
 #include "SquadAutonomyPanel.h"
 #include "SquadAutonomySettings.h"
-#include "SquadAutonomyModOptions.h"
+#include "SquadAutonomyModSettingsUI.h"
 #include "SquadAutonomyButton.h"
 #include "SquadAutonomyLocalization.h"
+#include "SquadAutonomyModSettings.h"
 
 #include <Debug.h>
 
@@ -98,23 +99,8 @@ namespace SquadAutonomy
     void (*Task_MoveToDoor_Gate_ChooseSide_gatePosition)(Tasker*, Ogre::Vector3&, CharBody*) = nullptr;
     void (*Task_OpenDoor_StartAction)(Tasker*, CharBody*) = nullptr;
     void (*Task_OpenDoor_Update)(Tasker*, CharBody*) = nullptr;
-    bool showOnMain = true;
-    bool lockPosition = true;
-    bool showInSquad = true;
-    bool enableLogging = false;
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
-    DatapanelGUI* optionsSettings;
-    const float defaultBtnWidth = 1.50;
-    const float defaultBtnHeight = 3.58;
-    const float defaultBtnLeft = 0.69;
-    const float defaultBtnTop = 0.788;
-    const float defaultBtnFontSize = 12.0;
-    float btnWidth = 1.50;
-    float btnHeight = 3.58;
-    float btnLeft = 0.69;
-    float btnTop = 0.788;
-    float btnFontSize = 12.0;
     std::wstring logFileName = L"SquadAutonomy.log";
     std::wstring logBakFileName = L"SquadAutonomyLog.bak";
     std::wstring saveName = L"SquadAutonomy.save";
@@ -182,7 +168,7 @@ namespace SquadAutonomy
 
     void Log(std::string line)
     {
-        if (!enableLogging) return;
+        if (!ModSettings::getSingleton().getValues().enableLogging) return;
         if (!logFile.is_open())
         {
             logFile.open(logPath, std::wfstream::out | std::wfstream::app);
@@ -348,23 +334,20 @@ namespace SquadAutonomy
         ForgottenGUI_changeFontSize_orig();
         if (SquadAutonomyPanel::initialized)
             SquadAutonomyPanel::getSingletonPtr()->create();
-        if (SquadAutonomyModOptions::initialized)
-            SquadAutonomyModOptions::getSingletonPtr()->create();
+
+        ModSettingsUI::getSingleton().create();
     }
 
-    void ShowModOptions(MyGUI::Widget* sender)
+    void ShowModSettings(MyGUI::Widget* sender)
     {
-        auto modOptions = SquadAutonomyModOptions::getSingletonPtr();
-        if (modOptions && modOptions->initialized)
+        auto& modSettingsUI = ModSettingsUI::getSingleton();
+        if (modSettingsUI.isVisible())
         {
-            if (modOptions->isVisible())
-            {
-                modOptions->hide();
-            }
-            else
-            {
-                modOptions->show();
-            }
+            modSettingsUI.hide();
+        }
+        else
+        {
+            modSettingsUI.show();
         }
     }
 
@@ -372,8 +355,8 @@ namespace SquadAutonomy
     void OptionsWindow_create_hook(OptionsWindow* thisptr)
     {
         OptionsWindow_create_orig(thisptr);
-        SquadAutonomyModOptions* modOptions = SquadAutonomyModOptions::getSingletonPtr();
-        if (!modOptions) return;
+        ModSettingsUI::getSingleton().setOptionsWindow(thisptr);
+
         //DebugLog("mod options initialized!");
         auto tabCount = thisptr->tabs->getItemCount();
         std::vector<int> catList(tabCount);
@@ -423,7 +406,6 @@ namespace SquadAutonomy
             }
             if (modLine)
             {
-                modOptions->setOptionsWindow(thisptr);
                 //DebugLog(Ogre::StringConverter::toString(modLine->getNumWidgets()));
                 //DebugLog(modLine->w1->getCaption().asUTF8());
                 //DebugLog(modLine->w2->getCaption().asUTF8());
@@ -435,7 +417,7 @@ namespace SquadAutonomy
                 //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
                 auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight-height)/2.0, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
                 btn->setCaption(Localization::gettext("Settings"));
-                btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModOptions);
+                btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
             }
         }
     }
@@ -444,22 +426,19 @@ namespace SquadAutonomy
     void saveOptions_hook(OptionsWindow* thisptr)
     {
         saveOptions_orig(thisptr);
-        SquadAutonomyModOptions::getSingletonPtr()->saveOptionsSettings();
+        ModSettingsUI::getSingleton().saveSettings();
     }
 
     void (*closeButton_orig)(OptionsWindow* thisptr, MyGUI::Widget* _sender);
     void closeButton_hook(OptionsWindow* thisptr, MyGUI::Widget* _sender)
     {
-        bool modOptionsVisible = false;
-        auto modOptions = SquadAutonomyModOptions::getSingletonPtr();
-        if (modOptions)
-        {
-            modOptionsVisible = modOptions->isVisible();
-        }
+        auto& modSettingsUI = ModSettingsUI::getSingleton();
+        const bool modSettingsVisible = modSettingsUI.isVisible();
+
         closeButton_orig(thisptr, _sender);
-        if (modOptions && modOptionsVisible && !modOptions->isVisible())
+        if (modSettingsVisible && !modSettingsUI.isVisible())
         {
-            modOptions->show();
+            modSettingsUI.show();
         }
     }
 
@@ -487,7 +466,9 @@ namespace SquadAutonomy
         int top,
         MyGUI::MouseButton id)
     {
-        if (lockPosition || !mClicked || id != MyGUI::MouseButton::Left)
+        auto& settingsValuesMutable = ModSettings::getSingleton().getValuesMutable();
+
+        if (settingsValuesMutable.lockPosition || !mClicked || id != MyGUI::MouseButton::Left)
             return;
 
         const int dx = left - mDragStart.left;
@@ -495,11 +476,11 @@ namespace SquadAutonomy
         if (dx != 0 || dy != 0)
         {
             mDragged = true;
-            btnLeft = static_cast<float>(mWindowStart.left + dx) / autBtn->getParentSize().width;
-            btnTop = static_cast<float>(mWindowStart.top + dy) / autBtn->getParentSize().height;
+            settingsValuesMutable.btnLeft = static_cast<float>(mWindowStart.left + dx) / autBtn->getParentSize().width;
+            settingsValuesMutable.btnTop = static_cast<float>(mWindowStart.top + dy) / autBtn->getParentSize().height;
             autBtn->setRealPosition(
-                btnLeft,
-                btnTop
+                settingsValuesMutable.btnLeft,
+                settingsValuesMutable.btnTop
             );
             //btnLeft = static_cast<float>(autBtn->getLeft()) / autBtn->getParentSize().width;
             //btnTop = static_cast<float>(autBtn->getTop()) / autBtn->getParentSize().height;
@@ -512,8 +493,19 @@ namespace SquadAutonomy
         MyGUI::MouseButton id)
     {
         if (id != MyGUI::MouseButton::Left)
+        {
             return;
-        if (mClicked && !mDragged) OpenSquadAutonomyPanelMainBar();
+        }
+
+        if (mClicked && !mDragged)
+        {
+            OpenSquadAutonomyPanelMainBar();
+        }
+        else if (mDragged)
+        {
+            ModSettings::getSingleton().saveToFile();
+        }
+
         mClicked = false;
         mDragged = false;
         sender->_setRootMouseFocus(false);
@@ -523,9 +515,11 @@ namespace SquadAutonomy
     MainBarGUI* MainbarGUICONSTRUCTOR_hook(MainBarGUI* thisptr)
     {
         MainBarGUI* orig = MainbarGUICONSTRUCTOR_orig(thisptr);
-        autBtn = orig->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", btnLeft, btnTop, btnWidth/100.0, btnHeight/100.0, MyGUI::Align::Center, "AUTBtn");
+
+        const auto& settingsValues = ModSettings::getSingleton().getValues();
+        autBtn = orig->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", settingsValues.btnLeft, settingsValues.btnTop, settingsValues.btnWidth/100.0, settingsValues.btnHeight/100.0, MyGUI::Align::Center, "AUTBtn");
         autBtn->setCaption(Localization::gettext("AUT"));
-        autBtn->setFontHeight(btnFontSize);
+        autBtn->setFontHeight(settingsValues.btnFontSize);
         autBtn->eventMouseButtonPressed +=
             MyGUI::newDelegate(onPressed);
 
@@ -537,7 +531,7 @@ namespace SquadAutonomy
         
         autBtn->setDepth(0);
 
-        if (!showOnMain)
+        if (!settingsValues.showOnMain)
         {
             autBtn->setVisible(false);
         }
@@ -548,14 +542,16 @@ namespace SquadAutonomy
     void _NV_update_hook(MainBarGUI* thisptr)
     {
         _NV_update_orig(thisptr);
+
+        const auto& settingsValues = ModSettings::getSingleton().getValues();
         if (autBtn)
         {
-            if (showOnMain)
+            if (settingsValues.showOnMain)
             {
                 autBtn->setVisible(true);
-                autBtn->setRealPosition(btnLeft, btnTop);
-                autBtn->setRealSize(btnWidth / 100.0, btnHeight / 100.0);
-                autBtn->setFontHeight(btnFontSize);
+                autBtn->setRealPosition(settingsValues.btnLeft, settingsValues.btnTop);
+                autBtn->setRealSize(settingsValues.btnWidth / 100.0, settingsValues.btnHeight / 100.0);
+                autBtn->setFontHeight(settingsValues.btnFontSize);
                 autBtn->setDepth(0);
             }
             else
@@ -619,6 +615,8 @@ namespace SquadAutonomy
     {
         SquadCellView_update_orig(thisptr, _info, _data);
 
+        const auto& settingsValues = ModSettings::getSingleton().getValues();
+
         bool createNew = true;
         for (int i = 0; i < squadAutButtons.size(); ++i)
         {
@@ -627,13 +625,13 @@ namespace SquadAutonomy
                 createNew = false;
             }
 
-            squadAutButtons[i]->setVisible(showInSquad);
+            squadAutButtons[i]->setVisible(settingsValues.showInSquad);
         }
 
         if(createNew)
         {
             squadAutButtons.emplace_back(new SquadAutonomyButton(*thisptr));
-            squadAutButtons.back()->setVisible(showInSquad);
+            squadAutButtons.back()->setVisible(settingsValues.showInSquad);
         }
     }
 
@@ -711,7 +709,6 @@ namespace SquadAutonomy
             if (settings->saveSettings(settingsSavePath))
             {
                 SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath);
-                SquadAutonomyModOptions::getSingletonPtr()->saveOptionsSettings();
                 shouldSave = false;
             }
         }
@@ -2478,6 +2475,7 @@ namespace SquadAutonomy
         logPath = modPath + logFileName;
         logBakPath = modPath + logBakFileName;
         Localization::init();
+        ModSettings::getSingleton().loadFromFile();
         SquadAutonomySettings::getSingletonPtr();
         Log("=====================New Session=====================");
     }
