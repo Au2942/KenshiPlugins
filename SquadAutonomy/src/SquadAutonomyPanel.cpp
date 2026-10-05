@@ -511,6 +511,7 @@ void SquadAutonomy::SquadAutonomyPanel::AutonomyOptions::updateOptions(SquadSett
         _labour->armourSmith = settings->getLabourArmourSmith();
         _labour->crossbowSmith = settings->getLabourCrossbowSmith();
         _labour->automaticMachine = settings->getLabourAutomaticMachine();
+        _labour->other = settings->getLabourOther();
     }
     if (_combat)
     {
@@ -606,6 +607,7 @@ void SquadAutonomyPanel::AutonomyOptions::updateSettings(DataPanelLine* line)
         squadSettings->setLabourArmourSmith(_labour->armourSmith);
         squadSettings->setLabourCrossbowSmith(_labour->crossbowSmith);
         squadSettings->setLabourAutomaticMachine(_labour->automaticMachine);
+        squadSettings->setLabourOther(_labour->other);
     }
     if (_combat)
     {
@@ -643,54 +645,50 @@ void SquadAutonomyPanel::AutonomyOptions::BasicOptions::refresh(AutonomyOptions*
     endSlider->setPrecision(0);
     endSlider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
         options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    auto checkbox = panel->setLineCheckbox(Localization::gettext("Allow Going to Bed"), &doSleep, category);
+    auto checkbox = panel->setLineCheckbox(Localization::gettext("Rest Until Healed When Wounded"), &restUntilHealed, category);
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
         options, &SquadAutonomyPanel::AutonomyOptions::updateSettingsAndRefresh);
-
-    if (settings->getDoSleep())
+    if (restUntilHealed)
     {
-        checkbox = panel->setLineCheckbox(Localization::gettext("Rest until healed"), &restUntilHealed, category);
-        checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-            options, &SquadAutonomyPanel::AutonomyOptions::updateSettingsAndRefresh);
-        if (restUntilHealed)
-        {
-            auto textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
-            textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-            textbox->editBox->setCaption(Localization::gettext("Rest Health Threshold"));
+        auto textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
+        textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+        textbox->editBox->setCaption(Localization::gettext("Rest Health Threshold"));
 
-            auto slider = panel->setLineSliderEditable("Rest Health Threshold", category, false, 0.0f, 100.0f, &this->restThreshold);
-            //slider->nameText->setEnabled(false);
-            slider->setPrecision(0);
-            slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-                options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+        auto slider = panel->setLineSliderEditable("Rest Health Threshold", category, false, 0.0f, 100.0f, &this->restThreshold);
+        //slider->nameText->setEnabled(false);
+        slider->setPrecision(0);
+        slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+            options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
 
-            textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
-            textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-            textbox->editBox->setCaption(Localization::gettext("Healed Health Threshold"));
+        textbox = panel->setLineText("", "", category, true, MyGUI::Align::Left);
+        textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+        textbox->editBox->setCaption(Localization::gettext("Healed Health Threshold"));
 
 
-            slider = panel->setLineSliderEditable("Healed Health Threshold", category, false, 0.0f, 100.0f, &this->healedThreshold);
-            //slider->nameText->setEnabled(false);
-            slider->setPrecision(0);
-            slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-                options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-        }
-        checkbox = panel->setLineCheckbox(Localization::gettext("Allow Using Paid Beds"), &usePaidBeds, category);
-        checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        slider = panel->setLineSliderEditable("Healed Health Threshold", category, false, 0.0f, 100.0f, &this->healedThreshold);
+        //slider->nameText->setEnabled(false);
+        slider->setPrecision(0);
+        slider->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
             options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
     }
+    checkbox = panel->setLineCheckbox(Localization::gettext("Allow Using Paid Beds"), &usePaidBeds, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
+    checkbox = panel->setLineCheckbox(Localization::gettext("Allow Sleep Outside Work Hours"), &doSleep, category);
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
+        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
 }
 
-DataPanelLine_SliderEditable* SquadAutonomyPanel::AutonomyOptions::createOptionsSlider(const char* key, float* var, int precision, float min, float max, bool seperateTextLine)
+DataPanelLine_SliderEditable* SquadAutonomyPanel::AutonomyOptions::createOptionsSlider(std::string key, float* var, int precision, float min, float max, bool seperateTextLine)
 {
     DataPanelLine_Text* textbox;
     if (seperateTextLine)
     {
         textbox = _panel->setLineText("", "", _category, true, MyGUI::Align::Left);
         textbox->editBox->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
-        textbox->editBox->setCaption(Localization::gettext(key));
+        textbox->editBox->setCaption(key);
     }
-    auto slider = _panel->setLineSliderEditable(Localization::gettext(key), _category, !seperateTextLine, min, max, var);
+    auto slider = _panel->setLineSliderEditable(key, _category, !seperateTextLine, min, max, var);
     slider->setPrecision(precision);
     int wrapCount = slider->nameText->getTextSize().width / slider->nameText->getTextRegion().width;
     int margin = slider->nameText->getHeight() - slider->nameText->getTextRegion().height;
@@ -719,6 +717,7 @@ void SquadAutonomyPanel::AutonomyOptions::LabourOptions::setAllTo(MyGUI::Widget*
     armourSmith = setAll;
     crossbowSmith = setAll;
     automaticMachine = setAll;
+    other = setAll;
     auto options = *(sender->getUserData<AutonomyOptions*>());
     if (options) options->updateSettingsAndRefresh(nullptr);
 }
@@ -729,68 +728,33 @@ void SquadAutonomyPanel::AutonomyOptions::LabourOptions::refresh(AutonomyOptions
     auto textbox = panel->setLineText("", *_MainColorCode + Localization::gettext("Stats Used:") + ' ' + Localization::gettext("(bigger number = higher priority, 0 = forbid)"), category, false, MyGUI::Align::Left);
     textbox->editBox->setColour(MyGUI::Colour(1.0, 1.0, 1.0));
     const float maxPriority = 10.0;
-    options->createOptionsSlider("Science", &science, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Labouring (Mining)", &labouring, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Farming", &farming, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Cooking", &cooking, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Medic", &medic, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Engineer", &engineer, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Robotics", &robotics, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Weapon Smith", &weaponSmith, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Armour Smith", &armourSmith, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Crossbow Smith", &crossbowSmith, 0, 0.0, maxPriority, false);
-    options->createOptionsSlider("Automatic Machine", &automaticMachine, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Science"), &science, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Labouring (Mining)"), &labouring, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Farming"), &farming, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Cooking"), &cooking, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Medic"), &medic, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Engineer"), &engineer, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Robotics"), &robotics, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Weapon Smith"), &weaponSmith, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Armour Smith"), &armourSmith, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Crossbow Smith"), &crossbowSmith, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Automatic Machine"), &automaticMachine, 0, 0.0, maxPriority, false);
+    options->createOptionsSlider(Localization::gettext("Other"), &other, 0, 0.0, maxPriority, false);
 
     panel->addSpace(category, 0.25);
     auto slider = panel->setLineSliderEditable(Localization::gettext("Set All"), category, true, 0.0, maxPriority, &setAll);
     slider->setPrecision(0);
     auto editBox = slider->valueEditBox;
     auto valueEditPos = editBox->getPosition();
-    auto button = panel->setLineButton("SetAll", Localization::gettext("Set"), category);
+    auto button = panel->setLineButton("", Localization::gettext("Set"), category);
     button->button->setPosition(valueEditPos.left, valueEditPos.top + editBox->getHeight());
     button->button->setSize(editBox->getWidth(), editBox->getHeight());
     slider->sliderBar->setPosition(slider->sliderBar->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->sliderBar->getHeight() * 0.5);
     slider->nameText->setPosition(slider->nameText->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->nameText->getHeight() * 0.5);
-    button->button->setCaption(Localization::gettext("Set"));
+    //button->button->setCaption(Localization::gettext("Set"));
     button->button->setUserData(options);
     button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &LabourOptions::setAllTo);
     panel->addSpace(category, 1.0);
-    /*
-    auto checkbox = panel->setLineCheckbox(Localization::gettext("Science"), &science, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Labouring (Mining)"), &labouring, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Farming"), &farming, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Cooking"), &cooking, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Medic"), &medic, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Engineer"), &engineer, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Robotics"), &robotics, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Weapon Smith"), &weaponSmith, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Armour Smith"), &armourSmith, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Crossbow Smith"), &crossbowSmith, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    panel->addSpace(category, 0.25);
-    checkbox = panel->setLineCheckbox(Localization::gettext("Automatic Machine"), &automaticMachine, category);
-    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<AutonomyOptions, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(options),
-        options, &SquadAutonomyPanel::AutonomyOptions::updateSettings);
-    */
 }
 
 void SquadAutonomyPanel::AutonomyOptions::CombatOptions::refresh(AutonomyOptions* options, int category, DatapanelGUI* panel, SquadSettingsInfo* settings)

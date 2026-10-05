@@ -168,23 +168,24 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
             saveFile << converter.from_bytes("\tOptions:") << L'\n';
             saveFile << converter.from_bytes("\t\tStartWorkTime: ") << settingsInfo->getStartWorkTime() << L'\n';
             saveFile << converter.from_bytes("\t\tEndWorkTime: ") << settingsInfo->getEndWorkTime() << L'\n';
+            saveFile << converter.from_bytes("\t\tRestUntilHealed: " + Ogre::StringConverter::toString(settingsInfo->getRestUntilHealed())) << L'\n';
+            saveFile << converter.from_bytes("\t\t\tRestThreshold: ") << settingsInfo->getRestThreshold() << L'\n';
+            saveFile << converter.from_bytes("\t\t\tHealedThreshold: ") << settingsInfo->getHealedThreshold() << L'\n';
+            saveFile << converter.from_bytes("\t\tUsePaidBeds: " + Ogre::StringConverter::toString(settingsInfo->getUsePaidBeds())) << L'\n';
             saveFile << converter.from_bytes("\t\tDoSleep: " + Ogre::StringConverter::toString(settingsInfo->getDoSleep())) << L'\n';
-            saveFile << converter.from_bytes("\t\t\tRestUntilHealed: " + Ogre::StringConverter::toString(settingsInfo->getRestUntilHealed())) << L'\n';
-            saveFile << converter.from_bytes("\t\t\t\tRestThreshold: " + Ogre::StringConverter::toString(settingsInfo->getRestThreshold())) << L'\n';
-            saveFile << converter.from_bytes("\t\t\t\tHealedThreshold: " + Ogre::StringConverter::toString(settingsInfo->getHealedThreshold())) << L'\n';
-            saveFile << converter.from_bytes("\t\t\tUsePaidBeds: " + Ogre::StringConverter::toString(settingsInfo->getUsePaidBeds())) << L'\n';
 
-            saveFile << converter.from_bytes("\t\tLabourScience: " + Ogre::StringConverter::toString(settingsInfo->getLabourScience())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourLabouring: " + Ogre::StringConverter::toString(settingsInfo->getLabourLabouring())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourFarming: " + Ogre::StringConverter::toString(settingsInfo->getLabourFarming())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourEngineer: " + Ogre::StringConverter::toString(settingsInfo->getLabourEngineer())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourCooking: " + Ogre::StringConverter::toString(settingsInfo->getLabourCooking())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourRobotics: " + Ogre::StringConverter::toString(settingsInfo->getLabourRobotics())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourMedic: " + Ogre::StringConverter::toString(settingsInfo->getLabourMedic())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourWeaponSmith: " + Ogre::StringConverter::toString(settingsInfo->getLabourWeaponSmith())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourArmourSmith: " + Ogre::StringConverter::toString(settingsInfo->getLabourArmourSmith())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourCrossbowSmith: " + Ogre::StringConverter::toString(settingsInfo->getLabourCrossbowSmith())) << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourAutomaticMachine: " + Ogre::StringConverter::toString(settingsInfo->getLabourAutomaticMachine())) << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourScience: ") << settingsInfo->getLabourScience() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourLabouring: ") << settingsInfo->getLabourLabouring() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourFarming: ") << settingsInfo->getLabourFarming() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourEngineer: ") << settingsInfo->getLabourEngineer() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourCooking: ") << settingsInfo->getLabourCooking() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourRobotics: ") << settingsInfo->getLabourRobotics() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourMedic: ") << settingsInfo->getLabourMedic() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourWeaponSmith: ") << settingsInfo->getLabourWeaponSmith() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourArmourSmith: ") << settingsInfo->getLabourArmourSmith() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourCrossbowSmith: ") << settingsInfo->getLabourCrossbowSmith() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourAutomaticMachine: ") << settingsInfo->getLabourAutomaticMachine() << L'\n';
+            saveFile << converter.from_bytes("\t\tLabourOther: ") << settingsInfo->getLabourOther() << L'\n';
 
             saveFile << converter.from_bytes("\t\tAttackEnemies: " + Ogre::StringConverter::toString(settingsInfo->getAttackEnemies())) << L'\n';
             saveFile << converter.from_bytes("\t\tProtectAllies: " + Ogre::StringConverter::toString(settingsInfo->getProtectAllies())) << L'\n';
@@ -246,17 +247,18 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             float healedThreshold = 90.0;
             bool usePaidBeds = false;
             // Labour
-            bool science = true;
-            bool labouring = true;
-            bool farming = true;
-            bool engineer = true;
-            bool cooking = true;
-            bool robotics = true;
-            bool medic = true;
-            bool weaponSmith = true;
-            bool armourSmith = true;
-            bool crossbowSmith = true;
-            bool automaticMachine = true;
+            float science = 1.0;
+            float labouring = 1.0;
+            float farming = 1.0;
+            float engineer = 1.0;
+            float cooking = 1.0;
+            float robotics = 1.0;
+            float medic = 1.0;
+            float weaponSmith = 1.0;
+            float armourSmith = 1.0;
+            float crossbowSmith = 1.0;
+            float automaticMachine = 1.0;
+            float other = 1.0;
             // Combat
             bool attackEnemies = true;
             bool protectAllies = true;
@@ -392,14 +394,6 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                             ss >> endWorkTime;
                             continue;
                         }
-                        if (type == "DoSleep")
-                        {
-                            if (dataLine == "true")
-                            {
-                                doSleep = true;
-                            }
-                            continue;
-                        }
                         if (type == "RestUntilHealed")
                         {
                             if (dataLine == "false")
@@ -427,6 +421,14 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                             if (dataLine == "true")
                             {
                                 usePaidBeds = true;
+                            }
+                            continue;
+                        }
+                        if (type == "DoSleep")
+                        {
+                            if (dataLine == "true")
+                            {
+                                doSleep = true;
                             }
                             continue;
                         }
@@ -505,6 +507,13 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                             if (dataLine == "") continue;
                             std::stringstream ss(dataLine);
                             ss >> automaticMachine;
+                            continue;
+                        }
+                        if (type == "LabourOther")
+                        {
+                            if (dataLine == "") continue;
+                            std::stringstream ss(dataLine);
+                            ss >> other;
                             continue;
                         }
                         if (type == "AttackEnemies")
@@ -610,6 +619,7 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 settingsInfo->setLabourArmourSmith(armourSmith);
                 settingsInfo->setLabourCrossbowSmith(crossbowSmith);
                 settingsInfo->setLabourAutomaticMachine(automaticMachine);
+                settingsInfo->setLabourOther(other);
 
                 settingsInfo->setAttackEnemies(attackEnemies);
                 settingsInfo->setProtectAllies(protectAllies);
@@ -975,155 +985,165 @@ bool SquadSettingsInfo::isRestTime()
 
 float SquadAutonomy::SquadSettingsInfo::getLabourScience()
 {
-    return _science;
+    return _labourScience;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourScience(float val)
 {
-    _science = val;
+    _labourScience = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourEngineer()
 {
-    return _engineer;
+    return _labourEngineer;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourEngineer(float val)
 {
-    _engineer = val;
+    _labourEngineer = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourRobotics()
 {
-    return _robotics;
+    return _labourRobotics;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourRobotics(float val)
 {
-    _robotics = val;
+    _labourRobotics = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourMedic()
 {
-    return _medic;
+    return _labourMedic;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourMedic(float val)
 {
-    _medic = val;
+    _labourMedic = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourLabouring()
 {
-    return _labouring;
+    return _labourLabouring;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourLabouring(float val)
 {
-    _labouring = val;
+    _labourLabouring = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourFarming()
 {
-    return _farming;
+    return _labourFarming;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourFarming(float val)
 {
-    _farming = val;
+    _labourFarming = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourCooking()
 {
-    return _cooking;
+    return _labourCooking;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourCooking(float val)
 {
-    _cooking = val;
+    _labourCooking = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourWeaponSmith()
 {
-    return _weaponSmith;
+    return _labourWeaponSmith;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourWeaponSmith(float val)
 {
-    _weaponSmith = val;
+    _labourWeaponSmith = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourArmourSmith()
 {
-    return _armourSmith;
+    return _labourArmourSmith;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourArmourSmith(float val)
 {
-    _armourSmith = val;
+    _labourArmourSmith = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourCrossbowSmith()
 {
-    return _crossbowSmith;
+    return _labourCrossbowSmith;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourCrossbowSmith(float val)
 {
-    _crossbowSmith = val;
+    _labourCrossbowSmith = val;
 }
 
 float SquadAutonomy::SquadSettingsInfo::getLabourAutomaticMachine()
 {
-    return _automaticMachine;
+    return _labourAutomaticMachine;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setLabourAutomaticMachine(float val)
 {
-    _automaticMachine = val;
+    _labourAutomaticMachine = val;
+}
+
+float SquadAutonomy::SquadSettingsInfo::getLabourOther()
+{
+    return _labourOther;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setLabourOther(float val)
+{
+    _labourOther = val;
 }
 
 int SquadAutonomy::SquadSettingsInfo::getLabourPriority(UseableStuff* useable)
 {
     if (useable->numOperatorsMax <= 0)
     {
-        return _automaticMachine;
+        return _labourAutomaticMachine;
     }
     auto statUsed = useable->getStatUsed();
     switch (statUsed)
     {
     case STAT_SCIENCE:
-        return _science;
+        return _labourScience;
         break;
     case STAT_LABOURING:
-        return _labouring;
+        return _labourLabouring;
         break;
     case STAT_FARMING:
-        return _farming;
+        return _labourFarming;
         break;
     case STAT_ENGINEERING:
-        return _engineer;
+        return _labourEngineer;
         break;
     case STAT_COOKING:
-        return _cooking;
+        return _labourCooking;
         break;
     case STAT_ROBOTICS:
-        return _robotics;
+        return _labourRobotics;
         break;
     case STAT_MEDIC:
-        return _medic;
+        return _labourMedic;
         break;
     case STAT_SMITHING_WEAPON:
-        return _weaponSmith;
+        return _labourWeaponSmith;
         break;
     case STAT_SMITHING_ARMOUR:
-        return _armourSmith;
+        return _labourArmourSmith;
         break;
     case STAT_SMITHING_BOW:
-        return _crossbowSmith;
+        return _labourCrossbowSmith;
         break;
     default:
-        return 0.0;
+        return _labourOther;
     }
     
 }

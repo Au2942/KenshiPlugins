@@ -12,9 +12,9 @@ namespace SquadAutonomy
     public:
         SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr),
             _startWorkTime(0.0), _endWorkTime(24.0), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true), _restThreshold(50.0), _healedThreshold(90.0),
-            _science(1.0), 
-            _labouring(1.0), _farming(1.0), 
-            _medic(1.0), _cooking(1.0), _engineer(1.0), _robotics(1.0), _weaponSmith(1.0), _armourSmith(1.0), _crossbowSmith(1.0), _automaticMachine(1.0),
+            _labourScience(1.0), 
+            _labourLabouring(1.0), _labourFarming(1.0), 
+            _labourMedic(1.0), _labourCooking(1.0), _labourEngineer(1.0), _labourRobotics(1.0), _labourWeaponSmith(1.0), _labourArmourSmith(1.0), _labourCrossbowSmith(1.0), _labourAutomaticMachine(1.0),
             _attackEnemies(true), _protectAllies(true), _doMedic(true), _doRescue(true),
             _manTurrets(false), _stayInsideGate(false), _closeGate(false)
         {
@@ -80,6 +80,8 @@ namespace SquadAutonomy
         void setLabourCrossbowSmith(float val);
         float getLabourAutomaticMachine();
         void setLabourAutomaticMachine(float val);
+        float getLabourOther();
+        void setLabourOther(float val);
         int getLabourPriority(UseableStuff*);
 
         bool getAttackEnemies();
@@ -109,23 +111,24 @@ namespace SquadAutonomy
         // Basic
         float _startWorkTime;
         float _endWorkTime;
-        bool _doSleep;
         bool _restUntilHealed;
         float _restThreshold;
         float _healedThreshold;
         bool _usePaidBeds;
+        bool _doSleep;
         // Labour
-        float _science;
-        float _labouring;
-        float _farming;
-        float _engineer;
-        float _cooking;
-        float _robotics;
-        float _medic;
-        float _weaponSmith;
-        float _armourSmith;
-        float _crossbowSmith;
-        float _automaticMachine;
+        float _labourScience;
+        float _labourLabouring;
+        float _labourFarming;
+        float _labourEngineer;
+        float _labourCooking;
+        float _labourRobotics;
+        float _labourMedic;
+        float _labourWeaponSmith;
+        float _labourArmourSmith;
+        float _labourCrossbowSmith;
+        float _labourAutomaticMachine;
+        float _labourOther;
         // Combat
         bool _attackEnemies;
         bool _protectAllies;

@@ -74,7 +74,7 @@ namespace SquadAutonomy
         class GuardOptions;
 
     private:
-        DataPanelLine_SliderEditable* createOptionsSlider(const char*, float*, int, float, float, bool = false);
+        DataPanelLine_SliderEditable* createOptionsSlider(std::string, float*, int, float, float, bool = false);
         int _category;
         int _subCategory;
         Platoon* _selectedSquad;
@@ -104,11 +104,11 @@ namespace SquadAutonomy
         {}
         float startWorkTime;
         float endWorkTime;
-        bool doSleep;
         bool restUntilHealed;
         float restThreshold;
         float healedThreshold;
         bool usePaidBeds;
+        bool doSleep;
     };
     class SquadAutonomyPanel::AutonomyOptions::LabourOptions
     {
@@ -116,7 +116,7 @@ namespace SquadAutonomy
         void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
         LabourOptions() : setAll(0.0), science(1.0),
             labouring(1.0), farming(1.0), 
-            medic(1.0), cooking(1.0), engineer(1.0), robotics(1.0), weaponSmith(1.0), armourSmith(1.0), crossbowSmith(1.0), automaticMachine(1.0)
+            medic(1.0), cooking(1.0), engineer(1.0), robotics(1.0), weaponSmith(1.0), armourSmith(1.0), crossbowSmith(1.0), automaticMachine(1.0), other(1.0)
         {}
         void setAllTo(MyGUI::Widget*);
         float setAll;
@@ -131,6 +131,7 @@ namespace SquadAutonomy
         float armourSmith;
         float crossbowSmith;
         float automaticMachine;
+        float other;
     };
     class SquadAutonomyPanel::AutonomyOptions::CombatOptions
     {

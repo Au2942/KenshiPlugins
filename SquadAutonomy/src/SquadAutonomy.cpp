@@ -1313,18 +1313,29 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             OrdersReceiver* order = character->getOrdersReciever();
-            Tasker* currentAction = nullptr;
-            if (order) currentAction = order->tryToGetCurrentGoal();
-            if (currentAction && (currentAction->key() == AUTO_LABOURING_MINES || currentAction->key() == STAY_IN_HOME))
+            Tasker* currentGoal = nullptr;
+            if (order) currentGoal = order->tryToGetCurrentGoal();
+            if (currentGoal)
             {
-                if (thisptr->getSpecialFunction() == BF_RESEARCH)
+                TaskType key = currentGoal->key();
+                if (key == AUTO_LABOURING_MINES || key == STAY_IN_HOME)
                 {
-                    if (ou->player && ou->player->technology)
+                    if (thisptr->getSpecialFunction() == BF_RESEARCH)
                     {
-                        if (ou->player->technology->current.size() == 0) return false;
+                        if (ou->player && ou->player->technology)
+                        {
+                            if (ou->player->technology->current.size() == 0) return false;
+                        }
+                    }
+                    if (thisptr->getSpecialFunction() == BF_DOOR)
+                    {
+                        return false;
                     }
                 }
-                if (thisptr->getSpecialFunction() == BF_DOOR)
+            }
+            if (thisptr->getSpecialFunction() == BF_TURRET)
+            {
+                if (!settings->getManTurrets())
                 {
                     return false;
                 }
@@ -1601,30 +1612,24 @@ namespace SquadAutonomy
                 }
                 if (type == GO_HOME_AND_GO_TO_BED)
                 {
-                    if (settings->getDoSleep())
+                    bool wakeup = true;
+                    if (settings->getRestUntilHealed())
                     {
-                        bool wakeup = true;
-                        if (!settings->isRestTime())
-                        {
-                            if (settings->getRestUntilHealed())
-                            {
-                                MedicalSystem* medical = character->getMedical();
-                                RaceData* race = character->getRace();
-                                if (race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
-                                {
-                                    wakeup = false;
-                                }
-                            }
-                        }
-                        else
+                        MedicalSystem* medical = character->getMedical();
+                        RaceData* race = character->getRace();
+                        if (race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
                         {
                             wakeup = false;
                         }
-                        if (wakeup)
-                        {
-                            thisptr->clearCurrentGoal(true);
-                            return;
-                        }
+                    }
+                    if (settings->getDoSleep() && settings->isRestTime())
+                    {
+                        wakeup = false;
+                    }
+                    if (wakeup)
+                    {
+                        thisptr->clearCurrentGoal(true);
+                        return;
                     }
                 }
             }
@@ -1898,24 +1903,26 @@ namespace SquadAutonomy
         {
             if (settings->getStayInsideGate() && thisptr)
             {
-                //TaskType key = thisptr->key;
-
-                //idk how this works
-                //from what I can tell, it keeps returning false because something about Task StateType requirement failing
-                //seemingly something to do with function AI::stateIsTrue and func 61e990 and DAT_141e45450
-                Character* character = ai->getCharacter();
-                CharMovement* movement = nullptr;
-                if (character) movement = character->getMovement();
-                if (movement && movement->isDestinationReached())
+                TaskType key = thisptr->key;
+                if (key == MAN_THE_GATE || key == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT)
                 {
-                    return true;
+                    //idk how this works
+                    //from what I can tell, it keeps returning false because something about Task StateType requirement failing
+                    //seemingly something to do with function AI::stateIsTrue and func 61e990 and DAT_141e45450
+                    Character* character = ai->getCharacter();
+                    CharMovement* movement = nullptr;
+                    if (character) movement = character->getMovement();
+                    if (movement && movement->isDestinationReached())
+                    {
+                        return true;
+                    }
+                    else return false;
+                    /*if (character->pos.squaredDistance(location) <= 50.0f)
+                    {
+                        return true;
+                    }
+                    else return false;*/
                 }
-                else return false;
-                /*if (character->pos.squaredDistance(location) <= 50.0f)
-                {
-                    return true;
-                }
-                else return false;*/
 
             }
         }
@@ -1991,13 +1998,13 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             Tasker* currentTask = nullptr;
-            OrdersReceiver* order = thisptr->getOrdersReciever();
+            AITaskSytem* order = thisptr->ai->getTaskSystem();
             CharBody* body = thisptr->getBody();
             if (order) currentTask = order->tryToGetCurrentGoal();
             if (currentTask)
             {
                 TaskType key = currentTask->key();
-                if (key == MAN_THE_GATE)
+                if (key == MAN_THE_GATE || key == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT)
                 {
                     //DebugLog("ManTheGate");
                     //const TaskData* taskData = currentTask->getTaskData();
@@ -2016,10 +2023,8 @@ namespace SquadAutonomy
                         if (door->isDamaged())
                         {
                             if (body) body->setCurrentAction(REPAIR, door);
-                            //thisptr->addJob(REPAIR, door, false, false, door->pos);
-                            //thisptr->addOrder(door, REPAIR, door, false, true, door->pos);
                         }
-                        else if (settings->getCloseGate())
+                        else if (key == MAN_THE_GATE && settings->getCloseGate())
                         {
                             bool isInsideGate = true;
                             if (settings->getStayInsideGate() && squad->activePlatoon)
@@ -2048,8 +2053,6 @@ namespace SquadAutonomy
                                     else if (closeGateCDTimer <= 0.0)
                                     {
                                         if (body) body->setCurrentAction(CLOSE_DOOR, door);
-                                        //thisptr->addOrder(door, CLOSE_DOOR, door, false, true, door->pos);
-                                        //thisptr->addGoal(CLOSE_DOOR, door);
                                         closeGateCDTimer = 0.0;
                                         closeGateTimerOn = false;
                                     }
@@ -2063,17 +2066,10 @@ namespace SquadAutonomy
                             else if (!isInsideGate && (door->getDoorState() == DOORSTATE_CLOSED))
                             {
                                 if (body) body->setCurrentAction(OPEN_DOOR, door);
-                                //thisptr->addGoal(OPEN_DOOR, door);
-                                //thisptr->addOrder(door, OPEN_DOOR, door, false, true, door->pos);
+                                
                             }
                         }
-                        /*else
-                        {
-                            if (door->getDoorState() == DOORSTATE_CLOSED)
-                            {
-                                thisptr->addOrder(door, OPEN_DOOR, door, false, true, door->pos);
-                            }
-                        }*/
+
                     }
 
                 }
@@ -2234,7 +2230,7 @@ namespace SquadAutonomy
                     if (currentTask->key() == PATROL_TOWN)
                     {
                         float score = taskSystem->currentGoalScore;
-                        score *= 0.98;
+                        score *= 0.95;
                         //DebugLog("Patrol score: " + Ogre::StringConverter::toString(score));
                         taskSystem->currentGoalScore = std::max(score, 0.0001f);
                         return taskSystem->currentGoalScore;
@@ -2248,13 +2244,24 @@ namespace SquadAutonomy
                     }
                 }
             }
-            else if (type == TAKE_INTRUDER_OUTSIDE)
+            else if (type == RELAX_IN_TOWN_PACKAGE)
             {
-                if (settings->isRestTime())
+                Character* leader = squad->getSquadLeader();
+                if (leader && character != leader)
                 {
-                    return 0.0;
+                    OrdersReceiver* leaderOrder = leader->getOrdersReciever();
+                    if (leaderOrder)
+                    {
+                        const TaskMatch currentGoal = leaderOrder->getCurrentGoal();
+                        if (currentGoal.key() == RELAX_IN_TOWN_PACKAGE)
+                        {
+                            return 1.0;
+                        }
+                    }
+
                 }
             }
+
             /*else if (type == GET_OUT_OF_BED_IF_ITS_EMERGENCY || type == GET_OUT_OF_BED)
             {
                 MedicalSystem* medical = nullptr;
@@ -2326,13 +2333,13 @@ namespace SquadAutonomy
                 //DebugLog(character->displayName + "AutoSleep");
                 return _NV_scoreGoToBed_orig(thisptr, subject, _a2);
             }
-            if (settings->getDoSleep())
+
+            if (settings->getRestUntilHealed())
             {
 
-                //if need to continue resting
                 if (race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
                 {
-                    if (settings->getRestUntilHealed() && stateBroadcast && stateBroadcast->isSleeping)
+                    if (stateBroadcast && stateBroadcast->isSleeping)
                     {
                         //DebugLog("GoToBed continue sleep until healed");
                         //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
@@ -2343,8 +2350,11 @@ namespace SquadAutonomy
                         //DebugLog("GoToBed rest");
                         return 5.0;
                     }
-
+                    if (medical->restedState <= settings->getRestThresholdP()) return 20.0;
                 }
+            }
+            if (settings->getDoSleep())
+            {
                 if (settings->isRestTime())
                 {
                     if (stateBroadcast && !stateBroadcast->isSleeping)
@@ -2368,17 +2378,6 @@ namespace SquadAutonomy
                             return 0.5;
                         }
                         return 1.0;
-                    }
-                }
-                else
-                {
-                    if (settings->getRestUntilHealed() && medical->restedState <= settings->getHealedThreshold() && medical && medical->scoreFirstAidNeed(false) < 0.1)
-                    {
-                        if (race && !race->robot)
-                        {
-                            if (medical->restedState <= settings->getRestThresholdP()) return 20.0;
-                            else return (1.0 - medical->restedState);
-                        }
                     }
                 }
             }
@@ -2422,19 +2421,19 @@ namespace SquadAutonomy
             if (currentGoal && (currentGoal->key() == GO_HOME_AND_GO_TO_BED || currentGoal->key() == GO_HOME_AND_GO_TO_BED_SECURE))
             {
                 //if still injured and has get rest until healed
+                if (character->isLiterallyUnderMeleeAttackRightNowForSure())
+                {
+                    //DebugLog("GetOutOfBed under melee attack");
+                    return 1.0;
+                }
+                if (settings->getRestUntilHealed() && race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
+                {
+                    //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
+                    //DebugLog("GetOutOfBed rest until healed");
+                    return 0.0;
+                }
                 if (settings->getDoSleep())
                 {
-                    if (character->isLiterallyUnderMeleeAttackRightNowForSure())
-                    {
-                        //DebugLog("GetOutOfBed under melee attack");
-                        return 1.0;
-                    }
-                    if (settings->getRestUntilHealed() && race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
-                    {
-                        //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
-                        //DebugLog("GetOutOfBed rest until healed");
-                        return 0.0;
-                    }
                     if (!settings->isRestTime())
                     {
                         //DebugLog("GetOutOfBed Sleep outside of rest time");
