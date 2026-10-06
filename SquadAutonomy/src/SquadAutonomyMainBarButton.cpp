@@ -8,7 +8,7 @@
 
 using namespace SquadAutonomy;
 
-MainBarButton &MainBarButton::getSingleton()
+MainBarButton& MainBarButton::getSingleton()
 {
     static std::unique_ptr<MainBarButton> singleton;
     if (!singleton)
@@ -68,7 +68,7 @@ void MainBarButton::createButton(MyGUI::Widget& parent)
     }
 }
 
-void MainBarButton::destroyButton(MyGUI::Widget &parent)
+void MainBarButton::destroyButton(MyGUI::Widget& parent)
 {
     if (!_autBtn)
     {
