@@ -18,6 +18,8 @@ namespace SquadAutonomy
         void hide();
         bool isVisible();
         void resetSettingsToDefault(MyGUI::Widget*);
+        void updateLogSeverity(MyGUI::ComboBox*, size_t);
+        void updatePanel(DataPanelLine*);
         void saveSettings();
         void close(MyGUI::Window*, const std::string&);
 
@@ -39,5 +41,6 @@ namespace SquadAutonomy
         int _category;
         DatapanelGUI* _panel;
         OptionsWindow* _optionsWindow;
+        int _logSeverityIndex;
     };
 }

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include "SquadAutonomyLog.h"
 
 namespace SquadAutonomy
 {
@@ -16,6 +17,8 @@ namespace SquadAutonomy
             bool lockPosition;
             bool showInSquad;
             bool enableLogging;
+            Logger::Severity logSeverity;
+            bool logSpam;
             float btnWidth;
             float btnHeight;
             float btnLeft;
@@ -48,6 +51,7 @@ namespace SquadAutonomy
 
         static bool parseBoolSetting(const std::wstring& stringValue, bool& outValue);
         static bool parseFloatSetting(const std::wstring& stringValue, float& outValue);
+        static bool parseLogSeveritySetting(const std::wstring& stringValue, Logger::Severity& outValue);
 
         SettingsValues _settingsValues;
         std::vector<std::string> _configPackages;

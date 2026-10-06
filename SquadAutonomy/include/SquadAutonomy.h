@@ -19,14 +19,8 @@ namespace SquadAutonomy
     extern std::string* _MainColorCode;
     void Init();
     std::wstring GetCurrentDLLDirectory();
-    extern void Log(std::string line);
-    extern std::wstring logFileName;
-    extern std::wstring logBakFileName;
     extern std::wstring saveName;
     extern std::wstring modPath;
-    extern std::wstring logPath;
-    extern std::wstring logBakPath;
-    extern std::wofstream logFile;
     extern std::wstring settingsSavePath;
     extern std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     //static int bc;

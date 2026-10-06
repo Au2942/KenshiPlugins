@@ -141,6 +141,16 @@ void ModSettings::loadFromFile()
                     parseBoolSetting(dataLineW, _settingsValues.enableLogging);
                     continue;
                 }
+                if (type == L"LogSeverity")
+                {
+                    parseLogSeveritySetting(dataLineW, _settingsValues.logSeverity);
+                    continue;
+                }
+                if (type == L"LogSpam")
+                {
+                    parseBoolSetting(dataLineW, _settingsValues.logSpam);
+                    continue;
+                }
             }
         }
         else if (wline == L"<Packages>")
@@ -194,6 +204,8 @@ void ModSettings::saveToFile() const
         << L"BtnFontSize: " << _settingsValues.btnFontSize << L'\n'
         << L"ShowInSquad: " << _settingsValues.showInSquad << L'\n'
         << L"EnableLogging: " << _settingsValues.enableLogging << L'\n'
+        << L"LogSeverity: " << static_cast<int>(_settingsValues.logSeverity) << L'\n'
+        << L"LogSpam: " << _settingsValues.logSpam << L'\n'
         << L"</Options>" << L'\n';
 
     tempFile << L"<Packages>" << L'\n';
@@ -242,12 +254,43 @@ bool ModSettings::parseFloatSetting(const std::wstring &stringValue, float &outV
     return false;
 }
 
+bool ModSettings::parseLogSeveritySetting(const std::wstring& stringValue, Logger::Severity& outValue)
+{
+    if (stringValue.empty())
+    {
+        return false;
+    }
+
+    std::wstringstream ss(stringValue);
+    int tempOutValue = 0;
+    ss >> tempOutValue;
+    if (ss)
+    {
+        switch (tempOutValue)
+        {
+        case static_cast<int>(Logger::None):
+        case static_cast<int>(Logger::Info):
+        case static_cast<int>(Logger::Warning):
+        case static_cast<int>(Logger::Error):
+        case static_cast<int>(Logger::Debug):
+            outValue = static_cast<Logger::Severity>(tempOutValue);
+            return true;
+        default:
+            outValue = Logger::None;
+            return false;
+        }
+    }
+    return false;
+}
+
 
 ModSettings::SettingsValues::SettingsValues() :
     showOnMain(true),
     lockPosition(true),
     showInSquad(true),
     enableLogging(false),
+    logSeverity(Logger::None),
+    logSpam(false),
     btnWidth(1.50),
     btnHeight(3.58),
     btnLeft(0.69),

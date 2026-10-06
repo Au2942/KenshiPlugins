@@ -22,7 +22,7 @@ ModSettingsUI& ModSettingsUI::getSingleton()
     return *singleton.get();
 }
 
-ModSettingsUI::ModSettingsUI() : _category(0), _panel(nullptr), _optionsWindow(nullptr)
+ModSettingsUI::ModSettingsUI() : _category(0), _panel(nullptr), _optionsWindow(nullptr), _logSeverityIndex(0)
 {
     create();
 }
@@ -63,6 +63,28 @@ void ModSettingsUI::close(MyGUI::Window* sender, const std::string& name)
 void ModSettingsUI::resetSettingsToDefault(MyGUI::Widget* sender)
 {
     ModSettings::getSingleton().resetToDefault();
+    refresh();
+}
+
+void ModSettingsUI::updateLogSeverity(MyGUI::ComboBox* sender, size_t index)
+{
+    auto& settingsValuesMutable = ModSettings::getSingleton().getValuesMutable();
+    switch (_logSeverityIndex)
+    {
+    case static_cast<int>(Logger::None):
+    case static_cast<int>(Logger::Info):
+    case static_cast<int>(Logger::Warning):
+    case static_cast<int>(Logger::Error):
+    case static_cast<int>(Logger::Debug):
+        settingsValuesMutable.logSeverity = static_cast<Logger::Severity>(_logSeverityIndex);
+        break;
+    default:
+        settingsValuesMutable.logSeverity = Logger::None;
+    }
+}
+
+void ModSettingsUI::updatePanel(DataPanelLine* line)
+{
     refresh();
 }
 
@@ -118,11 +140,36 @@ void ModSettingsUI::refresh()
         Localization::gettext("Show AUT button in the Squad Management screen"),
         settingsValuesMutable.showInSquad
     );
-    addCheckbox(
+    auto checkbox = addCheckbox(
         Localization::gettext("Enable logging"),
         Localization::gettext("Write to log. Turn on if experiencing frequent crashes and include the last few lines with your bug report."),
         settingsValuesMutable.enableLogging
     );
+    checkbox->callback = new MyGUI::delegates::CMethodDelegate1<ModSettingsUI, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
+        this, &ModSettingsUI::updatePanel);
+
+    if (ModSettings::getSingleton().getValues().enableLogging)
+    {
+        auto dropbox = _panel->setLineDropBox("", _category, &_logSeverityIndex, false, 1.0);
+        dropbox->addAValue(Localization::gettext("None"), 0);
+        dropbox->addAValue(Localization::gettext("Info"), 1);
+        dropbox->addAValue(Localization::gettext("Warning"), 2);
+        dropbox->addAValue(Localization::gettext("Error"), 3);
+        dropbox->addAValue(Localization::gettext("Debug"), 4);
+        dropbox->setSelectedValue(_logSeverityIndex);
+        dropbox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &ModSettingsUI::updateLogSeverity);
+        if (_optionsWindow && _optionsWindow->tooltip)
+        {
+            _optionsWindow->tooltip->setup(checkbox->getTextBox(), 
+                Localization::gettext("Select log severity from lowest to highest. Lower severity will be logged as well."));
+        }
+
+        addCheckbox(
+            Localization::gettext("Enable Spam"),
+            Localization::gettext("Enable logging spam."),
+            settingsValuesMutable.logSpam
+        );
+    }
 
     auto button = _panel->setLineButton("", Localization::gettext("Reset to Default"), _category);
     button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &ModSettingsUI::resetSettingsToDefault);

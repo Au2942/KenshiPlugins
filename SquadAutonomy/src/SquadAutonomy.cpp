@@ -6,6 +6,7 @@
 #include "SquadAutonomyLocalization.h"
 #include "SquadAutonomyModSettings.h"
 #include "SquadAutonomyMainBarButton.h"
+#include "SquadAutonomyLog.h"
 
 #include <Debug.h>
 
@@ -102,13 +103,8 @@ namespace SquadAutonomy
     void (*Task_OpenDoor_Update)(Tasker*, CharBody*) = nullptr;
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
-    std::wstring logFileName = L"SquadAutonomy.log";
-    std::wstring logBakFileName = L"SquadAutonomyLog.bak";
     std::wstring saveName = L"SquadAutonomy.save";
     std::wstring modPath = L"";
-    std::wstring logPath = L"";
-    std::wstring logBakPath = L"";
-    std::wofstream logFile;
     std::wstring settingsSavePath = L"";
     static int lc = 0;
     const int maxLC = 2000;
@@ -160,36 +156,6 @@ namespace SquadAutonomy
             return fullPath;
         }
         return L"";
-    }
-
-    void Log(std::string line)
-    {
-        if (!ModSettings::getSingleton().getValues().enableLogging) return;
-        if (!logFile.is_open())
-        {
-            logFile.open(logPath, std::wfstream::out | std::wfstream::app);
-            if (!logFile.is_open())
-            {
-                DebugLog("Log: Cannot open file");
-                return;
-            }
-        }
-        if (lc > maxLC)
-        {
-            logFile.close();
-            _wremove(logBakPath.c_str());
-            if (_wrename(logPath.c_str(), logBakPath.c_str()) != 0)
-            {
-                DebugLog("Error backing up logfile");
-                return;
-            }
-            logFile.open(logPath, std::fstream::out | std::fstream::app);
-            lc = 0;
-        }
-        logFile << converter.from_bytes(Ogre::StringConverter::toString(ou->timeStamper.stampTime())) << L' ';
-        logFile << converter.from_bytes(line) << L'\n';
-        lc++;
-        logFile.flush();
     }
     
     bool SetAI(Platoon* platoon, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction)
@@ -881,7 +847,7 @@ namespace SquadAutonomy
         AITaskSytem* taskSystem = ai->getTaskSystem();
         if (!taskSystem) return nullptr;
         //bool prioritizeNotFull = false;
-        Log("Find optimal Labour from list");
+        Logger::log("Find optimal Labour from list", Logger::Severity::Info, true);
         for (auto it = buildings->begin(); it != buildings->end(); ++it)
         {
             //DebugLog(it->first->displayName);
@@ -967,7 +933,7 @@ namespace SquadAutonomy
             maxOperators = operators;
             minDist = dist;
         }
-        if (optimalLabour) Log("Found labour : " + optimalLabour->displayName + ", " + Ogre::StringConverter::toString(maxOperators) + ", " + Ogre::StringConverter::toString(minDist));
+        if (optimalLabour) Logger::log("Found labour : " + optimalLabour->displayName + ", " + Ogre::StringConverter::toString(maxOperators) + ", " + Ogre::StringConverter::toString(minDist), Logger::Info, true);
         return optimalLabour;
     }
 
@@ -980,7 +946,7 @@ namespace SquadAutonomy
         std::unordered_map<UseableStuff*, int> labourCandidates;
         int minPriority = 0.0;
         TownBase* currentTown = character->getCurrentTownLocation();
-        Log("Find Labour To Do");
+        Logger::log("Find Labour To Do", Logger::Info, false);
         if (currentTown)
         {
             if (ou->player && ou->player->technology && ou->player->technology->current.size() > 0)
@@ -1139,7 +1105,7 @@ namespace SquadAutonomy
                 if (optimalLabour->numOperatorsMax <= 0)
                 {
                     ProductionBuilding* production = optimalLabour->getProductionBuilding();
-                    Log("Labour is automatic");
+                    Logger::log("Labour is automatic", Logger::Info, true);
                     if (production)
                     {
                         StorageBuilding* storage = ai->findResourceStorageBulidingFor(production->getProductionItemData(), production);
@@ -1147,7 +1113,7 @@ namespace SquadAutonomy
                         {
                             if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
                             {
-                                Log("Haul from " + production->displayName + " to " + storage->displayName);
+                                Logger::log("Haul from " + production->displayName + " to " + storage->displayName, Logger::Info, true);
                                 character->addOrder(storage, OPERATE_STORAGE, storage, false, true, storage->getPosition());
                             }
                         }
@@ -1167,19 +1133,18 @@ namespace SquadAutonomy
                             production->getResourcesNeededBecauseNotFull(out);
                             if (out.size() > 0)
                             {
-                                Log("Haul to " + production->displayName);
+                                Logger::log("Haul to " + production->displayName, Logger::Info, true);
                                 character->addOrder(production, OPERATE_STORAGE, production, false, true, production->getPosition());
                             }
                             else if (!production->isProductionEmpty())
                             {
                                 if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
                                 {
-                                    Log("Haul from " + production->displayName + " to " + storage->displayName);
+                                    Logger::log("Haul from " + production->displayName + " to " + storage->displayName, Logger::Info, true);
                                     character->addOrder(storage, OPERATE_STORAGE, storage, false, true, storage->getPosition());
                                 }
                             }
                         }
-                        
                     }
                     return nullptr;
                 }
@@ -1325,14 +1290,14 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled() && character)
         {
             TaskType type = key.key();
-            Log("RuntargetFind TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)));
+            Logger::log("RuntargetFind TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)), Logger::Info, true);
             if (type == GO_HOME_AND_GO_TO_BED || type == FIND_BED_AND_PUT_IN)
             {
                 out = FindOptimalBed(character, settings->getUsePaidBeds());
                 if (out) return 1.0;
                 else return 0.0;
             }
-            Log("EndRuntargetFind");
+            Logger::log("EndRuntargetFind", Logger::Info, true);
 
         }
         float score = runTargetFinder_orig(thisptr, func, key, out);
@@ -1382,7 +1347,7 @@ namespace SquadAutonomy
 
         if (settings && settings->isEnabled())
         {
-            Log("PeriodicUpdate");
+            Logger::log("PeriodicUpdate", Logger::Info, true);
 
             TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
             data->setDurationBased(1.0, 4.0, false);
@@ -1423,7 +1388,7 @@ namespace SquadAutonomy
             RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
             RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
             if (faction) faction->isPlayer = settings->getPlayerInterface();
-            Log("End periodUpdate");
+            Logger::log("End periodUpdate", Logger::Info, true);
         }
     }
 
@@ -1445,7 +1410,7 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            Log("PermaJob");
+            Logger::log("PermaJob", Logger::Info, true);
             if (!urgentOnes)
             {
                 if (faction && settings->getPlayerInterface())
@@ -1472,7 +1437,7 @@ namespace SquadAutonomy
                 faction->isPlayer->aiOptions.autoSit = origAutoSit;
                 faction->isPlayer = nullptr;
             }
-            Log("End PermaJob");
+            Logger::log("End PermaJob", Logger::Info, true);
             /*if (settings && settings->isEnabled())
             {
                 auto currentGoals = thisptr->orderedGoals;
@@ -1511,7 +1476,7 @@ namespace SquadAutonomy
                 //is player order?
                 if (thisptr->hasPlayerOrder(type)) return;
 
-                Log("CurrentActionChecks TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)));
+                Logger::log("CurrentActionChecks TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)), Logger::Info, true);
                 if (type == MAN_A_TURRET || type == MAN_A_TURRET_ON_BUILDING || type == MAN_THE_GATE || type == AUTO_LABOURING_MINES ||
                     type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT ||
                     type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE || type == REPAIR || type == BUILD)
@@ -1544,6 +1509,7 @@ namespace SquadAutonomy
                         return;
                     }
                 }
+                Logger::log("CurrentActionChecks End", Logger::Info, true);
             }
         }
     }
@@ -1559,7 +1525,7 @@ namespace SquadAutonomy
         if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
         if (settings && settings->isEnabled())
         {
-            Log("chooseGoal");
+            Logger::log("chooseGoal", Logger::Info, true);
 
         }
         /*========Orig Function=======*/
@@ -1567,7 +1533,7 @@ namespace SquadAutonomy
         /*========Orig Function=======*/
         if (settings && settings->isEnabled())
         {
-            Log("chooseGoal End");
+            Logger::log("chooseGoal End", Logger::Info, true);
         }
     }
 
@@ -1617,7 +1583,7 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            Log("update4Frame");
+            Logger::log("update4Frame", Logger::Info, true);
             TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
             data->setDurationBased(1.0, 4.0, false);
             data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
@@ -1629,7 +1595,7 @@ namespace SquadAutonomy
                 if (currentTask && currentTask.key() == MAN_THE_GATE && closeGateTimerOn)
                 {
                     closeGateCDTimer -= time;
-                    DebugLog("Close Gate Timer: " + Ogre::StringConverter::toString(closeGateCDTimer));
+                    Logger::log("Close Gate Timer: " + Ogre::StringConverter::toString(closeGateCDTimer), Logger::Debug, false);
                 }
             }
         }
@@ -2054,7 +2020,7 @@ namespace SquadAutonomy
             const TaskData* taskData = thisptr->getTaskData();
             if (taskData && taskData->isPermaJob()) return score;
 
-            Log("score TaskType: " +Ogre::StringConverter::toString(static_cast<int>(type)) + " - "  +Ogre::StringConverter::toString(score));
+            Logger::log("score TaskType: " +Ogre::StringConverter::toString(static_cast<int>(type)) + " - "  +Ogre::StringConverter::toString(score), Logger::Info, true);
             if (type == STAY_IN_HOME || type == SIT_AROUND)
             {
                 if (!settings->isRestTime())
@@ -2205,7 +2171,7 @@ namespace SquadAutonomy
                     return 0.0;
                 }
             }
-            Log("End score");
+            Logger::log("End score", Logger::Info, true);
         }
         return score;
     }
@@ -2229,7 +2195,7 @@ namespace SquadAutonomy
         if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            Log("score-gotobed");
+            Logger::log("score-gotobed", Logger::Info, true);
             MedicalSystem* medical = nullptr;
             RaceData* race = nullptr;
             Faction* faction = nullptr;
@@ -2294,7 +2260,7 @@ namespace SquadAutonomy
                 }
             }
             return 0.0;
-            Log("end gotobed");
+            Logger::log("end gotobed", Logger::Info, true);
         }
         return _NV_scoreGoToBed_orig(thisptr, subject, _a2);
     }
@@ -2317,7 +2283,7 @@ namespace SquadAutonomy
         if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
         if (settings && settings->isEnabled() && thisptr)
         {
-            Log("score-getoutofbed");
+            Logger::log("score-getoutofbed", Logger::Info, true);
             character = thisptr->getCharacter();
             MedicalSystem* medical = nullptr;
             RaceData* race = nullptr;
@@ -2353,7 +2319,7 @@ namespace SquadAutonomy
                     }
                 }
             }
-            Log("End score-getoutofbed");
+            Logger::log("End score-getoutofbed", Logger::Info, true);
         }
         return _NV_scoreGetOutOfBed_orig(thisptr, subject, _a2);
     }
@@ -2383,12 +2349,9 @@ namespace SquadAutonomy
     void Init()
     {
         modPath = GetCurrentDLLDirectory();
-        logPath = modPath + logFileName;
-        logBakPath = modPath + logBakFileName;
         Localization::init();
         ModSettings::getSingleton().loadFromFile();
         SquadAutonomySettings::getSingletonPtr();
-        Log("=====================New Session=====================");
     }
 
 }
