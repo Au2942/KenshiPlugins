@@ -5,6 +5,7 @@
 #include "SquadAutonomyButton.h"
 #include "SquadAutonomyLocalization.h"
 #include "SquadAutonomyModSettings.h"
+#include "SquadAutonomyMainBarButton.h"
 
 #include <Debug.h>
 
@@ -117,12 +118,7 @@ namespace SquadAutonomy
     bool shouldLoad = false;
     bool loadNextCall = false;
 
-    MyGUI::Button* autBtn = nullptr;
     MyGUI::Window* autBtnWindow = nullptr;
-    MyGUI::IntPoint mDragStart(0, 0);
-    MyGUI::IntPoint mWindowStart(0, 0);
-    bool mClicked = false;
-    bool mDragged = false;
 
     Building* destGate = nullptr;
     float closeGateCD = 1.0;
@@ -444,98 +440,28 @@ namespace SquadAutonomy
 
     std::vector<std::unique_ptr<SquadAutonomyButton>> squadAutButtons;
 
-    void onPressed(
-        MyGUI::Widget* sender,
-        int left,
-        int top,
-        MyGUI::MouseButton id)
-    {
-        if (id != MyGUI::MouseButton::Left)
-            return;
-
-        mClicked = true;
-
-        mDragStart = MyGUI::IntPoint(left, top);
-        mWindowStart = autBtn->getPosition();
-        sender->_setRootMouseFocus(true);
-    }
-
-    void onDrag(
-        MyGUI::Widget* sender,
-        int left,
-        int top,
-        MyGUI::MouseButton id)
-    {
-        auto& settingsValuesMutable = ModSettings::getSingleton().getValuesMutable();
-
-        if (settingsValuesMutable.lockPosition || !mClicked || id != MyGUI::MouseButton::Left)
-            return;
-
-        const int dx = left - mDragStart.left;
-        const int dy = top - mDragStart.top;
-        if (dx != 0 || dy != 0)
-        {
-            mDragged = true;
-            settingsValuesMutable.btnLeft = static_cast<float>(mWindowStart.left + dx) / autBtn->getParentSize().width;
-            settingsValuesMutable.btnTop = static_cast<float>(mWindowStart.top + dy) / autBtn->getParentSize().height;
-            autBtn->setRealPosition(
-                settingsValuesMutable.btnLeft,
-                settingsValuesMutable.btnTop
-            );
-            //btnLeft = static_cast<float>(autBtn->getLeft()) / autBtn->getParentSize().width;
-            //btnTop = static_cast<float>(autBtn->getTop()) / autBtn->getParentSize().height;
-        }
-    }
-
-    void onReleased(MyGUI::Widget* sender,
-        int left,
-        int top,
-        MyGUI::MouseButton id)
-    {
-        if (id != MyGUI::MouseButton::Left)
-        {
-            return;
-        }
-
-        if (mClicked && !mDragged)
-        {
-            OpenSquadAutonomyPanelMainBar();
-        }
-        else if (mDragged)
-        {
-            ModSettings::getSingleton().saveToFile();
-        }
-
-        mClicked = false;
-        mDragged = false;
-        sender->_setRootMouseFocus(false);
-    }
-
     MainBarGUI* (*MainbarGUICONSTRUCTOR_orig)(MainBarGUI* thisptr);
     MainBarGUI* MainbarGUICONSTRUCTOR_hook(MainBarGUI* thisptr)
     {
         MainBarGUI* orig = MainbarGUICONSTRUCTOR_orig(thisptr);
 
-        const auto& settingsValues = ModSettings::getSingleton().getValues();
-        autBtn = orig->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", settingsValues.btnLeft, settingsValues.btnTop, settingsValues.btnWidth/100.0, settingsValues.btnHeight/100.0, MyGUI::Align::Center, "AUTBtn");
-        autBtn->setCaption(Localization::gettext("AUT"));
-        autBtn->setFontHeight(settingsValues.btnFontSize);
-        autBtn->eventMouseButtonPressed +=
-            MyGUI::newDelegate(onPressed);
-
-        autBtn->eventMouseDrag +=
-            MyGUI::newDelegate(onDrag);
-        
-        autBtn->eventMouseButtonReleased +=
-            MyGUI::newDelegate(onReleased);
-        
-        autBtn->setDepth(0);
-
-        if (!settingsValues.showOnMain)
+        if (orig->getWidget())
         {
-            autBtn->setVisible(false);
+            MainBarButton::getSingleton().createButton(*orig->getWidget());
         }
+
         return orig;
+    }
+
+    void (*MainbarGUIDESTRUCTOR_orig)(MainBarGUI* thisptr);
+    void MainbarGUIDESTRUCTOR_hook(MainBarGUI* thisptr)
+    {
+        if (thisptr->getWidget())
+        {
+            MainBarButton::getSingleton().destroyButton(*thisptr->getWidget());
+        }
+
+        MainbarGUIDESTRUCTOR_orig(thisptr);
     }
 
     void (*_NV_update_orig)(MainBarGUI* thisptr);
@@ -543,23 +469,9 @@ namespace SquadAutonomy
     {
         _NV_update_orig(thisptr);
 
-        const auto& settingsValues = ModSettings::getSingleton().getValues();
-        if (autBtn)
-        {
-            if (settingsValues.showOnMain)
-            {
-                autBtn->setVisible(true);
-                autBtn->setRealPosition(settingsValues.btnLeft, settingsValues.btnTop);
-                autBtn->setRealSize(settingsValues.btnWidth / 100.0, settingsValues.btnHeight / 100.0);
-                autBtn->setFontHeight(settingsValues.btnFontSize);
-                autBtn->setDepth(0);
-            }
-            else
-            {
-                autBtn->setVisible(false);
-            }
-        }
+        MainBarButton::getSingleton().updateButton();
     }
+
     void (*_NV_autoChangeSelectedObject_orig)(MainBarGUI* thisptr, const hand& obj);
     void _NV_autoChangeSelectedObject_hook(MainBarGUI* thisptr, const hand& obj)
     {
@@ -2542,6 +2454,8 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add MainBarGUI::_NV_update constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
         ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_DESTRUCTOR), &SquadAutonomy::MainbarGUIDESTRUCTOR_hook, &SquadAutonomy::MainbarGUIDESTRUCTOR_orig))
+        ErrorLog("Could not add &MainBarGUI::_DESTRUCTOR hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_autoChangeSelectedObject), &SquadAutonomy::_NV_autoChangeSelectedObject_hook, &SquadAutonomy::_NV_autoChangeSelectedObject_orig))
         ErrorLog("Could not add MainBarGUI::_NV_autoChangeSelectedObject constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::tabPlatoonChange), &SquadAutonomy::tabPlatoonChange_hook, &SquadAutonomy::tabPlatoonChange_orig))
