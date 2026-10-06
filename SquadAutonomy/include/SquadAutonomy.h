@@ -41,11 +41,5 @@ namespace SquadAutonomy
     extern bool shouldLoad;
     extern bool loadNextCall;
 
-    extern MyGUI::Button* autBtn;
     extern MyGUI::Window* autBtnWindow;
-
-    extern MyGUI::IntPoint mDragStart;
-    extern MyGUI::IntPoint mWindowStart;
-    extern bool mClicked;
-    extern bool mDragged;
 }
