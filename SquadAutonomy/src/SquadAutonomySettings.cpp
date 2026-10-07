@@ -92,7 +92,7 @@ void SquadAutonomySettings::_initGameData()
 
 bool SquadAutonomySettings::saveSettings(std::wstring savePath)
 {
-    std::wofstream saveFile(savePath, std::wfstream::out | std::wfstream::trunc);
+    std::ofstream saveFile(savePath);
     if (!saveFile.is_open())
     {
         DebugLog("Save: Cannot open file");
@@ -104,6 +104,9 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
         auto settings = SquadAutonomySettings::getSingletonPtr();
         if (!settings) return false;
         //DebugLog("Saving " + Ogre::StringConverter::toString(squadSettings.size()) + " squads");
+
+        saveFile << std::boolalpha; // output bools as text
+
         for (int i = 0; i < settings->squadSettings.size(); ++i)
         {
             SquadSettingsInfo* settingsInfo = settings->squadSettings[i].get();
@@ -114,24 +117,24 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
             hand platoonHand = squad->getHandle();
             if (platoonHand)
             {
-                saveFile << converter.from_bytes("Squad: <" + squad->activePlatoon->getName() + "> ");
-                saveFile << platoonHand.index << L' ';
-                saveFile << platoonHand.serial << L' ';
-                saveFile << platoonHand.type << L' ';
-                saveFile << platoonHand.container << L' ';
-                saveFile << platoonHand.containerSerial << L'\n';
-                saveFile << converter.from_bytes("\tEnable: " + Ogre::StringConverter::toString(settingsInfo->isEnabled()) + '\n');
+                saveFile << "Squad: <" + squad->activePlatoon->getName() + "> ";
+                saveFile << platoonHand.index << ' ';
+                saveFile << platoonHand.serial << ' ';
+                saveFile << platoonHand.type << ' ';
+                saveFile << platoonHand.container << ' ';
+                saveFile << platoonHand.containerSerial << '\n';
+                saveFile << "\tEnable: " << settingsInfo->isEnabled() << '\n';
             }
             Building* home = settingsInfo->getBuilding(true);
             saveFile << "\tHomeBuilding:";
             if (home)
             {
                 hand homeHand = home->getHandle();
-                saveFile << converter.from_bytes(" <" + home->displayName + "> ");
-                saveFile << homeHand.index << L' ';
-                saveFile << homeHand.serial << L' ';
-                saveFile << homeHand.type << L' ';
-                saveFile << homeHand.container << L' ';
+                saveFile << " <" << home->displayName << "> ";
+                saveFile << homeHand.index << ' ';
+                saveFile << homeHand.serial << ' ';
+                saveFile << homeHand.type << ' ';
+                saveFile << homeHand.container << ' ';
                 saveFile << homeHand.containerSerial;
             }
             saveFile << '\n';
@@ -140,16 +143,16 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
             if (work)
             {
                 hand workHand = work->getHandle();
-                saveFile << converter.from_bytes(" <" + work->displayName + "> ");
-                saveFile << workHand.index << L' ';
-                saveFile << workHand.serial << L' ';
-                saveFile << workHand.type << L' ';
-                saveFile << workHand.container << L' ';
+                saveFile << " <" << work->displayName << "> ";
+                saveFile << workHand.index << ' ';
+                saveFile << workHand.serial << ' ';
+                saveFile << workHand.type << ' ';
+                saveFile << workHand.container << ' ';
                 saveFile << workHand.containerSerial;
             }
-            saveFile << L'\n';
+            saveFile << '\n';
             auto packages = settingsInfo->getSquadPackages();
-            saveFile << converter.from_bytes("\tPackages:\n");
+            saveFile << "\tPackages:\n";
             if (packages.size() > 0)
             {
                 for (auto it = packages.begin(); it != packages.end(); ++it)
@@ -158,45 +161,45 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
 
                     for (int j = 0; j < data.size(); ++j)
                     {
-                        saveFile << converter.from_bytes("\t\t") << it->first << L':';
-                        saveFile << converter.from_bytes(" <" + data[j]->name + '>');
-                        saveFile << L'\n';
+                        saveFile << "\t\t" << it->first << ':';
+                        saveFile << " <" + data[j]->name + '>';
+                        saveFile << '\n';
                     }
                 }
             }
-            saveFile << converter.from_bytes("\tEndPackages:") << L'\n';
-            saveFile << converter.from_bytes("\tOptions:") << L'\n';
-            saveFile << converter.from_bytes("\t\tStartWorkTime: ") << settingsInfo->getStartWorkTime() << L'\n';
-            saveFile << converter.from_bytes("\t\tEndWorkTime: ") << settingsInfo->getEndWorkTime() << L'\n';
-            saveFile << converter.from_bytes("\t\tRestUntilHealed: " + Ogre::StringConverter::toString(settingsInfo->getRestUntilHealed())) << L'\n';
-            saveFile << converter.from_bytes("\t\t\tRestThreshold: ") << settingsInfo->getRestThreshold() << L'\n';
-            saveFile << converter.from_bytes("\t\t\tHealedThreshold: ") << settingsInfo->getHealedThreshold() << L'\n';
-            saveFile << converter.from_bytes("\t\tUsePaidBeds: " + Ogre::StringConverter::toString(settingsInfo->getUsePaidBeds())) << L'\n';
-            saveFile << converter.from_bytes("\t\tDoSleep: " + Ogre::StringConverter::toString(settingsInfo->getDoSleep())) << L'\n';
+            saveFile << "\tEndPackages:" << '\n';
+            saveFile << "\tOptions:" << '\n';
+            saveFile << "\t\tStartWorkTime: " << settingsInfo->getStartWorkTime() << '\n';
+            saveFile << "\t\tEndWorkTime: " << settingsInfo->getEndWorkTime() << '\n';
+            saveFile << "\t\tRestUntilHealed: " << settingsInfo->getRestUntilHealed() << '\n';
+            saveFile << "\t\t\tRestThreshold: " << settingsInfo->getRestThreshold() << '\n';
+            saveFile << "\t\t\tHealedThreshold: " << settingsInfo->getHealedThreshold() << '\n';
+            saveFile << "\t\tUsePaidBeds: " << settingsInfo->getUsePaidBeds() << '\n';
+            saveFile << "\t\tDoSleep: " << settingsInfo->getDoSleep() << '\n';
 
-            saveFile << converter.from_bytes("\t\tLabourScience: ") << settingsInfo->getLabourScience() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourLabouring: ") << settingsInfo->getLabourLabouring() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourFarming: ") << settingsInfo->getLabourFarming() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourEngineer: ") << settingsInfo->getLabourEngineer() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourCooking: ") << settingsInfo->getLabourCooking() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourRobotics: ") << settingsInfo->getLabourRobotics() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourMedic: ") << settingsInfo->getLabourMedic() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourWeaponSmith: ") << settingsInfo->getLabourWeaponSmith() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourArmourSmith: ") << settingsInfo->getLabourArmourSmith() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourCrossbowSmith: ") << settingsInfo->getLabourCrossbowSmith() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourAutomaticMachine: ") << settingsInfo->getLabourAutomaticMachine() << L'\n';
-            saveFile << converter.from_bytes("\t\tLabourOther: ") << settingsInfo->getLabourOther() << L'\n';
+            saveFile << "\t\tLabourScience: " << settingsInfo->getLabourScience() << '\n';
+            saveFile << "\t\tLabourLabouring: " << settingsInfo->getLabourLabouring() << '\n';
+            saveFile << "\t\tLabourFarming: " << settingsInfo->getLabourFarming() << '\n';
+            saveFile << "\t\tLabourEngineer: " << settingsInfo->getLabourEngineer() << '\n';
+            saveFile << "\t\tLabourCooking: " << settingsInfo->getLabourCooking() << '\n';
+            saveFile << "\t\tLabourRobotics: " << settingsInfo->getLabourRobotics() << '\n';
+            saveFile << "\t\tLabourMedic: " << settingsInfo->getLabourMedic() << '\n';
+            saveFile << "\t\tLabourWeaponSmith: " << settingsInfo->getLabourWeaponSmith() << '\n';
+            saveFile << "\t\tLabourArmourSmith: " << settingsInfo->getLabourArmourSmith() << '\n';
+            saveFile << "\t\tLabourCrossbowSmith: " << settingsInfo->getLabourCrossbowSmith() << '\n';
+            saveFile << "\t\tLabourAutomaticMachine: " << settingsInfo->getLabourAutomaticMachine() << '\n';
+            saveFile << "\t\tLabourOther: " << settingsInfo->getLabourOther() << '\n';
 
-            saveFile << converter.from_bytes("\t\tAttackEnemies: " + Ogre::StringConverter::toString(settingsInfo->getAttackEnemies())) << L'\n';
-            saveFile << converter.from_bytes("\t\tProtectAllies: " + Ogre::StringConverter::toString(settingsInfo->getProtectAllies())) << L'\n';
-            saveFile << converter.from_bytes("\t\tDoMedic: " + Ogre::StringConverter::toString(settingsInfo->getDoMedic())) << L'\n';
-            saveFile << converter.from_bytes("\t\tDoRescue: " + Ogre::StringConverter::toString(settingsInfo->getDoRescue())) << L'\n';
+            saveFile << "\t\tAttackEnemies: " << settingsInfo->getAttackEnemies() << '\n';
+            saveFile << "\t\tProtectAllies: " << settingsInfo->getProtectAllies() << '\n';
+            saveFile << "\t\tDoMedic: " << settingsInfo->getDoMedic() << '\n';
+            saveFile << "\t\tDoRescue: " << settingsInfo->getDoRescue() << '\n';
 
-            saveFile << converter.from_bytes("\t\tManTurrets: " + Ogre::StringConverter::toString(settingsInfo->getManTurrets())) << L'\n';
-            saveFile << converter.from_bytes("\t\tStayInsideGate: " + Ogre::StringConverter::toString(settingsInfo->getStayInsideGate())) << L'\n';
-            saveFile << converter.from_bytes("\t\tCloseGate: " + Ogre::StringConverter::toString(settingsInfo->getCloseGate())) << L'\n';
-            saveFile << converter.from_bytes("\tEndOptions:") << L'\n';
-            saveFile << converter.from_bytes("EndSquad:") << L'\n';
+            saveFile << "\t\tManTurrets: " << settingsInfo->getManTurrets() << '\n';
+            saveFile << "\t\tStayInsideGate: " << settingsInfo->getStayInsideGate() << '\n';
+            saveFile << "\t\tCloseGate: " << settingsInfo->getCloseGate() << '\n';
+            saveFile << "\tEndOptions:" << '\n';
+            saveFile << "EndSquad:" << '\n';
         }
         return true;
     }
@@ -205,7 +208,7 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
 bool SquadAutonomySettings::loadSettings(std::wstring savePath)
 {
     //initialized = false;
-    std::wfstream saveFile(savePath, std::wfstream::in | std::wfstream::out | std::wfstream::app);
+    std::ifstream saveFile(savePath);
     if (!saveFile.is_open())
     {
         DebugLog("Load: Cannot open save file");
@@ -214,12 +217,11 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
 
     DebugLog("Loading settings file at " + converter.to_bytes(savePath));
     squadSettings.clear();
-    std::wstring wline;
+    std::string line;
     std::string type;
 
-    while (std::getline(saveFile, wline))
+    while (std::getline(saveFile, line))
     {
-        std::string line = converter.to_bytes(wline);
         line.erase(0, line.find_first_not_of(" \t"));
         size_t colon = line.find(':');
 
@@ -277,9 +279,8 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
             else continue;
 
             //get home buildings and packages
-            while (std::getline(saveFile, wline))
+            while (std::getline(saveFile, line))
             {
-                std::string line = converter.to_bytes(wline);
                 line.erase(0, line.find_first_not_of(" \t"));
                 colon = line.find(':');
                 if (colon == std::string::npos)
@@ -325,9 +326,8 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 }
                 if (type == "Packages")
                 {
-                    while (std::getline(saveFile, wline))
+                    while (std::getline(saveFile, line))
                     {
-                        std::string line = converter.to_bytes(wline);
                         line.erase(0, line.find_first_not_of(" \t"));
                         int priority;
                         colon = line.find(':');
@@ -366,9 +366,8 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
                 }
                 if (type == "Options")
                 {
-                    while (std::getline(saveFile, wline))
+                    while (std::getline(saveFile, line))
                     {
-                        std::string line = converter.to_bytes(wline);
                         line.erase(0, line.find_first_not_of(" \t"));
                         colon = line.find(':');
                         if (colon == std::string::npos)

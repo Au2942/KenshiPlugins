@@ -22,7 +22,7 @@ ModSettings& ModSettings::getSingleton()
 ModSettings::ModSettings() :
     _configFileName(L"SquadAutonomy.cfg")
 {
-    if (modPath != L"")
+    if (!modPath.empty())
     {
         _configFilePath = modPath + _configFileName;
     }
@@ -62,7 +62,7 @@ const std::vector<std::string> &ModSettings::getConfigPackages() const
 void ModSettings::loadFromFile()
 {
     DebugLog("Finding Config file at: " + converter.to_bytes(_configFilePath));
-    std::wifstream cfgFile(_configFilePath);
+    std::ifstream cfgFile(_configFilePath);
     if (!cfgFile.is_open())
     {
         DebugLog("Load: Cannot open config file");
@@ -70,95 +70,90 @@ void ModSettings::loadFromFile()
     }
     DebugLog("Reading config file...");
 
-    std::wstring wline;
+    std::string line;
     std::string token;
-    while (std::getline(cfgFile, wline))
+    while (std::getline(cfgFile, line))
     {
-
-
-        if (wline == L"<Options>")
+        if (line == "<Options>")
         {
-            while (std::getline(cfgFile, wline))
+            while (std::getline(cfgFile, line))
             {
-                if (wline == L"</Options>")
+                if (line == "</Options>")
                 {
                     break;
                 }
 
-                wline.erase(0, wline.find_first_not_of(L" \t"));
-                const auto colon = wline.find(L':');
+                line.erase(0, line.find_first_not_of(" \t"));
+                const auto colon = line.find(':');
                 if (colon == std::string::npos)
                 {
                     continue;
                 }
 
-                const std::wstring type = wline.substr(0, colon);
-                const std::wstring dataLine = wline.substr(colon + 1);
-                std::wstring dataLineW = wline.substr(colon + 1);
+                const std::string type = line.substr(0, colon);
+                const std::string dataLine = line.substr(colon + 1);
                 //DebugLog(type);
-                if (type == L"ShowOnMain")
+                if (type == "ShowOnMain")
                 {
-                    parseBoolSetting(dataLineW, _settingsValues.showOnMain);
+                    parseBoolSetting(dataLine, _settingsValues.showOnMain);
                     continue;
                 }
-                if (type == L"LockPosition")
+                if (type == "LockPosition")
                 {
-                    parseBoolSetting(dataLineW, _settingsValues.lockPosition);
+                    parseBoolSetting(dataLine, _settingsValues.lockPosition);
                     continue;
                 }
-                if (type == L"BtnWidth")
+                if (type == "BtnWidth")
                 {
-                    parseFloatSetting(dataLineW, _settingsValues.btnWidth);
+                    parseFloatSetting(dataLine, _settingsValues.btnWidth);
                     continue;
                 }
-                if (type == L"BtnHeight")
+                if (type == "BtnHeight")
                 {
-                    parseFloatSetting(dataLineW, _settingsValues.btnHeight);
+                    parseFloatSetting(dataLine, _settingsValues.btnHeight);
                     continue;
                 }
-                if (type == L"BtnLeft")
+                if (type == "BtnLeft")
                 {
-                    parseFloatSetting(dataLineW, _settingsValues.btnLeft);
+                    parseFloatSetting(dataLine, _settingsValues.btnLeft);
                     continue;
                 }
-                if (type == L"BtnTop")
+                if (type == "BtnTop")
                 {
-                    parseFloatSetting(dataLineW, _settingsValues.btnTop);
+                    parseFloatSetting(dataLine, _settingsValues.btnTop);
                     continue;
                 }
-                if (type == L"BtnFontSize")
+                if (type == "BtnFontSize")
                 {
-                    parseFloatSetting(dataLineW, _settingsValues.btnFontSize);
+                    parseFloatSetting(dataLine, _settingsValues.btnFontSize);
                     continue;
                 }
-                if (type == L"ShowInSquad")
+                if (type == "ShowInSquad")
                 {
-                    parseBoolSetting(dataLineW, _settingsValues.showInSquad);
+                    parseBoolSetting(dataLine, _settingsValues.showInSquad);
                     continue;
                 }
-                if (type == L"EnableLogging")
+                if (type == "EnableLogging")
                 {
-                    parseBoolSetting(dataLineW, _settingsValues.enableLogging);
+                    parseBoolSetting(dataLine, _settingsValues.enableLogging);
                     continue;
                 }
-                if (type == L"LogSeverity")
+                if (type == "LogSeverity")
                 {
-                    parseLogSeveritySetting(dataLineW, _settingsValues.logSeverity);
+                    parseLogSeveritySetting(dataLine, _settingsValues.logSeverity);
                     continue;
                 }
-                if (type == L"LogSpam")
+                if (type == "LogSpam")
                 {
-                    parseBoolSetting(dataLineW, _settingsValues.logSpam);
+                    parseBoolSetting(dataLine, _settingsValues.logSpam);
                     continue;
                 }
             }
         }
-        else if (wline == L"<Packages>")
+        else if (line == "<Packages>")
         {
-            while (std::getline(cfgFile, wline))
+            while (std::getline(cfgFile, line))
             {
-                // TODO: replace with wline
-                std::string line = converter.to_bytes(wline);
                 if (line == "</Packages>")
                 {
                     DebugLog("Done reading packages in config");
@@ -185,7 +180,7 @@ void ModSettings::loadFromFile()
 
 void ModSettings::saveToFile() const
 {
-    std::wofstream tempFile(L"temp.txt");
+    std::ofstream tempFile("temp.txt");
     if (!tempFile.is_open())
     {
         DebugLog("Config Save: Cannot open file");
@@ -194,26 +189,26 @@ void ModSettings::saveToFile() const
 
     tempFile
         << std::boolalpha // output bools as text
-        << L"<Options>" << L'\n'
-        << L"ShowOnMain: " << _settingsValues.showOnMain << L'\n'
-        << L"LockPosition: " << _settingsValues.lockPosition << L'\n'
-        << L"BtnWidth: " << _settingsValues.btnWidth << L'\n'
-        << L"BtnHeight: " <<_settingsValues.btnHeight << L'\n'
-        << L"BtnLeft: " << _settingsValues.btnLeft << L'\n'
-        << L"BtnTop: " << _settingsValues.btnTop << L'\n'
-        << L"BtnFontSize: " << _settingsValues.btnFontSize << L'\n'
-        << L"ShowInSquad: " << _settingsValues.showInSquad << L'\n'
-        << L"EnableLogging: " << _settingsValues.enableLogging << L'\n'
-        << L"LogSeverity: " << static_cast<int>(_settingsValues.logSeverity) << L'\n'
-        << L"LogSpam: " << _settingsValues.logSpam << L'\n'
-        << L"</Options>" << L'\n';
+        << "<Options>" << '\n'
+        << "ShowOnMain: " << _settingsValues.showOnMain << '\n'
+        << "LockPosition: " << _settingsValues.lockPosition << '\n'
+        << "BtnWidth: " << _settingsValues.btnWidth << '\n'
+        << "BtnHeight: " <<_settingsValues.btnHeight << '\n'
+        << "BtnLeft: " << _settingsValues.btnLeft << '\n'
+        << "BtnTop: " << _settingsValues.btnTop << '\n'
+        << "BtnFontSize: " << _settingsValues.btnFontSize << '\n'
+        << "ShowInSquad: " << _settingsValues.showInSquad << '\n'
+        << "EnableLogging: " << _settingsValues.enableLogging << '\n'
+        << "LogSeverity: " << static_cast<int>(_settingsValues.logSeverity) << '\n'
+        << "LogSpam: " << _settingsValues.logSpam << '\n'
+        << "</Options>" << '\n';
 
-    tempFile << L"<Packages>" << L'\n';
+    tempFile << "<Packages>" << '\n';
     for (auto it = _configPackages.begin(); it != _configPackages.end(); ++it)
     {
-        tempFile << L'"' << converter.from_bytes(*it) << L'"' << L'\n';
+        tempFile << '"' << *it << '"' << '\n';
     }
-    tempFile << L"</Packages>";
+    tempFile << "</Packages>";
 
     tempFile.close();
 
@@ -221,28 +216,28 @@ void ModSettings::saveToFile() const
     _wrename(L"temp.txt", _configFilePath.c_str());
 }
 
-bool ModSettings::parseBoolSetting(const std::wstring &stringValue, bool &outValue)
+bool ModSettings::parseBoolSetting(const std::string &stringValue, bool &outValue)
 {
-    std::wstring stringValueCopy = stringValue;
-    stringValueCopy.erase(0, stringValueCopy.find_first_not_of(L" \t"));
+    std::string stringValueCopy = stringValue;
+    stringValueCopy.erase(0, stringValueCopy.find_first_not_of(" \t"));
 
-    if (stringValueCopy == L"true" || stringValueCopy == L"false")
+    if (stringValueCopy == "true" || stringValueCopy == "false")
     {
-        outValue = stringValueCopy == L"true";
+        outValue = stringValueCopy == "true";
         return true;
     }
 
     return false;
 }
 
-bool ModSettings::parseFloatSetting(const std::wstring &stringValue, float &outValue)
+bool ModSettings::parseFloatSetting(const std::string &stringValue, float &outValue)
 {
     if (stringValue.empty())
     {
         return false;
     }
 
-    std::wstringstream ss(stringValue);
+    std::stringstream ss(stringValue);
     float tempOutValue = 0;
     ss >> tempOutValue;
     if (ss)
@@ -254,14 +249,14 @@ bool ModSettings::parseFloatSetting(const std::wstring &stringValue, float &outV
     return false;
 }
 
-bool ModSettings::parseLogSeveritySetting(const std::wstring& stringValue, Logger::Severity& outValue)
+bool ModSettings::parseLogSeveritySetting(const std::string& stringValue, Logger::Severity& outValue)
 {
     if (stringValue.empty())
     {
         return false;
     }
 
-    std::wstringstream ss(stringValue);
+    std::stringstream ss(stringValue);
     int tempOutValue = 0;
     ss >> tempOutValue;
     if (ss)
