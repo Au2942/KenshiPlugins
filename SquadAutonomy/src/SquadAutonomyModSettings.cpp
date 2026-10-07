@@ -269,9 +269,9 @@ bool ModSettings::parseLogSeveritySetting(const std::wstring& stringValue, Logge
         switch (tempOutValue)
         {
         case static_cast<int>(Logger::None):
-        case static_cast<int>(Logger::Info):
-        case static_cast<int>(Logger::Warning):
         case static_cast<int>(Logger::Error):
+        case static_cast<int>(Logger::Warning):
+        case static_cast<int>(Logger::Info):
         case static_cast<int>(Logger::Debug):
             outValue = static_cast<Logger::Severity>(tempOutValue);
             return true;

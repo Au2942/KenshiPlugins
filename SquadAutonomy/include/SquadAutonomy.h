@@ -17,6 +17,7 @@ namespace SquadAutonomy
     extern std::map<hand, float>* rentedBeds;
     extern bool (*Package_WanderingTrader_signalStart)(AIPackage*);
     extern std::string* _MainColorCode;
+    extern std::string* _GreyedColorCode;
     void Init();
     std::wstring GetCurrentDLLDirectory();
     extern std::wstring saveName;
