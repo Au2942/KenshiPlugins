@@ -81,6 +81,7 @@ void ModSettingsUI::updateLogSeverity(MyGUI::ComboBox* sender, size_t index)
     default:
         settingsValuesMutable.logSeverity = Logger::None;
     }
+    sender->setIndexSelected(_logSeverityIndex);
 }
 
 void ModSettingsUI::updatePanel(DataPanelLine* line)
@@ -148,28 +149,35 @@ void ModSettingsUI::refresh()
     checkbox->callback = new MyGUI::delegates::CMethodDelegate1<ModSettingsUI, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &ModSettingsUI::updatePanel);
 
-    if (ModSettings::getSingleton().getValues().enableLogging)
+    std::string logGreyed;
+    if (!ModSettings::getSingleton().getValues().enableLogging) logGreyed = *_GreyedColorCode;
+    int listIndex = _logSeverityIndex;
+    auto dropbox = _panel->setLineDropBox(logGreyed+Localization::gettext("Log Severity"), _category, 
+        ModSettings::getSingleton().getValues().enableLogging ? &_logSeverityIndex : &listIndex, false, 1.0);
+    dropbox->addAValue(logGreyed+Localization::gettext("None"), 0);
+    dropbox->addAValue(logGreyed+Localization::gettext("Error"), 1);
+    dropbox->addAValue(logGreyed+Localization::gettext("Warning"), 2);
+    dropbox->addAValue(logGreyed+Localization::gettext("Info"), 3);
+    dropbox->addAValue(logGreyed+Localization::gettext("Debug"), 4);
+    dropbox->setSelectedValue(_logSeverityIndex);
+    dropbox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &ModSettingsUI::updateLogSeverity);
+    if (_optionsWindow && _optionsWindow->tooltip)
     {
-        auto dropbox = _panel->setLineDropBox("", _category, &_logSeverityIndex, false, 1.0);
-        dropbox->addAValue(Localization::gettext("None"), 0);
-        dropbox->addAValue(Localization::gettext("Info"), 1);
-        dropbox->addAValue(Localization::gettext("Warning"), 2);
-        dropbox->addAValue(Localization::gettext("Error"), 3);
-        dropbox->addAValue(Localization::gettext("Debug"), 4);
-        dropbox->setSelectedValue(_logSeverityIndex);
-        dropbox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &ModSettingsUI::updateLogSeverity);
-        if (_optionsWindow && _optionsWindow->tooltip)
-        {
-            _optionsWindow->tooltip->setup(checkbox->getTextBox(), 
-                Localization::gettext("Select log severity from lowest to highest. Lower severity will be logged as well."));
-        }
-
-        addCheckbox(
-            Localization::gettext("Enable Spam"),
-            Localization::gettext("Enable logging spam."),
-            settingsValuesMutable.logSpam
-        );
+        std::string dropboxTooltip = Localization::gettext("Select log severity level. Higher severity includes all lower ones.");
+        _optionsWindow->tooltip->setup(dropbox->getComboBox(),
+            dropboxTooltip);
+        _optionsWindow->tooltip->setup(dropbox->w1,
+            dropboxTooltip);
     }
+
+    checkbox = addCheckbox(
+        logGreyed + Localization::gettext("Allow Spam"),
+        Localization::gettext("Allow logging spam."),
+        settingsValuesMutable.logSpam
+    );
+    checkbox->setEnabled(ModSettings::getSingleton().getValues().enableLogging);
+
+
 
     auto button = _panel->setLineButton("", Localization::gettext("Reset to Default"), _category);
     button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &ModSettingsUI::resetSettingsToDefault);

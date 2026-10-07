@@ -9,12 +9,12 @@ namespace SquadAutonomy
 		enum Severity
 		{
 			None,
-			Info,
-			Warning,
 			Error,
+			Warning,
+			Info,
 			Debug
 		};
-		static bool log(std::string log, Severity severity = None, bool spam = false);
+		static bool log(const std::string& log, Severity severity = None, bool spam = false);
 	private:
 	};
 }

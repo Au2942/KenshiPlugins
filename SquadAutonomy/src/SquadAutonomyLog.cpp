@@ -6,7 +6,7 @@
 
 namespace SquadAutonomy
 {
-	bool Logger::log(std::string log, Severity severity, bool spam)
+	bool Logger::log(const std::string& log, Severity severity, bool spam)
 	{
 		ModSettings::SettingsValues settings = ModSettings::getSingleton().getValues();
 		if (!settings.enableLogging) return false;
@@ -16,16 +16,16 @@ namespace SquadAutonomy
 		switch (severity)
 		{
 		case Info:
-			prefix = Localization::gettext("INFO:") + ' ';
+			prefix = Localization::gettext("INF:") + ' ';
 			break;
 		case Warning:
-			prefix = Localization::gettext("WARNING:") + ' ';
+			prefix = Localization::gettext("WRN:") + ' ';
 			break;
 		case Error:
-			prefix = Localization::gettext("ERROR:") + ' ';
+			prefix = Localization::gettext("ERR:") + ' ';
 			break;
 		case Debug:
-			prefix = Localization::gettext("DEBUG:") + ' ';
+			prefix = Localization::gettext("DBG:") + ' ';
 			break;
 		default:
 			break;

@@ -92,6 +92,7 @@ namespace SquadAutonomy
     const TaskData* (*getTaskDataConst)(TaskType key) = nullptr;
     std::map<hand, float>* rentedBeds = nullptr;
     std::string* _MainColorCode = nullptr;
+    std::string* _GreyedColorCode = nullptr;
     bool (*EscMenu_openedOtherWindows)(class EscMenu*) = nullptr;
     bool (*Package_WanderingTrader_signalStart)(AIPackage*) = nullptr;
     bool (*CharBody_NV_setCurrentAction)(CharBody*, Tasker*) = nullptr;
@@ -2374,6 +2375,7 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr+0x212db18;
             *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x286960;
             *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f48238;
+            *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f48350;
             *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce80f0;
             *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283F40;
             *(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6430;
@@ -2394,6 +2396,7 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr + 0x212BA58;
             *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x2864F0;
             *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f46248;
+            *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f46360;
             *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce60F0;
             *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283AD0;
             *(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6740;
