@@ -528,12 +528,12 @@ namespace SquadAutonomy
     void (*removeSquad_orig)(SquadManagementScreen* thisptr, SquadManagementScreen::SquadData* squad);
     void removeSquad_hook(SquadManagementScreen* thisptr, SquadManagementScreen::SquadData* squad)
     {
-        auto settings = SquadAutonomySettings::getSingletonPtr();
+        auto& settings = SquadAutonomySettings::getSingleton();
         Platoon* platoon = nullptr;
         if (squad->platoon) platoon = squad->platoon->me;
-        if (settings && platoon)
+        if (platoon)
         {
-            settings->removeSquadSettings(platoon);
+            settings.removeSquadSettings(platoon);
         }
         removeSquad_orig(thisptr, squad);
     }
@@ -561,10 +561,10 @@ namespace SquadAutonomy
     int (*saveGame_orig)(SaveManager* thisptr, const std::string& location, const std::string& name);
     int saveGame_hook(SaveManager* thisptr, const std::string& location, const std::string& name)
     {
-        auto settings = SquadAutonomySettings::getSingletonPtr();
-        for (int i = 0; i < settings->squadSettings.size(); ++i)
+        auto& settings = SquadAutonomySettings::getSingleton();
+        for (int i = 0; i < settings.squadSettings.size(); ++i)
         {
-            SquadSettingsInfo* squadSettings = settings->squadSettings[i].get();
+            SquadSettingsInfo* squadSettings = settings.squadSettings[i].get();
             if (!squadSettings->isEnabled()) continue;
             ResetAI(squadSettings->getSquad());
             squadSettings->unassignSquadHome();
@@ -583,7 +583,7 @@ namespace SquadAutonomy
         int result = loadGame_orig(thisptr, location, name);
         if (result != 0) return result;
         shouldLoad = true;
-        SquadAutonomySettings::getSingletonPtr()->initialized = false;
+        SquadAutonomySettings::getSingleton().initialized = false;
         settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/' + saveName;
         return result;
     }
@@ -594,10 +594,10 @@ namespace SquadAutonomy
         execute_orig(thisptr);
         if (shouldSave)
         {
-            auto settings = SquadAutonomySettings::getSingletonPtr();
-            if (settings->saveSettings(settingsSavePath))
+            auto& settings = SquadAutonomySettings::getSingleton();
+            if (settings.saveSettings(settingsSavePath))
             {
-                SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath);
+                SquadAutonomySettings::getSingleton().loadSettings(settingsSavePath);
                 shouldSave = false;
             }
         }
@@ -605,8 +605,8 @@ namespace SquadAutonomy
         {
             if (!ou->isLoadingFromASaveGame())
             {
-                SquadAutonomySettings::getSingletonPtr()->loadSettings(settingsSavePath);
-                SquadAutonomySettings::getSingletonPtr()->initialized = true;
+                SquadAutonomySettings::getSingleton().loadSettings(settingsSavePath);
+                SquadAutonomySettings::getSingleton().initialized = true;
                 shouldLoad = false;
             }
         }
@@ -1220,7 +1220,7 @@ namespace SquadAutonomy
         Platoon* squad = nullptr;
         SquadSettingsInfo* settings = nullptr;
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             OrdersReceiver* order = character->getOrdersReciever();
@@ -1276,7 +1276,7 @@ namespace SquadAutonomy
         if (thisptr)
         {
             character = thisptr->getCharacter();
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(thisptr->getPlatoon());
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(thisptr->getPlatoon());
         }
         if (settings && settings->isEnabled())
         {
@@ -1317,7 +1317,7 @@ namespace SquadAutonomy
         if (thisptr) ai = thisptr->ai;
         if (ai && ai->getPlatoon())
         {
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(ai->getPlatoon());
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(ai->getPlatoon());
             character = ai->getCharacter();
         }
 
@@ -1378,7 +1378,7 @@ namespace SquadAutonomy
             currentGoal = thisptr->tryToGetCurrentGoal();
         }
         if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+        if (platoon) settings = SquadAutonomySettings::getSingleton().getSquadSettings(platoon);
 
         if (settings && settings->isEnabled())
         {
@@ -1441,7 +1441,7 @@ namespace SquadAutonomy
         if (platoon)
         {
             faction = platoon->getFaction();
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(platoon);
         }
         if (settings && settings->isEnabled())
         {
@@ -1501,7 +1501,7 @@ namespace SquadAutonomy
         Tasker* currentAction = thisptr->tryToGetCurrentGoal();
         if (thisptr)  character = thisptr->character;
         if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+        if (platoon) settings = SquadAutonomySettings::getSingleton().getSquadSettings(platoon);
         if (settings && settings->isEnabled())
         {
             if (currentAction)
@@ -1557,7 +1557,7 @@ namespace SquadAutonomy
         Platoon* platoon = nullptr;
         if (thisptr)  character = thisptr->character;
         if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+        if (platoon) settings = SquadAutonomySettings::getSingleton().getSquadSettings(platoon);
         if (settings && settings->isEnabled())
         {
             Logger::log("chooseGoal", Logger::Info, true);
@@ -1580,7 +1580,7 @@ namespace SquadAutonomy
         Platoon* platoon = nullptr;
         if (thisptr) character = thisptr->me;
         if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
-        if (platoon) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+        if (platoon) settings = SquadAutonomySettings::getSingleton().getSquadSettings(platoon);
         if (settings && settings->isEnabled())
         {
             //Log("Clear current goal");
@@ -1614,7 +1614,7 @@ namespace SquadAutonomy
         if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
         if (platoon)
         {
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(platoon);
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(platoon);
         }
         if (settings && settings->isEnabled())
         {
@@ -1669,7 +1669,7 @@ namespace SquadAutonomy
         if (body) character = body->getCharacter();
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             Ownerships* own = squad->getOwnerships();
@@ -1713,7 +1713,7 @@ namespace SquadAutonomy
         Character* character = thisptr->getCharacter();
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             Tasker* currentTask = nullptr;
@@ -1774,7 +1774,7 @@ namespace SquadAutonomy
         if (character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
         
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             //DebugLog("ManTheGate FIND GATE");
@@ -1810,7 +1810,7 @@ namespace SquadAutonomy
     {
         Platoon* squad = ai->getPlatoon();
         SquadSettingsInfo* settings = nullptr;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             Character* character = ai->getCharacter();
@@ -1844,7 +1844,7 @@ namespace SquadAutonomy
         if (body) character = body->getCharacter();
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             if (settings->getCloseGate())
@@ -1872,8 +1872,8 @@ namespace SquadAutonomy
         if (body) character = body->getCharacter();
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
-       
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             if (settings->getCloseGate())
@@ -1900,7 +1900,7 @@ namespace SquadAutonomy
         Platoon* squad = nullptr;
         if (thisptr && thisptr->getPlatoon()) squad = thisptr->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             Tasker* currentTask = nullptr;
@@ -2012,7 +2012,7 @@ namespace SquadAutonomy
         if (squad)
         {
             activePlatoon = squad->activePlatoon;
-            settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         }
         if (settings && settings->isEnabled() && squad)
         {
@@ -2057,7 +2057,7 @@ namespace SquadAutonomy
             stateBroadcast = ai->getStateBroadcast();
             taskSystem = ai->getTaskSystem();
         }
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled() && thisptr)
         {
             TaskType type = thisptr->key();
@@ -2236,7 +2236,7 @@ namespace SquadAutonomy
             character = thisptr->getCharacter();
             stateBroadcast = thisptr->getStateBroadcast();
         }
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             Logger::log("score-gotobed", Logger::Info, true);
@@ -2324,7 +2324,7 @@ namespace SquadAutonomy
             taskSystem = thisptr->getTaskSystem();
         }
 
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled() && thisptr)
         {
             Logger::log("score-getoutofbed", Logger::Info, true);
@@ -2377,7 +2377,7 @@ namespace SquadAutonomy
         Faction* faction = thisptr->getFaction();
         bool removePI = false;
         if (thisptr && thisptr->getPlatoon()) squad = thisptr->getPlatoon()->me;
-        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
             if (faction && !faction->isPlayer)
@@ -2429,7 +2429,7 @@ namespace SquadAutonomy
         modPath = GetCurrentDLLDirectory();
         Localization::init();
         ModSettings::getSingleton().loadFromFile();
-        SquadAutonomySettings::getSingletonPtr();
+        SquadAutonomySettings::getSingleton();
     }
 
 }

@@ -10,20 +10,11 @@ namespace SquadAutonomy
     class SquadSettingsInfo
     {
     public:
-        SquadSettingsInfo(Platoon* squad) : _enabled(false), _squad(squad), _pi(nullptr), _homeBuilding(nullptr), _workBuilding(nullptr),
-            _startWorkTime(0.0), _endWorkTime(24.0), _doSleep(false), _usePaidBeds(false), _restUntilHealed(true), _restThreshold(50.0), _healedThreshold(90.0),
-            _labourScience(1.0), 
-            _labourLabouring(1.0), _labourFarming(1.0), 
-            _labourMedic(1.0), _labourCooking(1.0), _labourEngineer(1.0), _labourRobotics(1.0), _labourWeaponSmith(1.0), _labourArmourSmith(1.0), _labourCrossbowSmith(1.0), _labourAutomaticMachine(1.0),
-            _attackEnemies(true), _protectAllies(true), _doMedic(true), _doRescue(true),
-            _manTurrets(false), _stayInsideGate(false), _closeGate(false)
-        {
-            Faction* faction = squad->getFaction();
-            if (faction)
-            {
-                _pi = faction->isPlayer;
-            }
-        }
+        SquadSettingsInfo(Platoon& squad);
+
+        static std::unique_ptr<SquadSettingsInfo> readFromStream(std::istream& stream);
+        bool writeToStream(std::ostream& stream) const;
+
         Platoon* getSquad();
         PlayerInterface* getPlayerInterface();
         bool isEnabled();
@@ -99,7 +90,19 @@ namespace SquadAutonomy
         void setStayInsideGate(bool val);
         bool getCloseGate();
         void setCloseGate(bool val);
+
     private:
+        static hand parseHandSetting(const std::string& dataLine);
+        static Building* parseBuildingSetting(const std::string& dataLine);
+
+        void readSquadPackagesFromStream(std::istream& stream);
+        void readSquadOptionsFromStream(std::istream& stream);
+
+        static bool writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name);
+        static bool writeBuildingSettingToStream(std::ostream& stream, const Building* building, const std::string& tag);
+        void writeSquadPackagesToStream(std::ostream& stream) const;
+        void writeSquadOptionsToStream(std::ostream& stream) const;
+
         Platoon* _squad;
         PlayerInterface* _pi;
         bool _enabled;
@@ -143,19 +146,26 @@ namespace SquadAutonomy
     class SquadAutonomySettings
     {
     public:
-        static SquadAutonomySettings* getSingletonPtr();
+        static SquadAutonomySettings& getSingleton();
         static bool initialized;
         std::vector<std::unique_ptr<SquadSettingsInfo>> squadSettings;
-        SquadAutonomySettings();
-        bool saveSettings(std::wstring);
-        bool loadSettings(std::wstring);
-        hand* createHandfromLine(std::string);
+        bool saveSettings(const std::wstring&);
+        bool loadSettings(const std::wstring&);
         SquadSettingsInfo* getSquadSettings(Platoon*, bool createNew = false);
         std::vector<GameData*>* getAIPackageList();
         std::vector<GameData*>* getSquadTemplate();
         void removeSquadSettings(Platoon*);
 
     private:
+        // Make default constructor private to only allow creation as the singleton.
+        SquadAutonomySettings();
+
+        // Disable copy and move operations for the singleton by declaring them private.
+        SquadAutonomySettings(const SquadAutonomySettings& other);
+        SquadAutonomySettings(SquadAutonomySettings&& other);
+        SquadAutonomySettings& operator=(const SquadAutonomySettings& other);
+        SquadAutonomySettings& operator=(SquadAutonomySettings&& other);
+
         std::vector<GameData*> _AIPackageList;
         std::vector<GameData*> _squadTemplateList;
         void _initGameData();

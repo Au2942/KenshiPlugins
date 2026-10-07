@@ -49,8 +49,6 @@ namespace SquadAutonomy
         ModSettings& operator=(const ModSettings& other);
         ModSettings& operator=(ModSettings&& other);
 
-        static bool parseBoolSetting(const std::string& stringValue, bool& outValue);
-        static bool parseFloatSetting(const std::string& stringValue, float& outValue);
         static bool parseLogSeveritySetting(const std::string& stringValue, Logger::Severity& outValue);
 
         SettingsValues _settingsValues;

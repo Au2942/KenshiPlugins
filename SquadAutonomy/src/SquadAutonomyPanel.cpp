@@ -86,8 +86,8 @@ void SquadAutonomyPanel::refresh()
     if (this->_panel == nullptr)
         return;
     if (!_selectedSquad) return;
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
     this->_panel->setLineSpacing(32.0);
     this->_panel->clearPage(this->_category);
 
@@ -217,7 +217,7 @@ void SquadAutonomyPanel::refresh()
 
 void SquadAutonomyPanel::show()
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!this->_selectedSquad) return;
     this->_panel->changeCategory(this->_category);
     this->_panel->show(true);
@@ -238,7 +238,7 @@ bool SquadAutonomyPanel::isVisible()
 
 void SquadAutonomyPanel::selectSquad(Platoon* squad)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!squad) return;
     _selectedSquad = squad;
     _options->setSelectedSquad(squad);
@@ -255,8 +255,8 @@ void SquadAutonomyPanel::_changeAIPackageSearchText(DataPanelLine* line)
 
 void SquadAutonomyPanel::_updateAIPackageList(const std::string& keyword)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    SquadAutonomySettings* settings = SquadAutonomySettings::getSingletonPtr();
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
+    SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
     auto dropBox = reinterpret_cast<DataPanelLine_DropBox*>(this->_panel->getLine(lineBoxAIPackage, this->_category));
     if (dropBox == nullptr)
         return;
@@ -269,18 +269,18 @@ void SquadAutonomyPanel::_updateAIPackageList(const std::string& keyword)
     if (keyword.empty())
     {
         selectVal = currentSelected;
-        for (uint32_t i = 0; i < settings->getAIPackageList()->size(); ++i)
+        for (uint32_t i = 0; i < settings.getAIPackageList()->size(); ++i)
         {
-            dropBox->addAValue(settings->getAIPackageList()->at(i)->name, i);
+            dropBox->addAValue(settings.getAIPackageList()->at(i)->name, i);
         }
     }
     else
     {
         std::string s1 = keyword;
         std::transform(s1.begin(), s1.end(), s1.begin(), [](char c) { return std::toupper(c); });
-        for (uint32_t i = 0; i < settings->getAIPackageList()->size(); ++i)
+        for (uint32_t i = 0; i < settings.getAIPackageList()->size(); ++i)
         {
-            std::string& name = settings->getAIPackageList()->at(i)->name;
+            std::string& name = settings.getAIPackageList()->at(i)->name;
             std::string s2 = name;
             std::transform(s2.begin(), s2.end(), s2.begin(), [](char c) { return std::toupper(c); });
             if (s2.find(s1) != std::string::npos)
@@ -296,10 +296,10 @@ void SquadAutonomyPanel::_updateAIPackageList(const std::string& keyword)
 
 void SquadAutonomyPanel::_toggleAI(DataPanelLine* line)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (_selectedSquad && _selectedSquad->activePlatoon)
     {
-        auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+        auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
         if (line != nullptr && line->classType == DataPanelLine::DPL_BUTTON)
         {
             auto button = reinterpret_cast<DataPanelLine_Button*>(line)->button;
@@ -325,13 +325,13 @@ void SquadAutonomyPanel::_toggleAI(DataPanelLine* line)
 
 void SquadAutonomyPanel::_addAI(DataPanelLine* line)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (_selectedSquad)
     {
         GameData* data;
-        SquadAutonomySettings* settings = SquadAutonomySettings::getSingletonPtr();
-        SquadSettingsInfo* settingsInfo = settings->getSquadSettings(_selectedSquad, true);
-        if (_selectedAIPackageIndex < settings->getAIPackageList()->size()) data = settings->getAIPackageList()->at(_selectedAIPackageIndex);
+        SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
+        SquadSettingsInfo* settingsInfo = settings.getSquadSettings(_selectedSquad, true);
+        if (_selectedAIPackageIndex < settings.getAIPackageList()->size()) data = settings.getAIPackageList()->at(_selectedAIPackageIndex);
         if (data && settingsInfo)
         {
             settingsInfo->addPackage(static_cast<int>(_priority), data);
@@ -350,10 +350,10 @@ void SquadAutonomyPanel::_addAI(DataPanelLine* line)
 
 void SquadAutonomyPanel::_clearAI(DataPanelLine* line)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (_selectedSquad)
     {
-        auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+        auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
         if (settings)
         {
             settings->clearPackages();
@@ -410,13 +410,13 @@ void SquadAutonomyPanel::_setBar(DataPanelLine* line)
 
 void SquadAutonomyPanel::_clearBuildings(DataPanelLine* line)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!_selectedSquad)
     {
         ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
         return;
     }
-    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
     settings->setBuilding(nullptr, true);
     settings->setBuilding(nullptr, false);
     settings->unassignSquadHome();
@@ -428,7 +428,7 @@ void SquadAutonomyPanel::_clearBuildings(DataPanelLine* line)
 
 void SquadAutonomyPanel::_setBuilding(bool home)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!_selectedSquad || !_selectedSquad->activePlatoon)
     {
         ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
@@ -439,7 +439,7 @@ void SquadAutonomyPanel::_setBuilding(bool home)
         ou->showPlayerAMessage(Localization::gettext("No object selected!"), true);
         return;
     }
-    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
 
     Building* building = gui->selectedObject.getBuilding();
     if (!building)
@@ -533,8 +533,8 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     if (!this->_panel)
         return;
     if (!this->_selectedSquad) return;
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
-    auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
+    auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
 
     this->_panel->setLineSpacing(24.0);
     this->_panel->clearPage(this->_category);
@@ -575,15 +575,15 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
 }
 void SquadAutonomyPanel::AutonomyOptions::refreshOptions(MyGUI::ComboBox* sender, size_t index)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!this->_selectedSquad) return;
     refresh();
 }
 void SquadAutonomyPanel::AutonomyOptions::updateSettings(DataPanelLine* line)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!this->_selectedSquad) return;
-    auto squadSettings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
     if (_basic)
     {
         squadSettings->setStartWorkTime(_basic->startWorkTime);
@@ -626,7 +626,7 @@ void SquadAutonomyPanel::AutonomyOptions::updateSettings(DataPanelLine* line)
 }
 void SquadAutonomyPanel::AutonomyOptions::updateSettingsAndRefresh(DataPanelLine* line)
 {
-    if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
+    if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!this->_selectedSquad) return;
     updateSettings(line);
     refresh();
