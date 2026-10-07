@@ -43,6 +43,7 @@
 #include <kenshi/AI/Blackboard.h>
 #include <kenshi/Tasker.h>
 #include <kenshi/Faction.h>
+#include <kenshi/Inventory.h>
 #include <kenshi/FactionRelations.h>
 #include <kenshi/Platoon.h>
 #include <kenshi/StateBroadcastData.h>
@@ -840,11 +841,121 @@ namespace SquadAutonomy
 
     }
 
-    UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, std::unordered_map<UseableStuff*,int>* buildings)
+    StorageBuilding* FindResourceStorageBuildingFor(AI* ai, GameData* needed, StorageBuilding* skip)
     {
+        lektor<Building*> buildings;
+        ai->getAllLocalMachines(buildings, 67118134); //probably buildingfunction bitmask copied from AI::findResourceStorageBulidingFor
+        AITaskSytem* taskSystem = ai->getTaskSystem();
+        float minDist = std::numeric_limits<float>::max();
+        StorageBuilding* best = nullptr;
+        for (int i = 0; i < buildings.size(); ++i)
+        {
+            StorageBuilding* storage = buildings[i]->getFunctionStuff();
+            if (!storage) continue;
+            if (storage == skip) continue;
+            if (!storage->hasItem(needed)) continue;
+
+            ProductionBuilding* production = storage->getProductionBuilding();
+            if (production)
+            {
+                bool consumeItem = false;
+                for (int j = 0; j < production->getNumConsumtionItems(); ++j)
+                {
+                    if (production->getConsumtionItems(j)->item == needed)
+                    {
+                        consumeItem = true;
+                        break;
+                    }
+                }
+                if (consumeItem) continue;
+            }
+            if (taskSystem && taskSystem->isPathImpossible(storage)) continue;
+            float dist = ai->getPosition().squaredDistance(storage->getPosition());
+            if (dist < minDist)
+            {
+                minDist = dist;
+                best = storage;
+            }
+        }
+        return best;
+    }
+
+    Character* NearestSquadMemberHaul(Character* character, Building* to, Building* from)
+    {
+        if (!character || !to || !from) return nullptr;
+        ActivePlatoon* squad = character->getPlatoon();
+        Character* nearest = nullptr;
+        float minDist = std::numeric_limits<float>::max();
+        for (auto it = squad->things.begin(); it != squad->things.end(); ++it)
+        {
+            Character* obj = reinterpret_cast<Character*>(*it);
+            CharBody* body = obj->getBody();
+            AI* ai = obj->getAI();
+            if (body)
+            {
+                Tasker* currentAction = body->getCurrentAction();
+                if (currentAction && currentAction->key() == OPERATE_STORAGE)
+                {
+                    if (currentAction->subject == to->getHandle())
+                    {
+                        Logger::log(obj->displayName + " is already doing " + to->displayName, Logger::Debug, false);
+                        return nullptr;
+                    }
+                }
+            }
+            if (!ai) continue;
+            AITaskSytem* taskSystem = ai->getTaskSystem();
+            if (!taskSystem) continue;
+            if (from && taskSystem->isPathImpossible(from)) continue;
+
+            float dist = obj->pos.squaredDistance(from->pos);
+            if (dist < minDist)
+            {
+                nearest = obj;
+                minDist = dist;
+            }
+        }
+        if (nearest && nearest->getOrdersReciever())
+        {
+            Logger::log(nearest->displayName + " nearest to " + to->displayName, Logger::Debug, false);
+            nearest->getOrdersReciever()->addOrder(OPERATE_STORAGE, to, from->getPosition(), true, false);
+        }
+        return nearest;
+    }
+
+    bool NoOneElseIsHauling(Character* character, Building* to)
+    {
+        if (!character || !to) return false;
+        ActivePlatoon* squad = character->getPlatoon();
+        for (auto it = squad->things.begin(); it != squad->things.end(); ++it)
+        {
+            Character* obj = reinterpret_cast<Character*>(*it);
+            if (character == obj) continue;
+            CharBody* body = obj->getBody();
+            AI* ai = obj->getAI();
+            if (body)
+            {
+                Tasker* currentAction = body->getCurrentAction();
+                if (currentAction && currentAction->key() == OPERATE_STORAGE)
+                {
+                    if (currentAction->subject == to->getHandle())
+                    {
+                        Logger::log(obj->displayName + " is already doing " + to->displayName, Logger::Debug, false);
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, std::unordered_map<UseableStuff*,int>* buildings, SquadSettingsInfo* settings)
+    {
+        if (!character || !ai) return nullptr;
         UseableStuff* optimalLabour = nullptr;
         float minDist = std::numeric_limits<float>::max();
-        int maxOperators = std::numeric_limits<int>::max();
+        int minOperators = std::numeric_limits<int>::max();
+        int minPriority = 0;
         AITaskSytem* taskSystem = ai->getTaskSystem();
         if (!taskSystem) return nullptr;
         //bool prioritizeNotFull = false;
@@ -858,23 +969,56 @@ namespace SquadAutonomy
             ProductionBuilding* production = useable->getProductionBuilding();
             if (taskSystem->isPathImpossible(useable)) continue;
             if (useable->getBuildState() == 0) continue;
+            if (settings->getLabourPriority(useable) < minPriority) continue;
             if (production)
             {
                 if (production->isProductionFull())
                 {
                     //no storage
-                    StorageBuilding* storage = ai->findResourceStorageBulidingFor(production->getProductionItemData(), production);
-                    if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
+                    StorageBuilding* storage = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production);
+                    if (storage)
                     {
-                        return production;
+                        Logger::log(character->displayName + " -> " + production->displayName + " production full. Can haul to : " + storage->displayName, Logger::Debug, false);
+                        auto nearest = NearestSquadMemberHaul(character, storage, production);
+                        if (nearest == character)
+                        {
+                            return nullptr;
+                        }
                     }
-                    else continue;
+                    continue;
                 }
-                if (useable->numOperatorsMax <= 0)
+                lektor<GameData*> out;
+                production->getResourcesNeededBecauseEmpty(out);
+                if (out.size() == 0)
                 {
-                    float scoreAutoMachine = ai->scoreAutoMachinery(production, production->getPosition());
-                    if (scoreAutoMachine <= 0) continue;
-                    FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
+                    if (production->isProductionEmpty())
+                    {
+                        continue;
+                    }
+                    StorageBuilding* storage = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production);
+                    if (!storage) continue; 
+                }
+                else
+                {
+                    Logger::log(production->displayName + " has empty input resource", Logger::Debug, false);
+                    for (int i = 0; i < out.size(); ++i)
+                    {
+                        StorageBuilding* storage = FindResourceStorageBuildingFor(ai, out[i], production);
+                        if (storage)
+                        {
+                            Logger::log(production->displayName + " has input resource: " + storage->displayName, Logger::Debug, false);
+                            auto nearest = NearestSquadMemberHaul(character, production, storage);
+                            if (nearest == character)
+                            {
+                                return nullptr;
+                            }
+                        }
+                    }
+                    continue;
+                    
+                }
+                
+                    /*FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
                     if (farmBuilding)
                     {
                         if (farmBuilding->grown < 1.0)
@@ -897,44 +1041,37 @@ namespace SquadAutonomy
                             }
                         }
                     }
-                    
-                    lektor<GameData*> out;
-                    production->getResourcesNeededBecauseNotFull(out);
-                    if (out.size() == 0)
-                    {
-                        if (!production->isProductionEmpty())
-                        {
-                            //no storage
-                            StorageBuilding* storage = ai->findResourceStorageBulidingFor(production->getProductionItemData(), production);
-                            if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
-                            {
-                            }
-                            else continue;
-                        }
-                        else continue;
-                    }
-                    
-                }
+                    */
+                   
             }
-            //DebugLog(useable->displayName + ", " + Ogre::StringConverter::toString(operators) + ", " + Ogre::StringConverter::toString(dist));
-            if (operators < maxOperators)
+            Logger::log(useable->displayName + ", " + Ogre::StringConverter::toString(operators) + ", " + Ogre::StringConverter::toString(dist));
+            if (useable->numOperatorsMax <= 0)
+            {
+                float scoreAutoMachine = ai->scoreAutoMachinery(production, production->getPosition());
+                Logger::log(character->displayName + " -> " + production->displayName + " Automachine Score: " + Ogre::StringConverter::toString(scoreAutoMachine), Logger::Debug, false);
+                if (scoreAutoMachine <= 0) continue;
+
+            }
+            else if (operators < minOperators)
             {
                 optimalLabour = useable;
-                maxOperators = operators;
+                minOperators = operators;
                 minDist = dist;
+                minPriority = settings->getLabourPriority(useable);
                 continue;
             }
-            else if (operators > maxOperators) continue; 
+            else if (operators > minOperators) continue; 
 
             if (minDist < dist)
             {
                 continue;
             }
             optimalLabour = useable;
-            maxOperators = operators;
+            minOperators = operators;
             minDist = dist;
+            minPriority = settings->getLabourPriority(useable);
         }
-        if (optimalLabour) Logger::log("Found labour : " + optimalLabour->displayName + ", " + Ogre::StringConverter::toString(maxOperators) + ", " + Ogre::StringConverter::toString(minDist), Logger::Info, true);
+        if (optimalLabour) Logger::log(character->displayName + " found labour : " + optimalLabour->displayName + ", " + Ogre::StringConverter::toString(minOperators) + ", " + Ogre::StringConverter::toString(minDist), Logger::Info, false);
         return optimalLabour;
     }
 
@@ -945,239 +1082,156 @@ namespace SquadAutonomy
         if (!ai) return nullptr;
         hand optimalLabour = nullptr;
         std::unordered_map<UseableStuff*, int> labourCandidates;
-        int minPriority = 0.0;
         TownBase* currentTown = character->getCurrentTownLocation();
-        Logger::log("Find Labour To Do", Logger::Info, false);
+        Logger::log(character->displayName + " find Labour To Do", Logger::Info, true);
         if (currentTown)
         {
             if (ou->player && ou->player->technology && ou->player->technology->current.size() > 0)
             {
                 lektor<Building*>* researchBuildings = currentTown->findAllBuildingsWithFunction(BF_RESEARCH, character);
-                for (int i = 0; i < researchBuildings->size(); ++i)
+                if (researchBuildings)
                 {
-                    auto useable = (*researchBuildings)[i]->getUseableStuff();
-                    int priority = settings->getLabourPriority(useable);
-                    if (priority <= 0.0) continue;
-                    else if (priority < minPriority) continue;
-                    auto operators = useable->currentOperators;
-                    int opCount = operators.size();
-                    if (operators.find(character) != operators.end())
+                    for (int i = 0; i < researchBuildings->size(); ++i)
                     {
-                        opCount -= 1;
-                    }
-                    if (opCount < useable->numOperatorsMax)
-                    {
-                        if (priority > minPriority)
+                        auto useable = (*researchBuildings)[i]->getUseableStuff();
+                        int priority = settings->getLabourPriority(useable);
+                        if (priority <= 0) continue;
+                        auto operators = useable->currentOperators;
+                        int opCount = operators.size();
+                        if (operators.find(character) != operators.end())
                         {
-                            labourCandidates.clear();
-                            minPriority = priority;
+                            opCount -= 1;
                         }
-                        labourCandidates[useable] = opCount;
+                        if (opCount < useable->numOperatorsMax)
+                        {
+                            labourCandidates[useable] = opCount;
+                        }
                     }
                 }
             }
             lektor<Building*>* refineryBuildings = currentTown->findAllBuildingsWithFunction(BF_REFINERY, character);
-            for (int i = 0; i < refineryBuildings->size(); ++i)
+            if (refineryBuildings)
             {
-                auto production = (*refineryBuildings)[i]->getProductionBuilding();
-                int priority = settings->getLabourPriority(production);
-                if (priority <= 0.0) continue;
-                else if (priority < minPriority) continue;
-                if (production->couldIOperate(character))
+                for (int i = 0; i < refineryBuildings->size(); ++i)
                 {
-                    auto operators = production->currentOperators;
-                    int opCount = operators.size();
-                    if (operators.find(character) != operators.end())
+                    auto production = (*refineryBuildings)[i]->getProductionBuilding();
+                    int priority = settings->getLabourPriority(production);
+                    if (priority <= 0) continue;
+                    if (production->couldIOperate(character))
                     {
-                        opCount -= 1;
-                    }
-                    if (opCount < production->numOperatorsMax)
-                    {
-                        if (priority > minPriority)
+                        auto operators = production->currentOperators;
+                        int opCount = operators.size();
+                        if (operators.find(character) != operators.end())
                         {
-                            labourCandidates.clear();
-                            minPriority = priority;
+                            opCount -= 1;
                         }
-                        labourCandidates[production] = opCount;
+                        if (opCount < production->numOperatorsMax)
+                        {
+                            labourCandidates[production] = opCount;
+                        }
                     }
-                }
-                else if (production->numOperatorsMax <= 0 && production->getConsumtionItems(0))
-                {
-                    if (priority > minPriority)
+                    else if (production->numOperatorsMax <= 0)
                     {
-                        labourCandidates.clear();
-                        minPriority = priority;
+                        labourCandidates[production] = 0;
                     }
-                    labourCandidates[production] = 1;
                 }
             }
             lektor<Building*>* craftingBuildings = currentTown->findAllBuildingsWithFunction(BF_CRAFTING, character);
-            for (int i = 0; i < craftingBuildings->size(); ++i)
+            if (craftingBuildings)
             {
-                auto production = (*craftingBuildings)[i]->getProductionBuilding();
-                int priority = settings->getLabourPriority(production);
-                if (priority <= 0.0) continue;
-                else if (priority < minPriority) continue;
-                if (production->couldIOperate(character))
+                for (int i = 0; i < craftingBuildings->size(); ++i)
                 {
-                    auto operators = production->currentOperators;
-                    int opCount = operators.size();
-                    if (operators.find(character) != operators.end())
+                    auto production = (*craftingBuildings)[i]->getProductionBuilding();
+                    int priority = settings->getLabourPriority(production);
+                    if (priority <= 0) continue;
+                    if (production->couldIOperate(character))
                     {
-                        opCount -= 1;
-                    }
-                    if (opCount < production->numOperatorsMax)
-                    {
-                        if (priority > minPriority)
+                        auto operators = production->currentOperators;
+                        int opCount = operators.size();
+                        if (operators.find(character) != operators.end())
                         {
-                            labourCandidates.clear();
-                            minPriority = priority;
+                            opCount -= 1;
                         }
-                        labourCandidates[production] = opCount;
+                        if (opCount < production->numOperatorsMax)
+                        {
+                            labourCandidates[production] = opCount;
+                        }
                     }
-                }
-                else if (production->numOperatorsMax <= 0 && production->getConsumtionItems(0))
-                {
-                    if (priority > minPriority)
+                    else if (production->numOperatorsMax <= 0)
                     {
-                        labourCandidates.clear();
-                        minPriority = priority;
+                        labourCandidates[production] = 0;
                     }
-                    labourCandidates[production] = 1;
                 }
             }
             lektor<Building*>* mineBuildings = currentTown->findAllBuildingsWithFunction(BF_MINE, character);
-            for (int i = 0; i < mineBuildings->size(); ++i)
+            if (mineBuildings)
             {
-                auto production = (*mineBuildings)[i]->getProductionBuilding();
-                int priority = settings->getLabourPriority(production);
-                if (priority <= 0.0) continue;
-                else if (priority < minPriority) continue;
-                if (production->couldIOperate(character))
+                for (int i = 0; i < mineBuildings->size(); ++i)
                 {
-                    auto operators = production->currentOperators;
-                    int opCount = operators.size();
-                    if (operators.find(character) != operators.end())
+                    auto production = (*mineBuildings)[i]->getProductionBuilding();
+                    int priority = settings->getLabourPriority(production);
+                    if (priority <= 0) continue;
+                    if (production->couldIOperate(character))
                     {
-                        opCount -= 1;
-                    }
-                    if (opCount < production->numOperatorsMax)
-                    {
-                        if (priority > minPriority)
+                        auto operators = production->currentOperators;
+                        int opCount = operators.size();
+                        if (operators.find(character) != operators.end())
                         {
-                            labourCandidates.clear();
-                            minPriority = priority;
+                            opCount -= 1;
                         }
-                        labourCandidates[production] = opCount;
+                        if (opCount < production->numOperatorsMax)
+                        {
+                            labourCandidates[production] = opCount;
+                        }
                     }
-                }
-                else if (production->numOperatorsMax <= 0 && production->getConsumtionItems(0))
-                {
-                    if (priority > minPriority)
+                    else if (production->numOperatorsMax <= 0)
                     {
-                        labourCandidates.clear();
-                        minPriority = priority;
+                        labourCandidates[production] = 0;
                     }
-                    labourCandidates[production] = 1;
                 }
             }
 
-            UseableStuff* optimalLabour = FindOptimalLabourFromList(character, ai, &labourCandidates);
-
+            UseableStuff* optimalLabour = FindOptimalLabourFromList(character, ai, &labourCandidates, settings);
             if (optimalLabour)
             {
-                /*FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(optimalLabour);
-                if (farmBuilding)
+                ProductionBuilding* production = optimalLabour->getProductionBuilding();
+                OrdersReceiver* order = character->getOrdersReciever();
+                if (production)
                 {
-                    Log("Labour is Farm");
-                    if (farmBuilding->grown < 1.0 && !farmBuilding->isProductionEmpty())
+                    StorageBuilding* storage = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production);
+                    if (production->isProductionFull())
                     {
-                        //DebugLog("Unharvestable Farm with production");
-                        StorageBuilding* storage = ai->findResourceStorageBulidingFor(farmBuilding->getProductionItemData(), farmBuilding);
-                        if (storage && storage->getProductionItem() && !storage->getProductionItem()->isFull())
+                        if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
                         {
-                            Log("Haul from " + farmBuilding->displayName + " to " + storage->displayName);
-                            character->addOrder(storage, OPERATE_STORAGE, storage, false, true, storage->getPosition());
-                            return nullptr;
+                            Logger::log("Haul from " + production->displayName + " to " + storage->displayName, Logger::Debug, false);
+                            order->addOrder(OPERATE_STORAGE, storage, storage->getPosition(), true, false);
                         }
+                        return nullptr;
                     }
-                }
-                else*/ 
-                if (optimalLabour->numOperatorsMax <= 0)
-                {
-                    ProductionBuilding* production = optimalLabour->getProductionBuilding();
-                    Logger::log("Labour is automatic", Logger::Info, true);
-                    if (production)
+                    else if (optimalLabour->numOperatorsMax <= 0)
                     {
-                        StorageBuilding* storage = ai->findResourceStorageBulidingFor(production->getProductionItemData(), production);
-                        if (production->isProductionFull())
+                        Logger::log("Automachine: " + production->displayName, Logger::Debug, false);
+                        lektor<GameData*> out;
+                        production->getResourcesNeededBecauseEmpty(out);
+                        if (out.size() > 0)
+                        {
+                            Logger::log("Haul to " + production->displayName, Logger::Debug, false);
+                            order->addOrder(OPERATE_STORAGE, production, production->getPosition(), true, false);
+                        }
+                        else if (!production->isProductionEmpty())
                         {
                             if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
                             {
-                                Logger::log("Haul from " + production->displayName + " to " + storage->displayName, Logger::Info, true);
-                                character->addOrder(storage, OPERATE_STORAGE, storage, false, true, storage->getPosition());
+                                Logger::log("Haul from " + production->displayName + " to " + storage->displayName, Logger::Debug, false);
+                                order->addOrder(OPERATE_STORAGE, storage, storage->getPosition(), true, false);
                             }
                         }
-                        else
-                        {
-                            /*bool inputNotFull = false;
-                            for (int i = 0; i < production->getNumConsumtionItems(); ++i)
-                            {
-                                if (production->getConsumtionItems(i) && !production->getConsumtionItems(i)->isFull())
-                                {
-                                    inputNotFull = true;
-                                    break;
-                                }
-                            }*/
-                            //if (inputNotFull) character->addOrder(optimalLabour, OPERATE_STORAGE, optimalLabour, false, true, optimalLabour->getPosition());
-                            lektor<GameData*> out;
-                            production->getResourcesNeededBecauseNotFull(out);
-                            if (out.size() > 0)
-                            {
-                                Logger::log("Haul to " + production->displayName, Logger::Info, true);
-                                character->addOrder(production, OPERATE_STORAGE, production, false, true, production->getPosition());
-                            }
-                            else if (!production->isProductionEmpty())
-                            {
-                                if (storage && storage->canHaveSomeOfThese(production->getProductionItemData()))
-                                {
-                                    Logger::log("Haul from " + production->displayName + " to " + storage->displayName, Logger::Info, true);
-                                    character->addOrder(storage, OPERATE_STORAGE, storage, false, true, storage->getPosition());
-                                }
-                            }
-                        }
+                        return nullptr;
                     }
-                    return nullptr;
                 }
-                return optimalLabour;
             }
-            /*lektor<Building*>* storageBuildings = currentTown->findAllBuildingsWithFunction(BF_RESOURCE_STORAGE, character);
-            for (int i = 0; i < storageBuildings->size(); ++i)
-            {
-                auto storage = (*mineBuildings)[i]->getFunctionStuff();
-                if (storage->couldIOperate(character) && !storage->productionItem->isFull())
-                {
-                    labourCandidates[storage] = 1;
-                }
-            }*/
-            /*lektor<Building*>* mineNatBuildings = currentTown->findAllBuildingsWithFunction(BF_MINE_NATURAL, character);
-            for (int i = 0; i < mineNatBuildings->size(); ++i)
-            {
-                auto production = (*mineNatBuildings)[i]->getProductionBuilding();
-                if (!production->isProductionFull())
-                {
-                    if (production->currentOperators.size() == 0)
-                    {
-                        return production;
-                    }
-                    else if (production->currentOperators.size() < production->numOperatorsMax)
-                    {
-                        lektorEx::push_back(labourCandidates, production->getUseableStuff());
-                    }
-                }
-            }*/
         }
-        return nullptr;
+        return optimalLabour;
     }
 
     bool (*_NV_couldIOperate_orig)(UseableStuff* thisptr, const hand& h);
@@ -1298,7 +1352,6 @@ namespace SquadAutonomy
                 if (out) return 1.0;
                 else return 0.0;
             }
-            Logger::log("EndRuntargetFind", Logger::Info, true);
 
         }
         float score = runTargetFinder_orig(thisptr, func, key, out);
@@ -1325,7 +1378,9 @@ namespace SquadAutonomy
                     }
                 }
             }
+            Logger::log("EndRuntargetFind", Logger::Info, true);
         }
+        return score;
     }
 
     void (*periodicUpdate_orig)(AITaskSytem* thisptr, float time);
@@ -1901,7 +1956,7 @@ namespace SquadAutonomy
                         //currentTask->setLocation(gate->pos);
                         if (door->isDamaged())
                         {
-                            if (body) body->setCurrentAction(REPAIR, door);
+                            order->addOrder(REPAIR, door, door->pos, true, false);
                         }
                         else if (key == MAN_THE_GATE && settings->getCloseGate())
                         {

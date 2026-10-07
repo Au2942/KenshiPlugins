@@ -150,6 +150,7 @@ void ModSettingsUI::refresh()
         this, &ModSettingsUI::updatePanel);
 
     std::string logGreyed;
+    _logSeverityIndex = static_cast<int>(settingsValuesMutable.logSeverity);
     if (!ModSettings::getSingleton().getValues().enableLogging) logGreyed = *_GreyedColorCode;
     int listIndex = _logSeverityIndex;
     auto dropbox = _panel->setLineDropBox(logGreyed+Localization::gettext("Log Severity"), _category, 

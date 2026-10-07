@@ -14,7 +14,7 @@ namespace SquadAutonomy
 			Info,
 			Debug
 		};
-		static bool log(const std::string& log, Severity severity = None, bool spam = false);
+		static bool log(const std::string& log, Severity severity = Debug, bool spam = false);
 	private:
 	};
 }
