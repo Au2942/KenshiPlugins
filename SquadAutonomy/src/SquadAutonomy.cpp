@@ -25,6 +25,7 @@
 #include <kenshi/gui/DataPanelLine.h>
 #include <kenshi/gui/ToolTip.h>
 #include <kenshi/gui/SquadManagementScreen.h>
+#include <kenshi/gui/DialogueWindow.h>
 
 #include <kenshi/util/hand.h>
 #include <kenshi/util/PerfTimer.h>
@@ -319,9 +320,10 @@ namespace SquadAutonomy
     void OptionsWindow_create_hook(OptionsWindow* thisptr)
     {
         OptionsWindow_create_orig(thisptr);
+        if (!thisptr) return;
         ModSettingsUI::getSingleton().setOptionsWindow(thisptr);
 
-        //DebugLog("mod options initialized!");
+        Logger::log("Create settings Button in Options", Logger::Info, false);
         auto tabCount = thisptr->tabs->getItemCount();
         std::vector<int> catList(tabCount);
         int maxCat = 0;
@@ -368,20 +370,23 @@ namespace SquadAutonomy
                     }
                 }
             }
-            if (modLine)
+            if (modLine && modLine->w2)
             {
                 //DebugLog(Ogre::StringConverter::toString(modLine->getNumWidgets()));
                 //DebugLog(modLine->w1->getCaption().asUTF8());
                 //DebugLog(modLine->w2->getCaption().asUTF8());
-                float right = static_cast<float>(modLine->w2->getRight() - modLine->w2->getTextSize().width)/settingsPanel->getWidget()->getSize().width;
-                float left = right - 0.1;
-                float top = static_cast<float>(modLine->w2->getTop())/settingsPanel->getWidget()->getSize().height;
-                float height = static_cast<float>(modLine->w2->getHeight()) / settingsPanel->getWidget()->getSize().height;
-                float extendedHeight = height * 1.5;
-                //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
-                auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight-height)/2.0, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
-                btn->setCaption(Localization::gettext("Settings"));
-                btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
+                if (settingsPanel->getWidget()->getSize().height > 0 && settingsPanel->getWidget()->getSize().width > 0)
+                {
+                    float right = static_cast<float>(modLine->w2->getRight() - modLine->w2->getTextSize().width) / settingsPanel->getWidget()->getSize().width;
+                    float left = right - 0.1;
+                    float top = static_cast<float>(modLine->w2->getTop()) / settingsPanel->getWidget()->getSize().height;
+                    float height = static_cast<float>(modLine->w2->getHeight()) / settingsPanel->getWidget()->getSize().height;
+                    float extendedHeight = height * 1.5;
+                    //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
+                    auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight - height) * 0.5, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
+                    btn->setCaption(Localization::gettext("Settings"));
+                    btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
+                }
             }
         }
     }
@@ -390,6 +395,7 @@ namespace SquadAutonomy
     void saveOptions_hook(OptionsWindow* thisptr)
     {
         saveOptions_orig(thisptr);
+        if (!thisptr) return;
         ModSettingsUI::getSingleton().saveSettings();
     }
 
@@ -400,6 +406,7 @@ namespace SquadAutonomy
         const bool modSettingsVisible = modSettingsUI.isVisible();
 
         closeButton_orig(thisptr, _sender);
+        if (!thisptr) return;
         if (modSettingsVisible && !modSettingsUI.isVisible())
         {
             modSettingsUI.show();
@@ -2386,6 +2393,7 @@ namespace SquadAutonomy
         bool result = initialisation_orig(thisptr);
         if (result)
         {
+            Logger::log("Initialised gameworld data", Logger::Info, false);
             //taskData are initialised here
             auto relaxData = getTaskDataConst(RELAX_IN_TOWN_PACKAGE);
             OriginalTaskDataDuration* relaxOrig = new OriginalTaskDataDuration(relaxData->durationMin, relaxData->durationFuzz, relaxData->isDurationBased, relaxData->endsAfterTime);
@@ -2400,7 +2408,13 @@ namespace SquadAutonomy
         }
         return result;
     }
-    // install (in startPlugin):
+
+    bool (*getVisible_orig)(DialogueWindow* thisptr);
+    bool getVisible_hook(DialogueWindow* thisptr)
+    {
+        if (!thisptr) return false;
+        return getVisible_orig(thisptr);
+    }
 
     void Init()
     {
@@ -2483,11 +2497,13 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add MainBarGUI::tabPlatoonChange constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&PlayerInterface::cycleSquad), &SquadAutonomy::cycleSquad_hook, &SquadAutonomy::cycleSquad_orig))
         ErrorLog("Could not add PlayerInterface::cycleSquad constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&DialogueWindow::getVisible), &SquadAutonomy::getVisible_hook, &SquadAutonomy::getVisible_orig))
+        ErrorLog("Could not add DialogueWindow::getVisible constructor hook!");
 
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::create), &SquadAutonomy::OptionsWindow_create_hook, &SquadAutonomy::OptionsWindow_create_orig))
         ErrorLog("Could not add OptionsWindow::create constructor hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
-        ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");
+    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
+        ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");*/
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
         ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&GameWorld::initialisation), &SquadAutonomy::initialisation_hook, &SquadAutonomy::initialisation_orig))

@@ -45,6 +45,7 @@ void ModSettingsUI::create()
         _panel->show(false);
         gui->destroy(_panel);
     }
+    Logger::log("Creating Mod Settings Panel", Logger::Info, false);
     _panel = gui->createDatapanel(0.25f, 0.35f, 0.3f, 0.5f, true, "Window", true);
     _panel->setCaption(Localization::gettext("Squad Autonomy Mod Options"));
     _panel->setPanelName("SquadAutonomyModOptions");
@@ -186,6 +187,7 @@ void ModSettingsUI::refresh()
 
 void ModSettingsUI::show()
 {
+    if (!_panel) return;
     _panel->show(true);
     MyGUI::LayerManager::getInstancePtr()->upLayerItem(_panel->getWidget());
     refresh();
@@ -193,12 +195,14 @@ void ModSettingsUI::show()
 
 void ModSettingsUI::hide()
 {
+    if (!_panel) return;
     _panel->show(false);
     saveSettings();
 }
 
 bool ModSettingsUI::isVisible()
 {
+    if (!_panel) return false;
     return _panel->isVisible();
 }
 
