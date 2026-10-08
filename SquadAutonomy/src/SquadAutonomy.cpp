@@ -2387,6 +2387,32 @@ namespace SquadAutonomy
         return _NV_scoreGetOutOfBed_orig(thisptr, subject, _a2);
     }
 
+    bool (*wantsToEatNow_orig)(Character* thisptr);
+    bool wantsToEatNow_hook(Character* thisptr)
+    {
+        //this calls Character::amSomeoneWhoNeedsToEatToLive() which checks if the faction->isPlayer is true so we have to return PI for proper logic
+        Platoon* squad = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        Faction* faction = thisptr->getFaction();
+        bool removePI = false;
+        if (thisptr && thisptr->getPlatoon()) squad = thisptr->getPlatoon()->me;
+        if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (faction && !faction->isPlayer)
+            {
+                faction->isPlayer = settings->getPlayerInterface();
+                removePI = true;
+            }
+        }
+        bool result = wantsToEatNow_orig(thisptr);
+        if (settings && settings->isEnabled() && faction && removePI)
+        {
+            faction->isPlayer = nullptr;
+        }
+        return result;
+    }
+
     bool (*initialisation_orig)(GameWorld* thisptr);
     bool initialisation_hook(GameWorld* thisptr)
     {
@@ -2409,6 +2435,7 @@ namespace SquadAutonomy
         return result;
     }
 
+    // for preventing crash when using with NeedSleep (and any mod that call this in the main menu)
     bool (*getVisible_orig)(DialogueWindow* thisptr);
     bool getVisible_hook(DialogueWindow* thisptr)
     {
@@ -2510,6 +2537,9 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add GameWorld::initialisation constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_threadedUpdate), &SquadAutonomy::_NV_threadedUpdate_hook, &SquadAutonomy::_NV_threadedUpdate_orig))
         ErrorLog("Could not add Character::_NV_threadedUpdate constructor hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::wantsToEatNow), &SquadAutonomy::wantsToEatNow_hook, &SquadAutonomy::wantsToEatNow_orig))
+        ErrorLog("Could not add Character::wantsToEatNow constructor hook!");
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
         ErrorLog("Could not add CharMovement::_NV_setDestination hook!");
 
