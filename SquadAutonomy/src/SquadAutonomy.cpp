@@ -104,6 +104,8 @@ namespace SquadAutonomy
     void (*Task_MoveToDoor_Gate_ChooseSide_gatePosition)(Tasker*, Ogre::Vector3&, CharBody*) = nullptr;
     void (*Task_OpenDoor_StartAction)(Tasker*, CharBody*) = nullptr;
     void (*Task_OpenDoor_Update)(Tasker*, CharBody*) = nullptr;
+    Tasker* (*GOAPTaskMgr_createNewTask)(TaskRepertoire*, TaskType key, const hand& subject, taskPriority priority, float weight, Ogre::Vector3 location, int startTime, int endTime) = nullptr;
+
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
     std::wstring saveName = L"SquadAutonomy.save";
@@ -795,6 +797,7 @@ namespace SquadAutonomy
         TownBase* currentTown = character->getCurrentTownLocation();
         if (currentTown)
         {
+            // TODO: Prioritize homebuilding
             BuildingFunction bf = BF_BED;
             if (race && race->robot)
             {
@@ -808,39 +811,8 @@ namespace SquadAutonomy
                 UseableStuff* bed = bedBuildings->at(i)->getUseableStuff();
                 if (bed) beds.push_back(bed);
             }
-            if (currentTown->isTown() && currentTown->isTown()->playerHasBuildingsInThisTown)
-            {
-                std::sort(beds.begin(), beds.end());
-                auto newEndIt = std::unique(beds.begin(), beds.end());
-                beds.erase(newEndIt, beds.end());
-
-                optimalBed = FindOptimalBed(character, ai, false, beds, true);
-            }
+            optimalBed = FindOptimalBed(character, ai, false, beds, true);
             if (optimalBed) return optimalBed->getHandle();
-
-        }
-        Building* currentBuilding = nullptr;
-        if (character->isInsideBuilding)
-        {
-            currentBuilding = character->isInsideBuilding.getBuilding();
-            BuildingFunction bf = BF_BED;
-            if (race && race->robot)
-            {
-                bf = BF_SKELETON_BED;
-            }
-            lektor<Building*> bedBuildings;
-            currentBuilding->findAllFurnitureWithFunction(bedBuildings, bf);
-            for (int i = 0; i < bedBuildings.size(); ++i)
-            {
-                if (!bedBuildings[i]) continue;
-                UseableStuff* bed = bedBuildings[i]->getUseableStuff();
-                if (bed) beds.push_back(bed);
-            }
-
-            std::sort(beds.begin(), beds.end());
-            auto newEndIt = std::unique(beds.begin(), beds.end());
-            beds.erase(newEndIt, beds.end());
-
             optimalBed = FindOptimalBed(character, ai, usePaidBeds, beds);
         }
         if (optimalBed) return optimalBed->getHandle();
@@ -851,7 +823,7 @@ namespace SquadAutonomy
     StorageBuilding* FindResourceStorageBuildingFor(AI* ai, GameData* needed, StorageBuilding* skip)
     {
         lektor<Building*> buildings;
-        ai->getAllLocalMachines(buildings, 67118134); //probably buildingfunction bitmask copied from AI::findResourceStorageBulidingFor
+        ai->getAllLocalMachines(buildings, 67118134); //buildingfunction bitmask (I think?) copied from AI::findResourceStorageBulidingFor
         AITaskSytem* taskSystem = ai->getTaskSystem();
         float minDist = std::numeric_limits<float>::max();
         StorageBuilding* best = nullptr;
@@ -1787,7 +1759,6 @@ namespace SquadAutonomy
                             currentTask->setLocation(doorPos);
                             _NV_setDestination_orig(thisptr, doorPos, priority, notVertical);
                             return;
-
                         }
                     }
                 }
@@ -1842,29 +1813,24 @@ namespace SquadAutonomy
         if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            if (settings->getStayInsideGate() && thisptr)
+            Character* character = ai->getCharacter();
+            if (thisptr)
             {
                 TaskType key = thisptr->key;
-                if (key == MAN_THE_GATE || key == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT)
+                if (key == MAN_THE_GATE || (key == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT && settings->getStayInsideGate()))
                 {
                     //idk how this works
                     //from what I can tell, it keeps returning false because something about Task StateType requirement failing
                     //seemingly something to do with function AI::stateIsTrue and func 61e990 and DAT_141e45450
-                    Character* character = ai->getCharacter();
-                    CharMovement* movement = nullptr;
-                    if (character) movement = character->getMovement();
-                    if (movement && movement->isDestinationReached())
+                    //CharMovement* movement = nullptr;
+                    //if (character) movement = character->getMovement();
+                    if (character->pos.squaredDistance(location) <= 25.0f)
+                    //if (movement && movement->isDestinationReached())
                     {
                         return true;
                     }
                     else return false;
-                    /*if (character->pos.squaredDistance(location) <= 50.0f)
-                    {
-                        return true;
-                    }
-                    else return false;*/
                 }
-
             }
         }
         return _isRequirementsComplete_orig(thisptr, ai, target, location, subTarget, autoTargetFinder, failedOn);
@@ -1886,14 +1852,13 @@ namespace SquadAutonomy
                 OrdersReceiver* order = character->getOrdersReciever();
                 if (order)
                 {
-                    if (order->hasPlayerOrder(OPEN_DOOR))
+                    Tasker* currentGoal = order->tryToGetCurrentGoal();
+                    if (currentGoal && currentGoal->key() == MAN_THE_GATE && !order->hasPlayerOrder(OPEN_DOOR))
                     {
                         //DebugLog("Open Door");
-                        Task_OpenDoor_StartAction_orig(thisptr, body);
                         return;
                     }
                 }
-                return;
             }
         }
         Task_OpenDoor_StartAction_orig(thisptr, body);
@@ -1907,6 +1872,7 @@ namespace SquadAutonomy
         if (body) character = body->getCharacter();
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
+       
         if (squad) settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
@@ -1915,14 +1881,13 @@ namespace SquadAutonomy
                 OrdersReceiver* order = character->getOrdersReciever();
                 if (order)
                 {
-                    if (order->hasPlayerOrder(OPEN_DOOR))
+                    Tasker* currentGoal = order->tryToGetCurrentGoal();
+                    if (currentGoal && currentGoal->key() == MAN_THE_GATE && !order->hasPlayerOrder(OPEN_DOOR))
                     {
                         //DebugLog("Open Door");
-                        Task_OpenDoor_StartAction_orig(thisptr, body);
                         return;
                     }
                 }
-                return;
             }
         }
         Task_OpenDoor_Update_orig(thisptr, body);
@@ -1939,9 +1904,14 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             Tasker* currentTask = nullptr;
+            TaskRepertoire* repertoire = nullptr;
             AITaskSytem* order = thisptr->ai->getTaskSystem();
             CharBody* body = thisptr->getBody();
-            if (order) currentTask = order->tryToGetCurrentGoal();
+            if (order)
+            {
+                currentTask = order->tryToGetCurrentGoal();
+                if (order->aiImplementation) repertoire = order->aiImplementation->taskRepertoire;
+            }
             if (currentTask)
             {
                 TaskType key = currentTask->key();
@@ -1963,10 +1933,15 @@ namespace SquadAutonomy
                         //currentTask->setLocation(gate->pos);
                         if (door->isDamaged())
                         {
-                            order->addOrder(REPAIR, door, door->pos, true, false);
+                            Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, REPAIR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
+                            if (body) body->setCurrentAction(newTask);
+                            //order->addOrder(REPAIR, door, door->pos, true, false);
+                            //order->getFirstOrder()->startTime = settings->getStartWorkTime();
+                            //order->getFirstOrder()->endTime = settings->getEndWorkTime();
                         }
                         else if (key == MAN_THE_GATE && settings->getCloseGate())
                         {
+
                             bool isInsideGate = true;
                             if (settings->getStayInsideGate() && squad->activePlatoon)
                             {
@@ -1993,7 +1968,11 @@ namespace SquadAutonomy
                                     }
                                     else if (closeGateCDTimer <= 0.0)
                                     {
-                                        if (body) body->setCurrentAction(CLOSE_DOOR, door);
+                                        //Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, CLOSE_DOOR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
+                                        //if (body) body->setCurrentAction(newTask);
+                                        order->addOrder(CLOSE_DOOR , door, door->pos, true, false);
+                                        order->getFirstOrder()->startTime = settings->getStartWorkTime();
+                                        order->getFirstOrder()->endTime = settings->getEndWorkTime();
                                         closeGateCDTimer = 0.0;
                                         closeGateTimerOn = false;
                                     }
@@ -2006,13 +1985,15 @@ namespace SquadAutonomy
                             }
                             else if (!isInsideGate && (door->getDoorState() == DOORSTATE_CLOSED))
                             {
-                                if (body) body->setCurrentAction(OPEN_DOOR, door);
-                                
+                                //Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, OPEN_DOOR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
+                                //order->setCurrentGoal(newTask, order->currentGoalScore + 1.0, order->currentGoalPriority);
+                                //if (body) body->setCurrentAction(newTask);
+                                order->addOrder(OPEN_DOOR, door, door->pos, true, false);
+                                order->getFirstOrder()->startTime = settings->getStartWorkTime();
+                                order->getFirstOrder()->endTime = settings->getEndWorkTime();
                             }
                         }
-
                     }
-
                 }
             }
         }
@@ -2148,7 +2129,7 @@ namespace SquadAutonomy
                     return 0.0;
                 }
             }
-            else if (type == JOB_MEDIC)
+            else if (type == JOB_MEDIC || type == JOB_REPAIR_ROBOT)
             {
                 if (!settings->getDoMedic())
                 {
@@ -2481,6 +2462,7 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332ef0;
             *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336fc0;
             *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x3370b0;
+            *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32eb90;
             //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519c10; //TaskRepertoire
             //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50ED70;
             //*(uintptr_t*)&TaskRepertoire_hasTask = baseAddr + 0x32dbb0;
@@ -2502,6 +2484,7 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332a80;
             *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336b50;
             *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x336c40;
+            *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32E720;
             //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519F20;
             //*(uintptr_t*)&load = baseAddr + 0x47AD00;
             //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50F080;
