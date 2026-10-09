@@ -22,10 +22,16 @@ using namespace SquadAutonomy;
 
 bool SquadAutonomyPanel::initialized = false;
 std::string lineBoxAIPackage;
+std::string lineInvalidSquad;
+std::string lineSquadAutonomy;
+std::string lineSquadAutonomyTitle;
 
 void initLineKey()
 {
     lineBoxAIPackage = Localization::gettext("AI package");
+    lineInvalidSquad = Localization::gettext("No squad selected/invalid squad");
+    lineSquadAutonomy = Localization::gettext("Squad Autonomy");
+    lineSquadAutonomyTitle = Localization::gettext("Squad Autonomy:");
 }
 
 SquadAutonomyPanel* SquadAutonomyPanel::getSingletonPtr()
@@ -34,7 +40,12 @@ SquadAutonomyPanel* SquadAutonomyPanel::getSingletonPtr()
     return singleton.get();
 }
 
-SquadAutonomyPanel::SquadAutonomyPanel() : _selectedSquad(nullptr), _panel(nullptr), _selectedAIPackageIndex(0), _category(0), _priority(0.0f)
+SquadAutonomyPanel::SquadAutonomyPanel() : 
+    _selectedSquad(nullptr),
+    _panel(nullptr),
+    _selectedAIPackageIndex(0),
+    _category(0),
+    _priority(0.0f)
 {
     
     initLineKey();
@@ -59,7 +70,7 @@ void SquadAutonomyPanel::create()
     }
 
     this->_panel = gui->createDatapanel(0.25f, 0.375f, 0.25f, 0.5f, true, "Window", true);
-    this->_panel->setCaption(Localization::gettext("Squad Autonomy"));
+    this->_panel->setCaption(lineSquadAutonomy);
     this->_panel->setPanelName("SquadAutonomy");
 
     _options = new AutonomyOptions();
@@ -91,7 +102,7 @@ void SquadAutonomyPanel::refresh()
     this->_panel->setLineSpacing(32.0);
     this->_panel->clearPage(this->_category);
 
-    if (_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::gettext("Squad Autonomy:") + ' ' + _selectedSquad->activePlatoon->getName());
+    if (_selectedSquad->activePlatoon) this->_panel->setCaption(lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
 
     DataPanelLine_Text* textbox;
 
@@ -319,7 +330,7 @@ void SquadAutonomyPanel::_toggleAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
+        ou->showPlayerAMessage(lineInvalidSquad, true);
     }
 }
 
@@ -344,7 +355,7 @@ void SquadAutonomyPanel::_addAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
+        ou->showPlayerAMessage(lineInvalidSquad, true);
     }
 }
 
@@ -365,7 +376,7 @@ void SquadAutonomyPanel::_clearAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
+        ou->showPlayerAMessage(lineInvalidSquad, true);
     }
 }
 
@@ -413,7 +424,7 @@ void SquadAutonomyPanel::_clearBuildings(DataPanelLine* line)
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!_selectedSquad)
     {
-        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
+        ou->showPlayerAMessage(lineInvalidSquad, true);
         return;
     }
     auto settings = SquadAutonomySettings::getSingletonPtr()->getSquadSettings(_selectedSquad, true);
@@ -431,7 +442,7 @@ void SquadAutonomyPanel::_setBuilding(bool home)
     if (!SquadAutonomySettings::getSingletonPtr()->initialized) return;
     if (!_selectedSquad || !_selectedSquad->activePlatoon)
     {
-        ou->showPlayerAMessage(Localization::gettext("No squad selected/invalid squad"), true);
+        ou->showPlayerAMessage(lineInvalidSquad, true);
         return;
     }
     if (!gui->selectedObject)
@@ -540,7 +551,7 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     this->_panel->clearPage(this->_category);
     
 
-    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::gettext("Squad Autonomy:") + ' ' + _selectedSquad->activePlatoon->getName());
+    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption(lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
 
 
     auto dropBox = this->_panel->setLineDropBox(Localization::gettext("Category"), this->_category, &this->_subCategory, false, 1.0f);
