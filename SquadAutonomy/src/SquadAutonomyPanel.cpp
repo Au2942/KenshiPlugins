@@ -21,18 +21,6 @@
 using namespace SquadAutonomy;
 
 bool SquadAutonomyPanel::initialized = false;
-std::string lineBoxAIPackage;
-std::string lineInvalidSquad;
-std::string lineSquadAutonomy;
-std::string lineSquadAutonomyTitle;
-
-void initLineKey()
-{
-    lineBoxAIPackage = Localization::gettext("AI package");
-    lineInvalidSquad = Localization::gettext("No squad selected/invalid squad");
-    lineSquadAutonomy = Localization::gettext("Squad Autonomy");
-    lineSquadAutonomyTitle = Localization::gettext("Squad Autonomy:");
-}
 
 SquadAutonomyPanel* SquadAutonomyPanel::getSingletonPtr()
 {
@@ -48,11 +36,10 @@ SquadAutonomyPanel::SquadAutonomyPanel() :
     _priority(0.0f)
 {
     
-    initLineKey();
     create();
     initialized = true;
-
 }
+
 SquadAutonomyPanel::~SquadAutonomyPanel()
 {
     if (_options != nullptr)
@@ -70,7 +57,7 @@ void SquadAutonomyPanel::create()
     }
 
     this->_panel = gui->createDatapanel(0.25f, 0.375f, 0.25f, 0.5f, true, "Window", true);
-    this->_panel->setCaption(lineSquadAutonomy);
+    this->_panel->setCaption(Localization::lineSquadAutonomy);
     this->_panel->setPanelName("SquadAutonomy");
 
     _options = new AutonomyOptions();
@@ -102,7 +89,7 @@ void SquadAutonomyPanel::refresh()
     this->_panel->setLineSpacing(32.0);
     this->_panel->clearPage(this->_category);
 
-    if (_selectedSquad->activePlatoon) this->_panel->setCaption(lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
+    if (_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
 
     DataPanelLine_Text* textbox;
 
@@ -146,7 +133,7 @@ void SquadAutonomyPanel::refresh()
     editbox->callback = new MyGUI::delegates::CMethodDelegate1<SquadAutonomyPanel, DataPanelLine*>(MyGUI::delegates::GetDelegateUnlink(this),
         this, &SquadAutonomyPanel::_changeAIPackageSearchText);
 
-    auto dropbox = this->_panel->setLineDropBox(lineBoxAIPackage, this->_category, &this->_selectedAIPackageIndex, false, 1.0f);
+    auto dropbox = this->_panel->setLineDropBox(Localization::lineAIPackage, this->_category, &this->_selectedAIPackageIndex, false, 1.0f);
     dropbox->w1->setSize(dropbox->w1->getWidth(), editbox->editBox->getHeight());
     _updateAIPackageList("");
     editbox->getEditBox()->setSize(dropbox->listBox->getSize());
@@ -268,7 +255,7 @@ void SquadAutonomyPanel::_updateAIPackageList(const std::string& keyword)
 {
     if (!SquadAutonomySettings::getSingleton().initialized) return;
     SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
-    auto dropBox = reinterpret_cast<DataPanelLine_DropBox*>(this->_panel->getLine(lineBoxAIPackage, this->_category));
+    auto dropBox = reinterpret_cast<DataPanelLine_DropBox*>(this->_panel->getLine(Localization::lineAIPackage, this->_category));
     if (dropBox == nullptr)
         return;
 
@@ -330,7 +317,7 @@ void SquadAutonomyPanel::_toggleAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage(lineInvalidSquad, true);
+        ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
     }
 }
 
@@ -355,7 +342,7 @@ void SquadAutonomyPanel::_addAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage(lineInvalidSquad, true);
+        ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
     }
 }
 
@@ -376,7 +363,7 @@ void SquadAutonomyPanel::_clearAI(DataPanelLine* line)
     }
     else
     {
-        ou->showPlayerAMessage(lineInvalidSquad, true);
+        ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
     }
 }
 
@@ -424,7 +411,7 @@ void SquadAutonomyPanel::_clearBuildings(DataPanelLine* line)
     if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!_selectedSquad)
     {
-        ou->showPlayerAMessage(lineInvalidSquad, true);
+        ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
         return;
     }
     auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
@@ -442,7 +429,7 @@ void SquadAutonomyPanel::_setBuilding(bool home)
     if (!SquadAutonomySettings::getSingleton().initialized) return;
     if (!_selectedSquad || !_selectedSquad->activePlatoon)
     {
-        ou->showPlayerAMessage(lineInvalidSquad, true);
+        ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
         return;
     }
     if (!gui->selectedObject)
@@ -551,7 +538,7 @@ void SquadAutonomyPanel::AutonomyOptions::refresh()
     this->_panel->clearPage(this->_category);
     
 
-    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption(lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
+    if (this->_selectedSquad->activePlatoon) this->_panel->setCaption(Localization::lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
 
 
     auto dropBox = this->_panel->setLineDropBox(Localization::gettext("Category"), this->_category, &this->_subCategory, false, 1.0f);

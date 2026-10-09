@@ -18,7 +18,12 @@ namespace SquadAutonomy
 	public:
 		static void init();
 		static std::string gettext(const char* id);
+		static void initLine();
 
+		static std::string lineAIPackage;
+		static std::string lineInvalidSquad;
+		static std::string lineSquadAutonomy;
+		static std::string lineSquadAutonomyTitle;
 	private:
 	};
 }

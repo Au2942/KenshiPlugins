@@ -90,6 +90,8 @@ bool (*TaskRepertoire_hasTask)(TaskRepertoire* self, TaskType key) = nullptr;*/
 
 namespace SquadAutonomy
 {
+    // functions/variables that aren't available in KenshiLib
+    // we assign addresses for them in startPlugin
     ogre_unordered_map<TaskType, TaskData*>::type* taskTypetaskData = nullptr;
     const TaskData* (*getTaskDataConst)(TaskType key) = nullptr;
     std::map<hand, float>* rentedBeds = nullptr;
@@ -111,21 +113,22 @@ namespace SquadAutonomy
     std::wstring saveName = L"SquadAutonomy.save";
     std::wstring modPath = L"";
     std::wstring settingsSavePath = L"";
-    static int lc = 0;
-    const int maxLC = 2000;
-    //static int bc = 0;
-    //const int buffer = 100;
+
     bool shouldSave = false;
     bool shouldLoad = false;
     bool loadNextCall = false;
 
-    MyGUI::Window* autBtnWindow = nullptr;
-
+    // for use in closeGate and stayInsideGate logic
     Building* destGate = nullptr;
     float closeGateCD = 1.0;
     float closeGateCDTimer = 0;
     bool closeGateTimerOn = false;
 
+    // for changing a TaskDatas durations
+    // TaskDatas are initialised in GOAPTaskMgr::setupGOAP() iirc
+    // usually when the game create a new Tasker, it'll use TaskData from a static ogre_unordered_map<TaskType, TaskData*>::type taskData
+    // which means that changing the duration of a taskData = changing it for whatever uses the same taskData in the future
+    // so we have to revert it back once the game is done setting up the tasker with our custom duration data
     class OriginalTaskDataDuration
     {
     public:
