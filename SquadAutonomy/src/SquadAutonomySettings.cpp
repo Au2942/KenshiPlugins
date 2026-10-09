@@ -1,6 +1,7 @@
 #include "SquadAutonomy.h"
 #include "SquadAutonomySettings.h"
 #include "SquadAutonomyModSettings.h"
+#include "SquadAutonomySettingsUtils.h"
 
 #include <Debug.h>
 
@@ -30,7 +31,7 @@ SquadAutonomySettings::SquadAutonomySettings()
 }
 
 
-SquadAutonomySettings* SquadAutonomySettings::getSingletonPtr()
+SquadAutonomySettings& SquadAutonomySettings::getSingleton()
 {
     static std::unique_ptr<SquadAutonomySettings> singleton;
     if (!singleton)
@@ -38,7 +39,7 @@ SquadAutonomySettings* SquadAutonomySettings::getSingletonPtr()
         singleton.reset(new SquadAutonomySettings());
     }
 
-    return singleton.get();
+    return *singleton.get();
 }
 
 void SquadAutonomySettings::_initGameData()
@@ -90,7 +91,7 @@ void SquadAutonomySettings::_initGameData()
     }
 }
 
-bool SquadAutonomySettings::saveSettings(std::wstring savePath)
+bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
 {
     std::ofstream saveFile(savePath);
     if (!saveFile.is_open())
@@ -98,114 +99,21 @@ bool SquadAutonomySettings::saveSettings(std::wstring savePath)
         DebugLog("Save: Cannot open file");
         return false;
     }
-    else
+
+    DebugLog("Saving settings to " + converter.to_bytes(savePath));
+    //DebugLog("Saving " + Ogre::StringConverter::toString(squadSettings.size()) + " squads");
+
+    saveFile << std::boolalpha; // output bools as text
+
+    for (auto it = squadSettings.begin(); it != squadSettings.end(); ++it)
     {
-        DebugLog("Saving settings to " + converter.to_bytes(savePath));
-        auto settings = SquadAutonomySettings::getSingletonPtr();
-        if (!settings) return false;
-        //DebugLog("Saving " + Ogre::StringConverter::toString(squadSettings.size()) + " squads");
-
-        saveFile << std::boolalpha; // output bools as text
-
-        for (int i = 0; i < settings->squadSettings.size(); ++i)
-        {
-            SquadSettingsInfo* settingsInfo = settings->squadSettings[i].get();
-            Platoon* squad = settingsInfo->getSquad();
-            if (!squad) continue;
-            if (!squad->activePlatoon) continue;
-            //DebugLog("Saving squad " + Ogre::StringConverter::toString(i));
-            hand platoonHand = squad->getHandle();
-            if (platoonHand)
-            {
-                saveFile << "Squad: <" + squad->activePlatoon->getName() + "> ";
-                saveFile << platoonHand.index << ' ';
-                saveFile << platoonHand.serial << ' ';
-                saveFile << platoonHand.type << ' ';
-                saveFile << platoonHand.container << ' ';
-                saveFile << platoonHand.containerSerial << '\n';
-                saveFile << "\tEnable: " << settingsInfo->isEnabled() << '\n';
-            }
-            Building* home = settingsInfo->getBuilding(true);
-            saveFile << "\tHomeBuilding:";
-            if (home)
-            {
-                hand homeHand = home->getHandle();
-                saveFile << " <" << home->displayName << "> ";
-                saveFile << homeHand.index << ' ';
-                saveFile << homeHand.serial << ' ';
-                saveFile << homeHand.type << ' ';
-                saveFile << homeHand.container << ' ';
-                saveFile << homeHand.containerSerial;
-            }
-            saveFile << '\n';
-            Building* work = settingsInfo->getBuilding(false);
-            saveFile << "\tWorkBuilding:";
-            if (work)
-            {
-                hand workHand = work->getHandle();
-                saveFile << " <" << work->displayName << "> ";
-                saveFile << workHand.index << ' ';
-                saveFile << workHand.serial << ' ';
-                saveFile << workHand.type << ' ';
-                saveFile << workHand.container << ' ';
-                saveFile << workHand.containerSerial;
-            }
-            saveFile << '\n';
-            auto packages = settingsInfo->getSquadPackages();
-            saveFile << "\tPackages:\n";
-            if (packages.size() > 0)
-            {
-                for (auto it = packages.begin(); it != packages.end(); ++it)
-                {
-                    auto data = it->second;
-
-                    for (int j = 0; j < data.size(); ++j)
-                    {
-                        saveFile << "\t\t" << it->first << ':';
-                        saveFile << " <" + data[j]->name + '>';
-                        saveFile << '\n';
-                    }
-                }
-            }
-            saveFile << "\tEndPackages:" << '\n';
-            saveFile << "\tOptions:" << '\n';
-            saveFile << "\t\tStartWorkTime: " << settingsInfo->getStartWorkTime() << '\n';
-            saveFile << "\t\tEndWorkTime: " << settingsInfo->getEndWorkTime() << '\n';
-            saveFile << "\t\tRestUntilHealed: " << settingsInfo->getRestUntilHealed() << '\n';
-            saveFile << "\t\t\tRestThreshold: " << settingsInfo->getRestThreshold() << '\n';
-            saveFile << "\t\t\tHealedThreshold: " << settingsInfo->getHealedThreshold() << '\n';
-            saveFile << "\t\tUsePaidBeds: " << settingsInfo->getUsePaidBeds() << '\n';
-            saveFile << "\t\tDoSleep: " << settingsInfo->getDoSleep() << '\n';
-
-            saveFile << "\t\tLabourScience: " << settingsInfo->getLabourScience() << '\n';
-            saveFile << "\t\tLabourLabouring: " << settingsInfo->getLabourLabouring() << '\n';
-            saveFile << "\t\tLabourFarming: " << settingsInfo->getLabourFarming() << '\n';
-            saveFile << "\t\tLabourEngineer: " << settingsInfo->getLabourEngineer() << '\n';
-            saveFile << "\t\tLabourCooking: " << settingsInfo->getLabourCooking() << '\n';
-            saveFile << "\t\tLabourRobotics: " << settingsInfo->getLabourRobotics() << '\n';
-            saveFile << "\t\tLabourMedic: " << settingsInfo->getLabourMedic() << '\n';
-            saveFile << "\t\tLabourWeaponSmith: " << settingsInfo->getLabourWeaponSmith() << '\n';
-            saveFile << "\t\tLabourArmourSmith: " << settingsInfo->getLabourArmourSmith() << '\n';
-            saveFile << "\t\tLabourCrossbowSmith: " << settingsInfo->getLabourCrossbowSmith() << '\n';
-            saveFile << "\t\tLabourAutomaticMachine: " << settingsInfo->getLabourAutomaticMachine() << '\n';
-            saveFile << "\t\tLabourOther: " << settingsInfo->getLabourOther() << '\n';
-
-            saveFile << "\t\tAttackEnemies: " << settingsInfo->getAttackEnemies() << '\n';
-            saveFile << "\t\tProtectAllies: " << settingsInfo->getProtectAllies() << '\n';
-            saveFile << "\t\tDoMedic: " << settingsInfo->getDoMedic() << '\n';
-            saveFile << "\t\tDoRescue: " << settingsInfo->getDoRescue() << '\n';
-
-            saveFile << "\t\tManTurrets: " << settingsInfo->getManTurrets() << '\n';
-            saveFile << "\t\tStayInsideGate: " << settingsInfo->getStayInsideGate() << '\n';
-            saveFile << "\t\tCloseGate: " << settingsInfo->getCloseGate() << '\n';
-            saveFile << "\tEndOptions:" << '\n';
-            saveFile << "EndSquad:" << '\n';
-        }
-        return true;
+        (*it)->writeToStream(saveFile);
     }
+
+    return true;
 }
 
-bool SquadAutonomySettings::loadSettings(std::wstring savePath)
+bool SquadAutonomySettings::loadSettings(const std::wstring& savePath)
 {
     //initialized = false;
     std::ifstream saveFile(savePath);
@@ -217,457 +125,32 @@ bool SquadAutonomySettings::loadSettings(std::wstring savePath)
 
     DebugLog("Loading settings file at " + converter.to_bytes(savePath));
     squadSettings.clear();
-    std::string line;
-    std::string type;
 
-    while (std::getline(saveFile, line))
+    while (true)
     {
-        line.erase(0, line.find_first_not_of(" \t"));
-        size_t colon = line.find(':');
-
-        if (colon == std::string::npos)
+        std::unique_ptr<SquadSettingsInfo> currentSquadSettings = SquadSettingsInfo::readFromStream(saveFile);
+        if (currentSquadSettings)
         {
-            continue;
+            squadSettings.push_back(std::move(currentSquadSettings));
         }
-        type = line.substr(0, colon);
-        //DebugLog(type);
-        //get squad
-        if (type == "Squad")
+        else
         {
-            /*========================*/
-            std::string dataLine;
-            bool enable = false;
-            Platoon* squad = nullptr;
-            Building* home = nullptr;
-            Building* work = nullptr;
-            std::map<int, std::vector<GameData*>> packages;
-            float startWorkTime = 0.0;
-            float endWorkTime = 24.0;
-            bool doSleep = false;
-            bool restUntilHealed = true;
-            float restThreshold = 50.0;
-            float healedThreshold = 90.0;
-            bool usePaidBeds = false;
-            // Labour
-            float science = 1.0;
-            float labouring = 1.0;
-            float farming = 1.0;
-            float engineer = 1.0;
-            float cooking = 1.0;
-            float robotics = 1.0;
-            float medic = 1.0;
-            float weaponSmith = 1.0;
-            float armourSmith = 1.0;
-            float crossbowSmith = 1.0;
-            float automaticMachine = 1.0;
-            float other = 1.0;
-            // Combat
-            bool attackEnemies = true;
-            bool protectAllies = true;
-            bool doMedic = true;
-            bool doRescue = true;
-            // Guard
-            bool manTurrets = false;
-            bool stayInsideGate = false;
-            bool closeGate = false;
-            /*========================*/
-
-            dataLine = line.substr(colon + 1);
-            hand* hand = createHandfromLine(dataLine);
-
-            if (hand) squad = hand->getPlatoon();
-            else continue;
-
-            //get home buildings and packages
-            while (std::getline(saveFile, line))
-            {
-                line.erase(0, line.find_first_not_of(" \t"));
-                colon = line.find(':');
-                if (colon == std::string::npos)
-                {
-                    continue;
-                }
-
-                type = line.substr(0, colon);
-                //DebugLog(type);
-                if (type == "EndSquad") break;
-                if (type == "Enable")
-                {
-                    dataLine = line.substr(colon + 1);
-                    dataLine.erase(0, dataLine.find_first_not_of(" \t"));
-                    //DebugLog(dataLine);
-                    if (dataLine == "true")
-                    {
-                        enable = true;
-                    }
-                    continue;
-                }
-                if (type == "HomeBuilding")
-                {
-                    dataLine = line.substr(colon + 1);
-                    hand = createHandfromLine(dataLine);
-                    if (hand)
-                    {
-                        //DebugLog("Home hand created!");
-                        home = hand->getBuilding();
-                    }
-                    continue;
-                }
-                if (type == "WorkBuilding")
-                {
-                    dataLine = line.substr(colon + 1);
-                    hand = createHandfromLine(dataLine);
-                    if (hand)
-                    {
-                        //DebugLog("Work hand created!");
-                        work = hand->getBuilding();
-                    }
-                    continue;
-                }
-                if (type == "Packages")
-                {
-                    while (std::getline(saveFile, line))
-                    {
-                        line.erase(0, line.find_first_not_of(" \t"));
-                        int priority;
-                        colon = line.find(':');
-                        if (colon == std::string::npos)
-                        {
-                            continue;
-                        }
-                        type = line.substr(0, colon);
-                        //DebugLog(type);
-                        if (type == "EndPackages") break;
-                        std::stringstream ss(type);
-                        if (!(ss >> priority))
-                        {
-                            continue;
-                        }
-                        size_t start = line.find('<', colon);
-                        size_t end = line.rfind('>');
-
-                        if (start != std::string::npos && end != std::string::npos && end > start)
-                        {
-                            std::string packageName = line.substr(start + 1, end - start - 1);
-                            for (int i = 0; i < _AIPackageList.size(); ++i)
-                            {
-                                if (packageName == _AIPackageList[i]->name)
-                                {
-                                    const bool alreadyHasPackage = std::find(packages[priority].begin(), packages[priority].end(), _AIPackageList[i]) != packages[priority].end();
-                                    if (!alreadyHasPackage)
-                                    {
-                                        packages[priority].push_back(_AIPackageList[i]);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                if (type == "Options")
-                {
-                    while (std::getline(saveFile, line))
-                    {
-                        line.erase(0, line.find_first_not_of(" \t"));
-                        colon = line.find(':');
-                        if (colon == std::string::npos)
-                        {
-                            continue;
-                        }
-                        type = line.substr(0, colon);
-                        dataLine = line.substr(colon + 1);
-                        dataLine.erase(0, dataLine.find_first_not_of(" \t"));
-                        //DebugLog(type);
-                        //DebugLog(dataLine);
-                        if (type == "StartWorkTime")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> startWorkTime;
-                            continue;
-                        }
-                        if (type == "EndWorkTime")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> endWorkTime;
-                            continue;
-                        }
-                        if (type == "RestUntilHealed")
-                        {
-                            if (dataLine == "false")
-                            {
-                                restUntilHealed = false;
-                            }
-                            continue;
-                        }
-                        if (type == "RestThreshold")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> restThreshold;
-                            continue;
-                        }
-                        if (type == "HealedThreshold")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> healedThreshold;
-                            continue;
-                        }
-                        if (type == "UsePaidBeds")
-                        {
-                            if (dataLine == "true")
-                            {
-                                usePaidBeds = true;
-                            }
-                            continue;
-                        }
-                        if (type == "DoSleep")
-                        {
-                            if (dataLine == "true")
-                            {
-                                doSleep = true;
-                            }
-                            continue;
-                        }
-                        if (type == "LabourScience")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> science;
-                            continue;
-                        }
-                        if (type == "LabourLabouring")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> labouring;
-                            continue;
-                        }
-                        if (type == "LabourFarming")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> farming;
-                            continue;
-                        }
-                        if (type == "LabourEngineer")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> engineer;
-                            continue;
-                        }
-                        if (type == "LabourCooking")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> cooking;
-                            continue;
-                        }
-                        if (type == "LabourRobotics")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> robotics;
-                            continue;
-                        }
-                        if (type == "LabourMedic")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> medic;
-                            continue;
-                        }
-                        if (type == "LabourWeaponSmith")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> weaponSmith;
-                            continue;
-                        }
-                        if (type == "LabourArmourSmith")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> armourSmith;
-                            continue;
-                        }
-                        if (type == "LabourCrossbowSmith")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> crossbowSmith;
-                            continue;
-                        }
-                        if (type == "LabourAutomaticMachine")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> automaticMachine;
-                            continue;
-                        }
-                        if (type == "LabourOther")
-                        {
-                            if (dataLine == "") continue;
-                            std::stringstream ss(dataLine);
-                            ss >> other;
-                            continue;
-                        }
-                        if (type == "AttackEnemies")
-                        {
-                            if (dataLine == "false")
-                            {
-                                attackEnemies = false;
-                            }
-                            continue;
-                        }
-                        if (type == "ProtectAllies")
-                        {
-                            if (dataLine == "false")
-                            {
-                                protectAllies = false;
-                            }
-                            continue;
-                        }
-                        if (type == "DoMedic")
-                        {
-                            if (dataLine == "false")
-                            {
-                                doMedic = false;
-                            }
-                            continue;
-                        }
-                        if (type == "DoRescue")
-                        {
-                            if (dataLine == "false")
-                            {
-                                doRescue = false;
-                            }
-                            continue;
-                        }
-                        if (type == "ManTurrets")
-                        {
-                            if (dataLine == "true")
-                            {
-                                manTurrets = true;
-                            }
-                            continue;
-                        }
-                        if (type == "StayInsideGate")
-                        {
-                            if (dataLine == "true")
-                            {
-                                stayInsideGate = true;
-                            }
-                            continue;
-                        }
-                        if (type == "CloseGate")
-                        {
-                            if (dataLine == "true")
-                            {
-                                closeGate = true;
-                            }
-                            continue;
-                        }
-                        if (type == "EndOptions")
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            //save current squad data
-            if (squad)
-            {
-                DebugLog("Load Squad " + squad->activePlatoon->getName());
-                std::unique_ptr<SquadSettingsInfo> settingsInfo(new SquadSettingsInfo(squad));
-                settingsInfo->enableAutonomy(false);
-                settingsInfo->unassignSquadHome();
-                if (home)
-                {
-                    settingsInfo->setBuilding(home, true);
-                    DebugLog("Load home: " + home->displayName);
-                }
-                if (work)
-                {
-                    settingsInfo->setBuilding(work, false);
-                    DebugLog("Load work: " + work->displayName);
-                }
-                if (packages.size() > 0)
-                {
-                    settingsInfo->setPackages(packages);
-                }
-                settingsInfo->setStartWorkTime(startWorkTime);
-                settingsInfo->setEndWorkTime(endWorkTime);
-                settingsInfo->setDoSleep(doSleep);
-                settingsInfo->setRestUntilHealed(restUntilHealed);
-                settingsInfo->setRestThreshold(restThreshold);
-                settingsInfo->setHealedThreshold(healedThreshold);
-                settingsInfo->setUsePaidBeds(usePaidBeds);
-
-                settingsInfo->setLabourScience(science);
-                settingsInfo->setLabourLabouring(labouring);
-                settingsInfo->setLabourFarming(farming);
-                settingsInfo->setLabourEngineer(engineer);
-                settingsInfo->setLabourCooking(cooking);
-                settingsInfo->setLabourRobotics(robotics);
-                settingsInfo->setLabourMedic(medic);
-                settingsInfo->setLabourWeaponSmith(weaponSmith);
-                settingsInfo->setLabourArmourSmith(armourSmith);
-                settingsInfo->setLabourCrossbowSmith(crossbowSmith);
-                settingsInfo->setLabourAutomaticMachine(automaticMachine);
-                settingsInfo->setLabourOther(other);
-
-                settingsInfo->setAttackEnemies(attackEnemies);
-                settingsInfo->setProtectAllies(protectAllies);
-                settingsInfo->setDoMedic(doMedic);
-                settingsInfo->setDoRescue(doRescue);
-
-                settingsInfo->setManTurrets(manTurrets);
-                settingsInfo->setStayInsideGate(stayInsideGate);
-                settingsInfo->setCloseGate(closeGate);
-                settingsInfo->enableAutonomy(enable, false);
-                squadSettings.push_back(std::move(settingsInfo));
-            }
+            break;
         }
     }
+
     saveFile.close();
     //initialized = true;
     return true;
 }
 
-hand* SquadAutonomySettings::createHandfromLine(std::string line)
-{
-
-    size_t start = line.rfind('>');
-
-    if (start != std::string::npos)
-    {
-        std::string numbers = line.substr(start + 1);
-        //DebugLog(numbers);
-        std::istringstream iss(numbers);
-
-        int type;
-        unsigned int container;
-        unsigned int containerSerial;
-        unsigned int index;
-        unsigned int serial;
-
-        iss >> index
-            >> serial
-            >> type
-            >> container
-            >> containerSerial;
-        return new hand(index, serial, static_cast<itemType>(type), container, containerSerial);
-    }
-    return nullptr;
-
-}
-
 SquadSettingsInfo* SquadAutonomySettings::getSquadSettings(Platoon* squad, bool createNew)
 {
+    if (!squad)
+    {
+        return nullptr;
+    }
+
     for (int i = 0; i < squadSettings.size(); ++i)
     {
         if (squad == squadSettings[i]->getSquad())
@@ -677,7 +160,7 @@ SquadSettingsInfo* SquadAutonomySettings::getSquadSettings(Platoon* squad, bool 
     }
     if (createNew)
     {
-        std::unique_ptr<SquadSettingsInfo> newSettings(new SquadSettingsInfo(squad));
+        std::unique_ptr<SquadSettingsInfo> newSettings(new SquadSettingsInfo(*squad));
         squadSettings.push_back(std::move(newSettings));
         return squadSettings.back().get();
     }
@@ -708,6 +191,175 @@ void SquadAutonomySettings::removeSquadSettings(Platoon* squad)
     }
 }
 
+
+SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
+    _enabled(false),
+    _squad(&squad),
+    _pi(nullptr),
+    _homeBuilding(nullptr),
+    _workBuilding(nullptr),
+    _startWorkTime(0.0),
+    _endWorkTime(24.0),
+    _doSleep(false),
+    _usePaidBeds(false),
+    _restUntilHealed(true),
+    _restThreshold(50.0),
+    _healedThreshold(90.0),
+    _labourScience(1.0),
+    _labourLabouring(1.0),
+    _labourFarming(1.0),
+    _labourMedic(1.0),
+    _labourCooking(1.0),
+    _labourEngineer(1.0),
+    _labourRobotics(1.0),
+    _labourWeaponSmith(1.0),
+    _labourArmourSmith(1.0),
+    _labourCrossbowSmith(1.0),
+    _labourAutomaticMachine(1.0),
+    _attackEnemies(true),
+    _protectAllies(true),
+    _doMedic(true),
+    _doRescue(true),
+    _manTurrets(false),
+    _stayInsideGate(false),
+    _closeGate(false)
+{
+    Faction* faction = squad.getFaction();
+    if (faction)
+    {
+        _pi = faction->isPlayer;
+    }
+}
+
+std::unique_ptr<SquadSettingsInfo> SquadSettingsInfo::readFromStream(std::istream& stream)
+{
+    std::string squadTag;
+
+    auto streamOriginalPosition = stream.tellg();
+    stream >> squadTag;
+
+    if (squadTag != "Squad:")
+    {
+        stream.seekg(streamOriginalPosition);
+        return nullptr;
+    }
+
+    std::string dataLine;
+    std::getline(stream, dataLine);
+
+    hand squadHand = parseHandSetting(dataLine);
+    if (!squadHand.isValid())
+    {
+        return nullptr;
+    }
+
+    Platoon* squad = squadHand.getPlatoon();
+    if (!squad)
+    {
+        return nullptr;
+    }
+
+    std::unique_ptr<SquadSettingsInfo> settingsInfo(new SquadSettingsInfo(*squad));
+    settingsInfo->enableAutonomy(false);
+    settingsInfo->unassignSquadHome();
+
+    bool enable = false;
+
+    DebugLog("Load Squad " + squad->activePlatoon->getName());
+
+    std::string line;
+
+    while (std::getline(stream, line))
+    {
+        line.erase(0, line.find_first_not_of(" \t"));
+        auto colon = line.find(':');
+        if (colon == std::string::npos)
+        {
+            continue;
+        }
+
+        std::string type = line.substr(0, colon);
+        //DebugLog(type);
+        if (type == "EndSquad")
+        {
+            break;
+        }
+
+        if (type == "Enable")
+        {
+            dataLine = line.substr(colon + 1);
+            SettingsUtils::parseBoolSetting(dataLine, enable);
+            continue;
+        }
+        if (type == "HomeBuilding")
+        {
+            dataLine = line.substr(colon + 1);
+            Building* home = parseBuildingSetting(dataLine);
+            if (home)
+            {
+                settingsInfo->setBuilding(home, true);
+                DebugLog("Load home: " + home->displayName);
+            }
+            continue;
+        }
+        if (type == "WorkBuilding")
+        {
+            dataLine = line.substr(colon + 1);
+            Building* work = parseBuildingSetting(dataLine);
+            if (work)
+            {
+                settingsInfo->setBuilding(work, false);
+                DebugLog("Load work: " + work->displayName);
+            }
+            continue;
+        }
+        if (type == "Packages")
+        {
+            settingsInfo->readSquadPackagesFromStream(stream);
+            continue;
+        }
+        if (type == "Options")
+        {
+            settingsInfo->readSquadOptionsFromStream(stream);
+            continue;
+        }
+    }
+
+    settingsInfo->enableAutonomy(enable, false);
+
+    return settingsInfo;
+}
+
+bool SquadSettingsInfo::writeToStream(std::ostream &stream) const
+{
+    if (!_squad || !_squad->activePlatoon)
+    {
+        return false;
+    }
+
+    //DebugLog("Saving squad " + Ogre::StringConverter::toString(i));
+    hand platoonHand = _squad->getHandle();
+    if (!platoonHand)
+    {
+        return false;
+    }
+
+    stream << "Squad:";
+    writeHandSettingToStream(stream, platoonHand, _squad->activePlatoon->getName());
+    stream << '\n';
+
+    stream << "\tEnable: " << _enabled << '\n';
+
+    writeBuildingSettingToStream(stream, _homeBuilding, "HomeBuilding");
+    writeBuildingSettingToStream(stream, _workBuilding, "WorkBuilding");
+
+    writeSquadPackagesToStream(stream);
+    writeSquadOptionsToStream(stream);
+
+    stream << "EndSquad:" << '\n';
+
+    return true;
+}
 
 Platoon* SquadSettingsInfo::getSquad()
 {
@@ -1207,4 +859,340 @@ void SquadAutonomy::SquadSettingsInfo::setCloseGate(bool val)
 {
     _closeGate = val;
     ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
+}
+
+hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)
+{
+    size_t start = dataLine.rfind('>');
+    if (start == std::string::npos)
+    {
+        return hand();
+    }
+
+    std::string numbers = dataLine.substr(start + 1);
+    //DebugLog(numbers);
+    std::istringstream iss(numbers);
+
+    int type;
+    unsigned int container;
+    unsigned int containerSerial;
+    unsigned int index;
+    unsigned int serial;
+
+    iss >> index
+        >> serial
+        >> type
+        >> container
+        >> containerSerial;
+
+    return hand(index, serial, static_cast<itemType>(type), container, containerSerial);
+}
+
+Building* SquadSettingsInfo::parseBuildingSetting(const std::string& dataLine)
+{
+    hand buildingHand = parseHandSetting(dataLine);
+    if (!buildingHand.isValid())
+    {
+        return nullptr;
+    }
+
+    return buildingHand.getBuilding();
+}
+
+void SquadSettingsInfo::readSquadPackagesFromStream(std::istream& stream)
+{
+    std::string line;
+
+    while (std::getline(stream, line))
+    {
+        line.erase(0, line.find_first_not_of(" \t"));
+        int priority;
+        size_t colon = line.find(':');
+        if (colon == std::string::npos)
+        {
+            continue;
+        }
+
+        std::string type = line.substr(0, colon);
+        //DebugLog(type);
+        if (type == "EndPackages")
+        {
+            break;
+        }
+
+        std::stringstream ss(type);
+        if (!(ss >> priority))
+        {
+            continue;
+        }
+
+        size_t start = line.find('<', colon);
+        size_t end = line.rfind('>');
+        if (!(start != std::string::npos && end != std::string::npos && end > start))
+        {
+            continue;
+        }
+
+        std::string packageName = line.substr(start + 1, end - start - 1);
+
+        std::vector<GameData*>* _AIPackageList = SquadAutonomySettings::getSingleton().getAIPackageList();
+
+        auto packageInListIt = std::find_if(
+            _AIPackageList->begin(),
+            _AIPackageList->end(),
+            [&packageName](GameData* packageData){ return packageName == packageData->name; }
+        );
+
+        if (packageInListIt != _AIPackageList->end())
+        {
+            const bool alreadyHasPackage = std::find(_squadPackages[priority].begin(), _squadPackages[priority].end(), *packageInListIt) != _squadPackages[priority].end();
+            if (!alreadyHasPackage)
+            {
+                _squadPackages[priority].push_back(*packageInListIt);
+            }
+        }
+    }
+}
+
+void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
+{
+    std::string line;
+
+    while (std::getline(stream, line))
+    {
+        line.erase(0, line.find_first_not_of(" \t"));
+        size_t colon = line.find(':');
+        if (colon == std::string::npos)
+        {
+            continue;
+        }
+        std::string type = line.substr(0, colon);
+        std::string dataLine = line.substr(colon + 1);
+        dataLine.erase(0, dataLine.find_first_not_of(" \t"));
+        //DebugLog(type);
+        //DebugLog(dataLine);
+        if (type == "StartWorkTime")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _startWorkTime);
+            continue;
+        }
+        if (type == "EndWorkTime")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _endWorkTime);
+            continue;
+        }
+        if (type == "RestUntilHealed")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _restUntilHealed);
+            continue;
+        }
+        if (type == "RestThreshold")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _restThreshold);
+            continue;
+        }
+        if (type == "HealedThreshold")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _healedThreshold);
+            continue;
+        }
+        if (type == "UsePaidBeds")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _usePaidBeds);
+            continue;
+        }
+        if (type == "DoSleep")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _doSleep);
+            continue;
+        }
+        if (type == "LabourScience")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourScience);
+            continue;
+        }
+        if (type == "LabourLabouring")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourLabouring);
+            continue;
+        }
+        if (type == "LabourFarming")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourFarming);
+            continue;
+        }
+        if (type == "LabourEngineer")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourEngineer);
+            continue;
+        }
+        if (type == "LabourCooking")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourCooking);
+            continue;
+        }
+        if (type == "LabourRobotics")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourRobotics);
+            continue;
+        }
+        if (type == "LabourMedic")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourMedic);
+            continue;
+        }
+        if (type == "LabourWeaponSmith")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourWeaponSmith);
+            continue;
+        }
+        if (type == "LabourArmourSmith")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourArmourSmith);
+            continue;
+        }
+        if (type == "LabourCrossbowSmith")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourCrossbowSmith);
+            continue;
+        }
+        if (type == "LabourAutomaticMachine")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourAutomaticMachine);
+            continue;
+        }
+        if (type == "LabourOther")
+        {
+            SettingsUtils::parseFloatSetting(dataLine, _labourOther);
+            continue;
+        }
+        if (type == "AttackEnemies")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _attackEnemies);
+            continue;
+        }
+        if (type == "ProtectAllies")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _protectAllies);
+            continue;
+        }
+        if (type == "DoMedic")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _doMedic);
+            continue;
+        }
+        if (type == "DoRescue")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _doRescue);
+            continue;
+        }
+        if (type == "ManTurrets")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _manTurrets);
+            continue;
+        }
+        if (type == "StayInsideGate")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _stayInsideGate);
+            continue;
+        }
+        if (type == "CloseGate")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _closeGate);
+            continue;
+        }
+        if (type == "EndOptions")
+        {
+            break;
+        }
+    }
+}
+
+bool SquadSettingsInfo::writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name)
+{
+    if (!handToWrite)
+    {
+        return false;
+    }
+
+    stream
+        << " <" << name << "> "
+        << handToWrite.index << ' '
+        << handToWrite.serial << ' '
+        << handToWrite.type << ' '
+        << handToWrite.container << ' '
+        << handToWrite.containerSerial;
+
+    return true;
+}
+
+bool SquadSettingsInfo::writeBuildingSettingToStream(std::ostream &stream, const Building *building, const std::string& tag)
+{
+    bool writeOk = true;
+
+    stream << '\t' << tag << ':';
+    if (building)
+    {
+        writeOk = writeHandSettingToStream(stream, building->getHandle(), building->displayName);
+    }
+    stream << '\n';
+
+    return writeOk;
+}
+
+void SquadSettingsInfo::writeSquadPackagesToStream(std::ostream &stream) const
+{
+    stream << "\tPackages:\n";
+    if (!_squadPackages.empty())
+    {
+        for (auto it = _squadPackages.begin(); it != _squadPackages.end(); ++it)
+        {
+            auto data = it->second;
+
+            for (int j = 0; j < data.size(); ++j)
+            {
+                stream
+                    << "\t\t" << it->first << ':'
+                    << " <" + data[j]->name + '>'
+                    << '\n';
+            }
+        }
+    }
+    stream << "\tEndPackages:" << '\n';
+}
+
+void SquadSettingsInfo::writeSquadOptionsToStream(std::ostream &stream) const
+{
+    stream
+        << "\tOptions:" << '\n'
+        << "\t\tStartWorkTime: " << _startWorkTime << '\n'
+        << "\t\tEndWorkTime: " << _endWorkTime << '\n'
+        << "\t\tRestUntilHealed: " << _restUntilHealed << '\n'
+        << "\t\t\tRestThreshold: " << _restThreshold << '\n'
+        << "\t\t\tHealedThreshold: " << _healedThreshold << '\n'
+        << "\t\tUsePaidBeds: " << _usePaidBeds << '\n'
+        << "\t\tDoSleep: " << _doSleep << '\n'
+
+        << "\t\tLabourScience: " << _labourScience << '\n'
+        << "\t\tLabourLabouring: " << _labourLabouring << '\n'
+        << "\t\tLabourFarming: " << _labourFarming << '\n'
+        << "\t\tLabourEngineer: " << _labourEngineer << '\n'
+        << "\t\tLabourCooking: " << _labourCooking << '\n'
+        << "\t\tLabourRobotics: " << _labourRobotics << '\n'
+        << "\t\tLabourMedic: " << _labourMedic << '\n'
+        << "\t\tLabourWeaponSmith: " << _labourWeaponSmith << '\n'
+        << "\t\tLabourArmourSmith: " << _labourArmourSmith << '\n'
+        << "\t\tLabourCrossbowSmith: " << _labourCrossbowSmith << '\n'
+        << "\t\tLabourAutomaticMachine: " << _labourAutomaticMachine << '\n'
+        << "\t\tLabourOther: " << _labourOther << '\n'
+
+        << "\t\tAttackEnemies: " << _attackEnemies << '\n'
+        << "\t\tProtectAllies: " << _protectAllies << '\n'
+        << "\t\tDoMedic: " << _doMedic << '\n'
+        << "\t\tDoRescue: " << _doRescue << '\n'
+
+        << "\t\tManTurrets: " << _manTurrets << '\n'
+        << "\t\tStayInsideGate: " << _stayInsideGate << '\n'
+        << "\t\tCloseGate: " << _closeGate << '\n'
+        << "\tEndOptions:" << '\n';
 }
