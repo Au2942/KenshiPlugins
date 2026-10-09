@@ -168,51 +168,49 @@ namespace SquadAutonomy
     
     bool SetAI(Platoon* platoon, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction)
     {
-        //DebugLog("Set AI");
         if (!platoon || !platoon->activePlatoon)
         {
-            ou->showPlayerAMessage("No squad selected/invalid squad", true);
+            ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
             return false;
         }
+        Logger::log("Set AI for " + platoon->activePlatoon->getName(), Logger::Info, false);
         for (auto iter = platoon->activePlatoon->things.begin(); iter != platoon->activePlatoon->things.end(); ++iter)
         {
             auto obj = reinterpret_cast<Character*>(*iter);
-            //obj->getMovement()->halt();
+
             obj->clearAllAIGoals();
-            //obj->ai->resultsCache.resetAllCaches();
+
             if (endAction && obj->getBody())
             {
                 CharBody* body = obj->getBody();
                 StateBroadcastData* stateBroadcast = obj->getStateBroadcast();
+                //ignore sleeping/sitting characters
                 if (stateBroadcast && (stateBroadcast->isSleeping || stateBroadcast->isSitting))
                 { }
                 else body->endAction();
             }
         }
+
         Blackboard* bb = platoon->getBlackboard();
         bb->clearAllPackages();
-        /*if (aiPackages.size() < 1)
-        {
-            //ou->showPlayerAMessage("No AI packages to enable", true);
-            return true;
-        }*/
+
         for (auto pack = aiPackages.begin(); pack != aiPackages.end(); ++pack)
         {
             auto data = pack->second;
             for (int i = 0; i < data.size(); ++i)
             {
                 bb->_addPackage(data[i], pack->first);
-                //DebugLog("Adding " + data[i]->name + " to " + platoon->activePlatoon->getName());
+                Logger::log("Adding " + data[i]->name + " to " + platoon->activePlatoon->getName(), Logger::Info, false);
             }
         }
         return true;
     }
     bool ResetAI(Platoon* platoon, bool endAction)
     {
-        //DebugLog("Reset AI");
+        Logger::log("Reset AI for " + platoon->activePlatoon->getName(), Logger::Info, false);
         if (!platoon || !platoon->activePlatoon)
         {
-            ou->showPlayerAMessage("No squad selected/invalid squad", true);
+            ou->showPlayerAMessage(Localization::lineInvalidSquad, true);
             return false;
         }
 
@@ -238,6 +236,8 @@ namespace SquadAutonomy
         return true;
     }
 
+    // hacky function for resetting static guard when toggle stayingate on/off
+    // TODO: find a better way to "refresh" the AI
     void ClearTask(Platoon* platoon, TaskType key)
     {
         if (!platoon || !platoon->activePlatoon)
@@ -284,20 +284,10 @@ namespace SquadAutonomy
     void OpenSquadAutonomyPanelMainBar()
     {
         Platoon* platoon = ou->player->getCurrentPlatoon();
-        if (platoon)
-        {
-            SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
-            if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
-            {
-                SquadAutonomyPanel::getSingletonPtr()->hide();
-            }
-            else
-            {
-                SquadAutonomyPanel::getSingletonPtr()->show();
-            }
-        }
+        OpenSquadAutonomyPanel(platoon);
     }
 
+    // copied from KEP, I think it's for updating the UI font size when we change the font size in the settings. Not sure if needed.
     void (*ForgottenGUI_changeFontSize_orig)();
     void ForgottenGUI_changeFontSize_hook()
     {
@@ -321,6 +311,7 @@ namespace SquadAutonomy
         }
     }
 
+    // TODO: there's a Mod Config Menu that was released, should look into using that instead and leave this as a fallback
     void (*OptionsWindow_create_orig)(OptionsWindow* thisptr);
     void OptionsWindow_create_hook(OptionsWindow* thisptr)
     {
@@ -341,14 +332,12 @@ namespace SquadAutonomy
             //From KEP: mod category = 0x0
             if (panel && panel->getCurrentCategory() == cat)
             {
-                //cat = panel->getCurrentCategory();
                 settingsPanel = panel;
                 break;
             }
         }
         if (settingsPanel)
         {
-            //DebugLog(Ogre::StringConverter::toString(settingsPanel->getNumLines(cat)));
             std::string identifier = "SquadAutonomy";
             for (int i = 0; i < settingsPanel->getNumLines(cat); ++i)
             {
@@ -377,9 +366,7 @@ namespace SquadAutonomy
             }
             if (modLine && modLine->w2)
             {
-                //DebugLog(Ogre::StringConverter::toString(modLine->getNumWidgets()));
-                //DebugLog(modLine->w1->getCaption().asUTF8());
-                //DebugLog(modLine->w2->getCaption().asUTF8());
+                //w2 = right side text (in this case it's "version x")
                 if (settingsPanel->getWidget()->getSize().height > 0 && settingsPanel->getWidget()->getSize().width > 0)
                 {
                     float right = static_cast<float>(modLine->w2->getRight() - modLine->w2->getTextSize().width) / settingsPanel->getWidget()->getSize().width;
@@ -412,6 +399,7 @@ namespace SquadAutonomy
 
         closeButton_orig(thisptr, _sender);
         if (!thisptr) return;
+        // reopen the mod menu so you can use it outside of the options menu
         if (modSettingsVisible && !modSettingsUI.isVisible())
         {
             modSettingsUI.show();
@@ -452,6 +440,7 @@ namespace SquadAutonomy
         MainBarButton::getSingleton().updateButton();
     }
 
+    // next 3 hooks are for updating currently selected squad
     void (*_NV_autoChangeSelectedObject_orig)(MainBarGUI* thisptr, const hand& obj);
     void _NV_autoChangeSelectedObject_hook(MainBarGUI* thisptr, const hand& obj)
     {
@@ -541,6 +530,7 @@ namespace SquadAutonomy
         removeSquad_orig(thisptr, squad);
     }
 
+    // for closing panels when pressing ESC
     bool (*EscMenu_openedOtherWindows_orig)(void*);
     bool EscMenu_openedOtherWindows_hook(void* self)
     {
@@ -561,6 +551,9 @@ namespace SquadAutonomy
         return out;
     }
 
+    // saving the squad settings
+    // we don't save our settings right away because the folder will be unaccessible during this process
+    // instead set shouldSave to true and do the saving after SaveManager::Execute
     int (*saveGame_orig)(SaveManager* thisptr, const std::string& location, const std::string& name);
     int saveGame_hook(SaveManager* thisptr, const std::string& location, const std::string& name)
     {
@@ -579,7 +572,8 @@ namespace SquadAutonomy
 
         return result;
     }
-
+    // loading the squad settings
+    // same as saving
     int (*loadGame_orig)(SaveManager* thisptr, const std::string& location, const std::string& name);
     int loadGame_hook(SaveManager* thisptr, const std::string& location, const std::string& name)
     {
@@ -598,6 +592,7 @@ namespace SquadAutonomy
         if (shouldSave)
         {
             auto& settings = SquadAutonomySettings::getSingleton();
+            // check if can open save file (it always fails the first time when auto-save for some reason)
             if (settings.saveSettings(settingsSavePath))
             {
                 SquadAutonomySettings::getSingleton().loadSettings(settingsSavePath);
@@ -606,6 +601,7 @@ namespace SquadAutonomy
         }
         else if (shouldLoad)
         {
+            // convenient function, wonder if there's one for saving
             if (!ou->isLoadingFromASaveGame())
             {
                 SquadAutonomySettings::getSingleton().loadSettings(settingsSavePath);
@@ -615,7 +611,9 @@ namespace SquadAutonomy
         }
     }
 
-
+    // for assigning home to homeless squad (mostly the wandering squad)
+    // used to do this by getting everything towns and compare the distance to each
+    // changed to using currentTownLocation from blackboard
     void SetNearestFriendlyTownAsHome(Platoon* squad)
     {
         if (!squad) return;
@@ -682,7 +680,8 @@ namespace SquadAutonomy
         }
     }
 
-
+    // finding "optimal" bed
+    // criteria is efficiency > cost > distance
     UseableStuff* FindOptimalBed(Character* character, AI* ai, bool usePaidBeds, const std::vector<UseableStuff*> beds, bool ownFactionOnly = false)
     {
         float minDist = std::numeric_limits<float>::max();
@@ -814,8 +813,10 @@ namespace SquadAutonomy
                 UseableStuff* bed = bedBuildings->at(i)->getUseableStuff();
                 if (bed) beds.push_back(bed);
             }
+            // prioritize beds from own faction
             optimalBed = FindOptimalBed(character, ai, false, beds, true);
             if (optimalBed) return optimalBed->getHandle();
+            // if there's none then find again without limiting to just own faction
             optimalBed = FindOptimalBed(character, ai, usePaidBeds, beds);
         }
         if (optimalBed) return optimalBed->getHandle();
@@ -823,6 +824,8 @@ namespace SquadAutonomy
 
     }
 
+    // the base game AI::findResourceStorageBulidingFor has a flaw where it counts inputs for having the resource needed
+    // which led to problems like Plate Beating Station telling us it has iron resources we can use for Iron Refinery
     StorageBuilding* FindResourceStorageBuildingFor(AI* ai, GameData* needed, StorageBuilding* skip)
     {
         lektor<Building*> buildings;
@@ -840,6 +843,7 @@ namespace SquadAutonomy
             ProductionBuilding* production = storage->getProductionBuilding();
             if (production)
             {
+                // check if the "resource" in question is an input
                 bool consumeItem = false;
                 for (int j = 0; j < production->getNumConsumtionItems(); ++j)
                 {
@@ -862,6 +866,7 @@ namespace SquadAutonomy
         return best;
     }
 
+    // give order to the nearest squad member to haul items from and to buildings
     Character* NearestSquadMemberHaul(Character* character, Building* to, Building* from)
     {
         if (!character || !to || !from) return nullptr;
@@ -900,11 +905,13 @@ namespace SquadAutonomy
         if (nearest && nearest->getOrdersReciever())
         {
             Logger::log(nearest->displayName + " nearest to " + to->displayName, Logger::Debug, false);
+            // when ordering an OPERATE_STORAGE task type it seems that you need to set location to the "from" building's position
             nearest->getOrdersReciever()->addOrder(OPERATE_STORAGE, to, from->getPosition(), true, false);
         }
         return nearest;
     }
 
+    // TODO: still iffy about having other characters order the nearest character to do it instead of having the nearest character order themselves
     bool NoOneElseIsHauling(Character* character, Building* to)
     {
         if (!character || !to) return false;
@@ -931,6 +938,9 @@ namespace SquadAutonomy
         return true;
     }
 
+    // the int value in the buildings unordered_map is for operators count
+    // thinking of changing it to just std::vector<UseableStuff*> and get the operator counts again here
+    // criteria is labourPriority > operators count > distance
     UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, std::unordered_map<UseableStuff*,int>* buildings, SquadSettingsInfo* settings)
     {
         if (!character || !ai) return nullptr;
@@ -954,6 +964,8 @@ namespace SquadAutonomy
             if (settings->getLabourPriority(useable) < minPriority) continue;
             if (production)
             {
+                // if production is full then order someone to put it in storage
+                // if there's no compatible storage then ignore the building
                 if (production->isProductionFull())
                 {
                     //no storage
@@ -969,8 +981,11 @@ namespace SquadAutonomy
                     }
                     continue;
                 }
+
                 lektor<GameData*> out;
                 production->getResourcesNeededBecauseEmpty(out);
+                // if no inputs slot then check if the output is not empty
+                // if it's empty or no compatible storage then ignore
                 if (out.size() == 0)
                 {
                     if (production->isProductionEmpty())
@@ -980,6 +995,8 @@ namespace SquadAutonomy
                     StorageBuilding* storage = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production);
                     if (!storage) continue; 
                 }
+                // if one of the input is empty then find resources from other storages
+                // if none found then ignore
                 else
                 {
                     Logger::log(production->displayName + " has empty input resource", Logger::Debug, false);
@@ -1027,6 +1044,8 @@ namespace SquadAutonomy
                    
             }
             Logger::log(useable->displayName + ", " + Ogre::StringConverter::toString(operators) + ", " + Ogre::StringConverter::toString(dist));
+
+            // for automatic machinery we do an ai->scoreAutoMachinery check one more time to see if it can be operated
             if (useable->numOperatorsMax <= 0)
             {
                 float scoreAutoMachine = ai->scoreAutoMachinery(production, production->getPosition());
@@ -1068,6 +1087,10 @@ namespace SquadAutonomy
         Logger::log(character->displayName + " find Labour To Do", Logger::Info, true);
         if (currentTown)
         {
+            // research
+            // the whole reason I made a custom labor finding logic in the first place
+            // the base game BuildingFinder::SpecialFunction doesn't check if the player is currently researching anything
+            // so I was getting multiple reports of characters doing research job when there's nothing to research
             if (ou->player && ou->player->technology && ou->player->technology->current.size() > 0)
             {
                 lektor<Building*>* researchBuildings = currentTown->findAllBuildingsWithFunction(BF_RESEARCH, character);
@@ -1103,6 +1126,7 @@ namespace SquadAutonomy
                     {
                         auto operators = production->currentOperators;
                         int opCount = operators.size();
+                        // don't count yourself
                         if (operators.find(character) != operators.end())
                         {
                             opCount -= 1;
@@ -1112,7 +1136,8 @@ namespace SquadAutonomy
                             labourCandidates[production] = opCount;
                         }
                     }
-                    else if (production->numOperatorsMax <= 0)
+                    // auto machinery return false for couldIOperate so we manually add it
+                    else if (production->numOperatorsMax <= 0) 
                     {
                         labourCandidates[production] = 0;
                     }
@@ -1174,6 +1199,7 @@ namespace SquadAutonomy
             }
 
             UseableStuff* optimalLabour = FindOptimalLabourFromList(character, ai, &labourCandidates, settings);
+            // handle special cases (production building with full output and auto machinery)
             if (optimalLabour)
             {
                 ProductionBuilding* production = optimalLabour->getProductionBuilding();
@@ -1232,6 +1258,7 @@ namespace SquadAutonomy
             if (currentGoal)
             {
                 TaskType key = currentGoal->key();
+                // TODO: STAY_IN_HOME task will still use research bench for some reason even with this in place
                 if (key == AUTO_LABOURING_MINES || key == STAY_IN_HOME)
                 {
                     if (thisptr->getSpecialFunction() == BF_RESEARCH)
@@ -1247,6 +1274,7 @@ namespace SquadAutonomy
                     }
                 }
             }
+            // attempt at stopping characters with protect squad/allies goal from using turrets (this didn't work iirc)
             if (thisptr->getSpecialFunction() == BF_TURRET)
             {
                 if (!settings->getManTurrets())
@@ -1259,6 +1287,9 @@ namespace SquadAutonomy
         return _NV_couldIOperate_orig(thisptr, h);
     }
 
+    // prevent the endless loop of one character placing down an intruder and another picking them up before instantly placing them down again
+    // I thought it might have something to do with them thinking that the carried body is still inside the town so I added a check
+    // not sure how it works really but it just works
     float (*findKOIntruder_town_orig)(AI* thisptr, const hand& _a1, hand& out, bool justAsking);
     float findKOIntruder_town_hook(AI* thisptr, const hand& _a1, hand& out, bool justAsking)
     {
@@ -1294,9 +1325,9 @@ namespace SquadAutonomy
                 //else return 0.0;
             }
         }
+        // TODO: uncomment else return 0.0 above when the FindLabourToDo logic is "completed"
 
         float score = findMineToWorkAt_orig(thisptr, in, out, justAsking);
-        
         if (settings && settings->isEnabled())
         {
             if (out && out.getBuilding() && out.getBuilding()->getUseableStuff())
@@ -1365,6 +1396,10 @@ namespace SquadAutonomy
         return score;
     }
 
+    // AITaskSytem::periodicUpdate is where most of stuffs related to the AI goals happens
+    // things like AITaskSytem::chooseGoal runGoals runGOAP setcurrentGoal currentActionChecks etc.
+    // it's called by AI::periodicUpdate
+
     void (*periodicUpdate_orig)(AITaskSytem* thisptr, float time);
     void periodicUpdate_hook(AITaskSytem* thisptr, float time)
     {
@@ -1387,13 +1422,14 @@ namespace SquadAutonomy
         {
             Logger::log("PeriodicUpdate", Logger::Info, true);
 
+            // TaskData duration is used here
+            // specifically in the setCurrentGoal function where the durationMin and durationFuzz are used to calculate goalExpiryTime
             TaskData* data = taskTypetaskData->find(RELAX_IN_TOWN_PACKAGE)->second;
             data->setDurationBased(1.0, 4.0, false);
             data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
             data->setDurationBased(4.0, 4.0, false);
 
-            //if (character == gui->selectedObject.getCharacter()) DebugLog("PeriodUpdate: " + character->displayName);
-
+            // set work building as home outside of rest time, with normal home building as fallback
             if (settings->isRestTime())
             {
                 if (!settings->assignSquadHome(true))
@@ -1411,6 +1447,14 @@ namespace SquadAutonomy
                     }
                 }
             }
+
+            // the part that makes everything work
+            // basically many of the task scoring/target finding functions have a faction->isPlayer check
+            // in many cases if faction->isPlayer is true, it'll just return 0.0/nullptr and do nothing
+            // for example the man_the_gate task or the go_home_go_to_sleep task wouldn't do anything if faction->isPlayer is true
+            // so what we do is we set isPlayer (PlayerInterface) to null for the duration of AITaskSystem periodic update
+            // however there are some AI goal/tasks that only works with faction->isPlayer = true like isHungry check, auto sleep, auto ditch item
+            // so we'll assign isPlayer back from time to time
             faction = character->getFaction();
             if (faction)
             {
@@ -1430,6 +1474,8 @@ namespace SquadAutonomy
         }
     }
 
+    // this deals with shift+click jobs and some auto tasks like auto-ditch, auto-sit found in the AI tab (see PlayerInterface::AIOptions)
+    // the part dealing with auto-task is gated behind urgentOnes check (they aren't considered urgent)
     void (*choosePermaJob_orig)(AITaskSytem* thisptr, std::map<float, Tasker*, std::less<float>, Ogre::STLAllocator<std::pair<float const, Tasker*>, Ogre::GeneralAllocPolicy > >& orderedGoals, TaskMatch& alreadyHasGoal, bool urgentOnes, bool _jobsEnabled);
     void choosePermaJob_hook(AITaskSytem* thisptr, std::map<float, Tasker*, std::less<float>, Ogre::STLAllocator<std::pair<float const, Tasker*>, Ogre::GeneralAllocPolicy > >& orderedGoals, TaskMatch& alreadyHasGoal, bool urgentOnes, bool _jobsEnabled)
     {
@@ -1449,8 +1495,14 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             Logger::log("PermaJob", Logger::Info, true);
+            // deal with auto-tasks
             if (!urgentOnes)
             {
+                // give back PlayerInterface so auto-task can do it things
+                // autoSit creates Tasker with TaskType SIT_AROUND (275) which is the player-oriented version of STAY_IN_HOME
+                // set autoSit = false because STAY_IN_HOME is already in most packages 
+                // not sure if there's any problem with leaving it as is though. Maybe TODO: remove this?
+                // also not sure if SIT_AROUND is better than STAY_IN_HOME. will have to do a more through comparison
                 if (faction && settings->getPlayerInterface())
                 {
                     origAutoSit = settings->getPlayerInterface()->aiOptions.autoSit;
@@ -1470,6 +1522,7 @@ namespace SquadAutonomy
         /*========Orig Function=======*/
         if (settings && settings->isEnabled())
         {
+            // gives faction the playerInterface back so the character can function properly (receive player order, hunger decay etc.)
             if (faction && faction->isPlayer && settings->getPlayerInterface())
             {
                 faction->isPlayer->aiOptions.autoSit = origAutoSit;
@@ -1493,7 +1546,7 @@ namespace SquadAutonomy
         }
     }
     
-
+    // to end certain action when it's the start/end of work hour
     void (*currentActionChecks_orig)(AITaskSytem* thisptr);
     void currentActionChecks_hook(AITaskSytem* thisptr)
     {
@@ -1591,6 +1644,9 @@ namespace SquadAutonomy
             if (currentGoal)
             {
                 TaskType type = currentGoal->key();
+
+                // prevent wandering squad from stopping its goal when given an order by player
+                // a better way might be to rerun the goal when interrupted but I'm not sure how I want to go about it
                 if (type == WANDERING_TRADER ||
                     type == TRAVEL_TO_TARGET_TOWN || type == TRAVEL_TO_TARGET_TOWN_FAST || type == TRAVEL_TO_TARGET_PACKAGE)
                 {
@@ -1604,6 +1660,9 @@ namespace SquadAutonomy
         /*========Orig Function=======*/
     }
 
+    // Another place where TaskData duration is used
+    // it checks TaskData->isDurationBased/endsAfterTime (I don't remember which one) and ends the task if it's true
+    // also uses this for timer cause why not
     void (*update4Frame_orig)(AITaskSytem* thisptr, Ogre::Vector3 position, float time);
     void update4Frame_hook(AITaskSytem* thisptr, Ogre::Vector3 position, float time)
     {
@@ -1627,13 +1686,14 @@ namespace SquadAutonomy
             data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
             data->setDurationBased(4.0, 4.0, false);
 
+            // TODO?: move to a more relevant time-related function
             if (settings->getCloseGate())
             {
                 auto currentTask = thisptr->getCurrentGoal();
                 if (currentTask && currentTask.key() == MAN_THE_GATE && closeGateTimerOn)
                 {
                     closeGateCDTimer -= time;
-                    Logger::log("Close Gate Timer: " + Ogre::StringConverter::toString(closeGateCDTimer), Logger::Debug, false);
+                    Logger::log("Close Gate Timer: " + Ogre::StringConverter::toString(closeGateCDTimer), Logger::Debug, true);
                 }
             }
         }
@@ -1661,9 +1721,14 @@ namespace SquadAutonomy
         }
     }
 
+// for letting characters with MAN_THE_GATE and STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT goal stay inside the gate and closing the gate
+// this is the most hacky part of all imo
+// mostly because Task_XXX classes aren't added in KenshiLib yet so there's a lot of guessing involved
+// usableNode and locationNode classes are also much needed for dealing with STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT node targetting
 #pragma region MAN THE GATE target fix
     
-
+    // vfunction9
+    // it presumably get the gate position and return it through val
     void (*Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig)(Tasker* thisptr, Ogre::Vector3& val, CharBody* body);
     void Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook(Tasker* thisptr, Ogre::Vector3& val, CharBody* body)
     {
@@ -1676,6 +1741,9 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             Ownerships* own = squad->getOwnerships();
+            // the orig function checks if subject->itemType is NULL_ITEM (11) to update one of its member (probably the target?)
+            // not sure if .setNull() also set the itemType to NULL_ITEM as I couldn't find anything at its address (should take a look while exe is running some day)
+            // might be a better idea to just do itemType = 11; but idk
             thisptr->subject.setNull();
             if (own)
             {
@@ -1689,8 +1757,10 @@ namespace SquadAutonomy
         Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig(thisptr, val, body);
     }
 
-
-
+    // vfunction3
+    // called from Character::threadedUpdate() (same with others Task_xxx vfunction3)
+    // Character::threadedUpdate() calls CharBody::update(float time) which get replaced by Task_XXX vfunction3 when having certain AI goals
+    // seems like all this one does making the character faces outward with CharMovement->faceDirection(gateFacingOutDirection)
     void (*Task_ManTheGate_Update_orig)(Tasker* thisptr, CharBody* body);
     void Task_ManTheGate_Update_hook(Tasker* thisptr, CharBody* body)
     {
@@ -1709,6 +1779,7 @@ namespace SquadAutonomy
         Task_ManTheGate_Update_orig(thisptr, body);
     }
 
+    // as there are too many unknowns I chose to hook into this and just change the destination when stayInsideGate is true instead
     void (*_NV_setDestination_orig)(CharMovement* thisptr, const Ogre::Vector3& dest, UpdatePriority priority, bool notVertical);
     void _NV_setDestination_hook(CharMovement* thisptr, const Ogre::Vector3& dest, UpdatePriority priority, bool notVertical)
     {
@@ -1725,6 +1796,12 @@ namespace SquadAutonomy
             if (currentTask)
             {
                 TaskType key = currentTask->key();
+
+                // for STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT I just move the dest inward
+                // but this leads to a problem where since they aren't really at the locationNode they are assigned
+                // the node won't be considered occupied and so multiple characters can choose the same one and end up with the same destination
+                // probably a good idea to wait for useableNode and locationNode to be added to KenshiLib before messing with this further
+
                 if (key == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT)
                 {
                     Building* guardTarget = nullptr;
@@ -1750,6 +1827,8 @@ namespace SquadAutonomy
                         }
                     }
                 }
+
+                // for MAN_THE_GATE I use the destGate gotten from Task_ManTheGate_FindGate
                 if (key == MAN_THE_GATE)
                 {
                     if (destGate)
@@ -1770,6 +1849,9 @@ namespace SquadAutonomy
         destGate = nullptr;
         _NV_setDestination_orig(thisptr, dest, priority, notVertical);
     }
+
+    // this is called by vfunction3 (which I named _update) earlier
+    // it gave back the door of the target building I think
     Building* (*Task_ManTheGate_FindGate_orig)(Tasker* thisptr, Character* character, hand subject);
     Building* Task_ManTheGate_FindGate_hook(Tasker* thisptr, Character* character, hand subject)
     {
@@ -1808,6 +1890,8 @@ namespace SquadAutonomy
         return gate;
     }
 
+    // the way I'm doing it by changing the dest of setDestination makes this check fail
+    // I think it's something to do with stateType but not sure
     bool (*_isRequirementsComplete_orig)(TaskData* thisptr, AI* ai, const hand& target, const Ogre::Vector3& location, hand& subTarget, bool autoTargetFinder, StateType& failedOn);
     bool _isRequirementsComplete_hook(TaskData* thisptr, AI* ai, const hand& target, const Ogre::Vector3& location, hand& subTarget, bool autoTargetFinder, StateType& failedOn)
     {
@@ -1822,9 +1906,9 @@ namespace SquadAutonomy
                 TaskType key = thisptr->key;
                 if (key == MAN_THE_GATE || (key == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT && settings->getStayInsideGate()))
                 {
-                    //idk how this works
-                    //from what I can tell, it keeps returning false because something about Task StateType requirement failing
-                    //seemingly something to do with function AI::stateIsTrue and func 61e990 and DAT_141e45450
+                    // idk how this works
+                    // from what I can tell, it keeps returning false because something about Task StateType requirement failing
+                    // some seemingly relevant functions and variables: AI::stateIsTrue, a function at 0x61e990, variable DAT_141e45450
                     //CharMovement* movement = nullptr;
                     //if (character) movement = character->getMovement();
                     if (character->pos.squaredDistance(location) <= 25.0f)
@@ -1839,6 +1923,7 @@ namespace SquadAutonomy
         return _isRequirementsComplete_orig(thisptr, ai, target, location, subTarget, autoTargetFinder, failedOn);
     }
 
+    // prevent automatically open door when getCloseGate is true *unless it's a player order
     void (*Task_OpenDoor_StartAction_orig)(Tasker* thisptr, CharBody* body);
     void Task_OpenDoor_StartAction_hook(Tasker* thisptr, CharBody* body)
     {
@@ -1866,7 +1951,9 @@ namespace SquadAutonomy
         }
         Task_OpenDoor_StartAction_orig(thisptr, body);
     }
-
+    
+    // prevent automatically open door when getCloseGate is true *unless it's a player order
+    // TODO: prevent the gate opening trigger for MAN_THE_GATE task in the first place
     void (*Task_OpenDoor_Update_orig)(Tasker* thisptr, CharBody* body);
     void Task_OpenDoor_Update_hook(Tasker* thisptr, CharBody* body)
     {
@@ -1896,6 +1983,7 @@ namespace SquadAutonomy
         Task_OpenDoor_Update_orig(thisptr, body);
     }
 
+    // hooked here so we can add our own actions after task_xxx update finished
     void (*_NV_threadedUpdate_orig)(Character* thisptr);
     void _NV_threadedUpdate_hook(Character* thisptr)
     {
@@ -1936,7 +2024,10 @@ namespace SquadAutonomy
                         //currentTask->setLocation(gate->pos);
                         if (door->isDamaged())
                         {
-                            Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, REPAIR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
+                            // create Tasker with GOAPTaskMgr::createNewTask because you can set start time and end time
+                            // the tasker created doesn't seem to work with AITaskSytem::setCurrentGoal nor _forcedSetCurrentAction
+                            Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, 
+                                REPAIR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
                             if (body) body->setCurrentAction(newTask);
                             //order->addOrder(REPAIR, door, door->pos, true, false);
                             //order->getFirstOrder()->startTime = settings->getStartWorkTime();
@@ -1976,6 +2067,7 @@ namespace SquadAutonomy
                                         order->addOrder(CLOSE_DOOR , door, door->pos, true, false);
                                         order->getFirstOrder()->startTime = settings->getStartWorkTime();
                                         order->getFirstOrder()->endTime = settings->getEndWorkTime();
+                                        order->setTaskExpiryTimer();
                                         closeGateCDTimer = 0.0;
                                         closeGateTimerOn = false;
                                     }
@@ -1994,6 +2086,7 @@ namespace SquadAutonomy
                                 order->addOrder(OPEN_DOOR, door, door->pos, true, false);
                                 order->getFirstOrder()->startTime = settings->getStartWorkTime();
                                 order->getFirstOrder()->endTime = settings->getEndWorkTime();
+                                order->setTaskExpiryTimer();
                             }
                         }
                     }
@@ -2004,7 +2097,7 @@ namespace SquadAutonomy
 #pragma endregion
 
 
-
+    // preventing the package with wanderingTrader blackboard signal from starting until all members are ready
     bool (*Package_WanderingTrader_signalStart_orig)(AIPackage* thisptr);
     bool Package_WanderingTrader_signalStart_hook(AIPackage* thisptr)
     {
@@ -2043,6 +2136,11 @@ namespace SquadAutonomy
         return Package_WanderingTrader_signalStart_orig(thisptr);
     }
 
+    
+    // task scoring
+    // I mostly use this to prevent unwanted actions (working during rest hours or resting during work hours)
+    // interesting one is PATROL_TOWN where I make the score slowly diminish so they stop patrolling to do other things
+    // mostly for "hang out in a town" package where they either do RELAX_IN_TOWN_PACKAGE forever or PATROL_TOWN forever depending on the weight I gave
     float (*score_orig)(Tasker* thisptr, AI* ai);
     float score_hook(Tasker* thisptr, AI* ai)
     {
@@ -2397,6 +2495,7 @@ namespace SquadAutonomy
         return result;
     }
 
+    // GOAPTaskMgr::setupGOAP is called in the orig so we can get our original TaskData duration here
     bool (*initialisation_orig)(GameWorld* thisptr);
     bool initialisation_hook(GameWorld* thisptr)
     {
@@ -2404,7 +2503,6 @@ namespace SquadAutonomy
         if (result)
         {
             Logger::log("Initialised gameworld data", Logger::Info, false);
-            //taskData are initialised here
             auto relaxData = getTaskDataConst(RELAX_IN_TOWN_PACKAGE);
             OriginalTaskDataDuration* relaxOrig = new OriginalTaskDataDuration(relaxData->durationMin, relaxData->durationFuzz, relaxData->isDurationBased, relaxData->endsAfterTime);
             taskTypeOrigDataDuration[RELAX_IN_TOWN_PACKAGE] = relaxOrig;
