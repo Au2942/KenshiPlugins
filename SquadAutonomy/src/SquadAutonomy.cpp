@@ -602,7 +602,7 @@ namespace SquadAutonomy
         else if (shouldLoad)
         {
             // convenient function, wonder if there's one for saving
-            if (!ou->isLoadingFromASaveGame())
+            if (ou && !ou->isLoadingFromASaveGame())
             {
                 SquadAutonomySettings::getSingleton().loadSettings(settingsSavePath);
                 SquadAutonomySettings::getSingleton().initialized = true;
