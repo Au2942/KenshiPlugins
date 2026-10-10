@@ -1,5 +1,6 @@
 #include "SquadAutonomy.h"
 #include "SquadAutonomyPanel.h"
+#include "SquadAutonomyLog.h"
 #include "SquadAutonomyLocalization.h"
 
 #include <Debug.h>
@@ -13,6 +14,8 @@
 #include <kenshi/gui/ForgottenGUI.h>
 #include <kenshi/gui/DatapanelGUI.h>
 #include <kenshi/gui/DataPanelLine.h>
+
+#include <mygui/MyGUI_Button.h>
 
 #include <kenshi/Town.h>
 #include <kenshi/Building/Building.h>
@@ -76,7 +79,31 @@ void SquadAutonomyPanel::create()
 
     refresh();
 
+    _createModSettingsButton();
+    
     this->_panel->show(false);
+}
+
+void SquadAutonomyPanel::_createModSettingsButton()
+{
+    MyGUI::Window* panelWindow = this->_panel->win->castType<MyGUI::Window>();
+    MyGUI::TextBox* captionWidget = panelWindow->getCaptionWidget();
+    MyGUI::Widget* header = captionWidget->getParent();
+    MyGUI::Button* closeBtn = header->getChildAt(0)->castType<MyGUI::Button>();
+
+    int left = closeBtn->getLeft();
+    int top = closeBtn->getTop();
+    int width = closeBtn->getWidth();
+    int newWidth = width;
+    int height = closeBtn->getHeight();
+    auto btn = header->createWidget<MyGUI::Button>("Kenshi_Button1", left - newWidth, top, newWidth, height, MyGUI::Align::Left | MyGUI::Align::Top, "SquadAutonomySettingsBtn");
+    btn->setCaption(Localization::gettext("Settings"));
+    float margin = newWidth - btn->getTextRegion().width;
+    newWidth = btn->getTextSize().width + margin;
+    btn->setSize(newWidth, height);
+    btn->setPosition(left - newWidth, top);
+    captionWidget->setSize(captionWidget->getWidth() - newWidth, captionWidget->getHeight());
+    btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
 }
 
 void SquadAutonomyPanel::refresh()

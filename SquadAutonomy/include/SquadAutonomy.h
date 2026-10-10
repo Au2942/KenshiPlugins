@@ -29,6 +29,7 @@ namespace SquadAutonomy
     void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);
     void OpenSquadAutonomyPanelMainBar();
+    void ShowModSettings(MyGUI::Widget* sender);
     void RevertTaskDuration(TaskType);
     extern bool shouldSave;
     extern bool shouldLoad;

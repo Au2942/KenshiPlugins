@@ -32,7 +32,7 @@ namespace SquadAutonomy
         float _priority;
 
         AutonomyOptions* _options;
-
+        void _createModSettingsButton();
         void _toggleAI(DataPanelLine* line); //button for enabling/setting packages to a squad
         void _addAI(DataPanelLine* line); //set the packages in the setting
         void _clearAI(DataPanelLine* line); //clear all packages in the setting
