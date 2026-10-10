@@ -329,18 +329,24 @@ namespace SquadAutonomy
         for (size_t i = 0; i < tabCount; i++)
         {
             auto panel = *(thisptr->tabs->getItemDataAt<DatapanelGUI*>(i, false));
-            //From KEP: mod category = 0x0
-            if (panel && panel->getCurrentCategory() == cat)
+            //auto itemName = thisptr->tabs->getItemNameAt(i);
+            // From KEP: mod category = 0x0
+            // broke when mod like Return Of Life add new tab and pushed this one away
+            // itemName = MODS *differ per language so not useful
+            // panel name = Active_Mods
+            if (panel && panel->panelName == "Active_Mods")
             {
                 settingsPanel = panel;
                 break;
             }
         }
-        if (settingsPanel)
+        if (!settingsPanel) Logger::log("Can't find MODS category in the Options Menu", Logger::Warning);
+        else
         {
             std::string identifier = "SquadAutonomy";
             for (int i = 0; i < settingsPanel->getNumLines(cat); ++i)
             {
+                //Logger::log("ModLine: " + settingsPanel->getLineByNum(cat, i)->keyValue);
                 auto line = settingsPanel->getLineByNum(cat, i);
                 if (line)
                 {
@@ -367,24 +373,23 @@ namespace SquadAutonomy
             if (modLine && modLine->w2)
             {
                 //w2 = right side text (in this case it's "version x")
-                if (settingsPanel->getWidget()->getSize().height > 0 && settingsPanel->getWidget()->getSize().width > 0)
-                {
-                    int right = modLine->w2->getRight() - modLine->w2->getTextSize().width;// / settingsPanel->getWidget()->getSize().width;
-                    int width = modLine->w2->getTextSize().width;
-                    int top = modLine->w2->getTop();// / settingsPanel->getWidget()->getSize().height;
-                    int height = modLine->w2->getHeight();// / settingsPanel->getWidget()->getSize().height;
-                    //DebugLog("width: " + Ogre::StringConverter::toString(width) + " right: " + Ogre::StringConverter::toString(right) + " height " + Ogre::StringConverter::toString(height));
-                    auto btn = modLine->w2->getParent()->createWidget<MyGUI::Button>("Kenshi_Button1", right - width, 0, width, height, MyGUI::Align::Left | MyGUI::Align::Top, "SquadAutonomySettingsBtn");
-                    btn->setCaption(Localization::gettext("Settings"));
-                    int marginWidth = width - btn->getTextRegion().width;
-                    width = btn->getTextSize().width + marginWidth;
-                    int marginHeight = height - btn->getTextRegion().height;
-                    height = btn->getTextSize().height + marginHeight;
-                    btn->setSize(width, height);
-                    btn->setPosition(right - width, top);
-                    btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
-                }
+
+                int right = modLine->w2->getRight() - modLine->w2->getTextSize().width;// / settingsPanel->getWidget()->getSize().width;
+                int width = modLine->w2->getTextSize().width;
+                int top = modLine->w2->getTop();// / settingsPanel->getWidget()->getSize().height;
+                int height = modLine->w2->getHeight();// / settingsPanel->getWidget()->getSize().height;
+                auto btn = modLine->w2->getParent()->createWidget<MyGUI::Button>("Kenshi_Button1", right - width, top, width, height, MyGUI::Align::Left | MyGUI::Align::Top, "SquadAutonomySettingsBtn");
+                btn->setCaption(Localization::gettext("Settings"));
+                int marginWidth = width - btn->getTextRegion().width;
+                width = btn->getTextSize().width + marginWidth;
+                int marginHeight = height - btn->getTextRegion().height;
+                height = btn->getTextSize().height + marginHeight;
+                btn->setSize(width, height);
+                btn->setPosition(right - width, top);
+                btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
+
             }
+            else Logger::log("Can't find mod line", Logger::Warning);
         }
     }
 

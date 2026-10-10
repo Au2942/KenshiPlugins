@@ -490,10 +490,13 @@ namespace MoreImmersiveBars
         for (size_t i = 0; i < tabCount; i++)
         {
             auto panel = *(thisptr->tabs->getItemDataAt<DatapanelGUI*>(i, false));
-            //From KEP: mod category = 0x0
-            if (panel && panel->getCurrentCategory() == cat)
+            auto itemName = thisptr->tabs->getItemNameAt(i);
+            // From KEP: mod category = 0x0
+            // broke when mod like Return Of Life add new tab and pushed this one away
+            // panel name = Active_Mods
+            // itemName = MODS
+            if (panel && panel->panelName == "Active_Mods")
             {
-                //cat = panel->getCurrentCategory();
                 settingsPanel = panel;
                 break;
             }
@@ -527,20 +530,22 @@ namespace MoreImmersiveBars
                     }
                 }
             }
-            if (modLine)
+            if (modLine && modLine->w2)
             {
-                modOptions->setOptionsWindow(thisptr);
-                //DebugLog(Ogre::StringConverter::toString(modLine->getNumWidgets()));
-                //DebugLog(modLine->w1->getCaption().asUTF8());
-                //DebugLog(modLine->w2->getCaption().asUTF8());
-                float right = static_cast<float>(modLine->w2->getRight() - modLine->w2->getTextSize().width) / settingsPanel->getWidget()->getSize().width;
-                float left = right - 0.1;
-                float top = static_cast<float>(modLine->w2->getTop()) / settingsPanel->getWidget()->getSize().height;
-                float height = static_cast<float>(modLine->w2->getHeight()) / settingsPanel->getWidget()->getSize().height;
-                float extendedHeight = height * 1.5;
-                //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
-                auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight - height) / 2.0, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
+                //w2 = right side text (in this case it's "version x")
+                int right = modLine->w2->getRight() - modLine->w2->getTextSize().width;
+                int width = modLine->w2->getTextSize().width;
+                int top = modLine->w2->getTop();
+                int height = modLine->w2->getHeight();
+                DebugLog("width: " + Ogre::StringConverter::toString(width) + " right: " + Ogre::StringConverter::toString(right) + " height " + Ogre::StringConverter::toString(height));
+                auto btn = modLine->w2->getParent()->createWidget<MyGUI::Button>("Kenshi_Button1", right - width, top, width, height, MyGUI::Align::Left | MyGUI::Align::Top, "MoreImmersiveBarsSettingBtn");
                 btn->setCaption(Localization::gettext("Settings"));
+                int marginWidth = width - btn->getTextRegion().width;
+                width = btn->getTextSize().width + marginWidth;
+                int marginHeight = height - btn->getTextRegion().height;
+                height = btn->getTextSize().height + marginHeight;
+                btn->setSize(width, height);
+                btn->setPosition(right - width, top);
                 btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModOptions);
             }
         }
