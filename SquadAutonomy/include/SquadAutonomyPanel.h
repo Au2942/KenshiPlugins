@@ -8,81 +8,110 @@ namespace SquadAutonomy
     class SquadAutonomyPanel
     {
     public:
-        static SquadAutonomyPanel* getSingletonPtr();
-        static bool initialized;
+        static SquadAutonomyPanel& getSingleton();
+
         SquadAutonomyPanel();
         ~SquadAutonomyPanel();
 
         void create();
         void refresh();
+
         void show();
         void hide();
         bool isVisible();
-        void selectSquad(Platoon*);
-        class AutonomyOptions;
-        AutonomyOptions* getOptionsTab()
-        {
-            return _options;
-        }
+
+        void selectSquad(Platoon& selectedSquad);
+
     private:
-        int _category;
+        class MainTab;
+        class OptionsTab;
+
+        void createModSettingsButton();
+
         Platoon* _selectedSquad;
         DatapanelGUI* _panel;
-        int _selectedAIPackageIndex;
-        float _priority;
 
-        AutonomyOptions* _options;
-        void _createModSettingsButton();
-        void _toggleAI(DataPanelLine* line); //button for enabling/setting packages to a squad
-        void _addAI(DataPanelLine* line); //set the packages in the setting
-        void _clearAI(DataPanelLine* line); //clear all packages in the setting
-        void _setHome(DataPanelLine* line);
-        void _setWork(DataPanelLine* line);
-        void _setBar(DataPanelLine* line);
-        void _clearBuildings(DataPanelLine* line);
-        void _setBuilding(bool home);
-
-        void _changeAIPackageSearchText(DataPanelLine* line);
-        void _updateAIPackageList(const std::string& keyword);
+        std::unique_ptr<MainTab> _mainTab;
+        std::unique_ptr<OptionsTab> _optionsTab;
     };
-    class SquadAutonomyPanel::AutonomyOptions
+
+    class SquadAutonomyPanel::MainTab
     {
     public:
+        MainTab(DatapanelGUI& panel, int tabId);
+
         void refresh();
-        void refreshOptions(MyGUI::ComboBox*, size_t);
-        void updateSettings(DataPanelLine*);
-        void updateSettingsAndRefresh(DataPanelLine*);
-        AutonomyOptions() : _category(1), _subCategory(0), _selectedSquad(nullptr), _panel(nullptr)
-        {}
-        void init();
-        void setPanel(DatapanelGUI* panel)
-        {
-            _panel = panel;
-        }
-        void setSelectedSquad(Platoon* squad)
-        {
-            _selectedSquad = squad;
-        }
-        int getCategory()
-        {
-            return _category;
-        }
-        void updateOptions(SquadSettingsInfo*);
+
+        int getCategory() const;
+
+        void setSelectedSquad(Platoon& selectedSquad);
+
+    private:
+        void toggleAI(DataPanelLine* line); //button for enabling/setting packages to a squad
+        void addAI(DataPanelLine* line); //set the packages in the setting
+        void clearAI(DataPanelLine* line); //clear all packages in the setting
+        void setHome(DataPanelLine* line);
+        void setWork(DataPanelLine* line);
+        void setBar(DataPanelLine* line);
+        void clearBuildings(DataPanelLine* line);
+        void changeAIPackageSearchText(DataPanelLine* line);
+
+        void setBuilding(bool home);
+        void updateAIPackageList(const std::string& keyword = std::string());
+
+        static std::string getBuildingName(const Building& building);
+
+        DatapanelGUI* _panel;
+        Platoon* _selectedSquad;
+        int _category;
+
+        float _priority;
+        int _selectedAIPackageIndex;
+    };
+
+    class SquadAutonomyPanel::OptionsTab
+    {
+    public:
+        OptionsTab(DatapanelGUI& panel, int category);
+
+        void refresh();
+
+        int getCategory() const;
+
+        void setSelectedSquad(Platoon& selectedSquad);
+
+    private:
+        class OptionsBase;
         class BasicOptions;
         class LabourOptions;
         class CombatOptions;
         class GuardOptions;
 
-    private:
+        // Disable copy and move operations by declaring them private.
+        // Reason: sub-options (_basic etc) store `this` pointer, executing copy/move will leave them with the wrong pointer.
+        // If copy/move restriction needs to be lifted, implement updating this pointer in sub-options, or remove it from their fields.
+        OptionsTab(const OptionsTab& other);
+        OptionsTab(OptionsTab&& other);
+        OptionsTab& operator=(const OptionsTab& other);
+        OptionsTab& operator=(OptionsTab&& other);
+
+        void refreshCallback(MyGUI::ComboBox*, size_t);
+        void writeToSelectedSquadSettings(DataPanelLine*);
+        void writeToSelectedSquadSettingsAndRefresh(DataPanelLine*);
+
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+
         DataPanelLine_SliderEditable* createOptionsSlider(std::string, float*, int, float, float, bool = false);
+
+        DatapanelGUI* _panel;
+        Platoon* _selectedSquad;
         int _category;
         int _subCategory;
-        Platoon* _selectedSquad;
-        DatapanelGUI* _panel;
-        BasicOptions* _basic;
-        LabourOptions* _labour;
-        CombatOptions* _combat;
-        GuardOptions* _guard;
+
+        std::unique_ptr<BasicOptions> _basic;
+        std::unique_ptr<LabourOptions> _labour;
+        std::unique_ptr<CombatOptions> _combat;
+        std::unique_ptr<GuardOptions> _guard;
         //bool _manTurrets;
         //bool _closeGate;
         //bool _doSleep;
@@ -96,12 +125,28 @@ namespace SquadAutonomy
         //item type?
     };
 
-    class SquadAutonomyPanel::AutonomyOptions::BasicOptions
+    class SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        void refresh(AutonomyOptions* ,int, DatapanelGUI*, SquadSettingsInfo *);
-        BasicOptions() : startWorkTime(0.0f), endWorkTime(24.0f), doSleep(false), restUntilHealed(true), restThreshold(50.0), healedThreshold(90.0), usePaidBeds(false)
-        {}
+        OptionsBase(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+    protected:
+        OptionsTab* _optionsTab;
+        DatapanelGUI* _panel;
+        int _category;
+    };
+
+    class SquadAutonomyPanel::OptionsTab::BasicOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
+    {
+    public:
+        BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+        void refresh();
+
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+
+    private:
         float startWorkTime;
         float endWorkTime;
         bool restUntilHealed;
@@ -110,15 +155,20 @@ namespace SquadAutonomy
         bool usePaidBeds;
         bool doSleep;
     };
-    class SquadAutonomyPanel::AutonomyOptions::LabourOptions
+
+    class SquadAutonomyPanel::OptionsTab::LabourOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
-        LabourOptions() : setAll(0.0), science(1.0),
-            labouring(1.0), farming(1.0), 
-            medic(1.0), cooking(1.0), engineer(1.0), robotics(1.0), weaponSmith(1.0), armourSmith(1.0), crossbowSmith(1.0), automaticMachine(1.0), other(1.0)
-        {}
+        LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+        void refresh();
+
         void setAllTo(MyGUI::Widget*);
+
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+
+    private:
         float setAll;
         float science;
         float labouring;
@@ -133,23 +183,35 @@ namespace SquadAutonomy
         float automaticMachine;
         float other;
     };
-    class SquadAutonomyPanel::AutonomyOptions::CombatOptions
+
+    class SquadAutonomyPanel::OptionsTab::CombatOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
-        CombatOptions() : attackEnemies(true), protectAllies(true), doMedic(true), doRescue(true)
-        {}
+        CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+        void refresh();
+
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+
+    private:
         bool attackEnemies;
         bool protectAllies;
         bool doMedic;
         bool doRescue;
     };
-    class SquadAutonomyPanel::AutonomyOptions::GuardOptions
+
+    class SquadAutonomyPanel::OptionsTab::GuardOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        void refresh(AutonomyOptions*, int, DatapanelGUI*, SquadSettingsInfo*);
-        GuardOptions() : manTurrets(false), stayInsideGate(false), closeGate(false)
-        {}
+        GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+        void refresh();
+
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+
+    private:
         bool manTurrets;
         bool stayInsideGate;
         bool closeGate;

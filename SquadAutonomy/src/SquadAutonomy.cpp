@@ -268,16 +268,16 @@ namespace SquadAutonomy
 
     void OpenSquadAutonomyPanel(Platoon* platoon)
     {
-        if (platoon) 
+        if (platoon)
         {
-            SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
-            if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
+            SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
+            if (SquadAutonomyPanel::getSingleton().isVisible())
             {
-                SquadAutonomyPanel::getSingletonPtr()->hide();
+                SquadAutonomyPanel::getSingleton().hide();
             }
             else
             {
-                SquadAutonomyPanel::getSingletonPtr()->show();
+                SquadAutonomyPanel::getSingleton().show();
             }
         }
     }
@@ -292,9 +292,8 @@ namespace SquadAutonomy
     void ForgottenGUI_changeFontSize_hook()
     {
         ForgottenGUI_changeFontSize_orig();
-        if (SquadAutonomyPanel::initialized)
-            SquadAutonomyPanel::getSingletonPtr()->create();
 
+        SquadAutonomyPanel::getSingleton().create();
         ModSettingsUI::getSingleton().create();
     }
 
@@ -455,14 +454,13 @@ namespace SquadAutonomy
     void _NV_autoChangeSelectedObject_hook(MainBarGUI* thisptr, const hand& obj)
     {
         _NV_autoChangeSelectedObject_orig(thisptr, obj);
-        if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
+        if (SquadAutonomyPanel::getSingleton().isVisible())
         {
             Platoon* platoon = ou->player->getCurrentPlatoon();
             if (platoon)
             {
-                SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
-                SquadAutonomyPanel::getSingletonPtr()->refresh();
-                SquadAutonomyPanel::getSingletonPtr()->getOptionsTab()->refresh();
+                SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
+                SquadAutonomyPanel::getSingleton().refresh();
             }
         }
     }
@@ -472,14 +470,13 @@ namespace SquadAutonomy
     {
         tabPlatoonChange_orig(thisptr, _sender, _index);
 
-        if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
+        if (SquadAutonomyPanel::getSingleton().isVisible())
         {
             Platoon* platoon = ou->player->getCurrentPlatoon();
             if (platoon)
             {
-                SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
-                SquadAutonomyPanel::getSingletonPtr()->refresh();
-                SquadAutonomyPanel::getSingletonPtr()->getOptionsTab()->refresh();
+                SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
+                SquadAutonomyPanel::getSingleton().refresh();
             }
         }
     }
@@ -489,14 +486,13 @@ namespace SquadAutonomy
     {
         // your code before/instead of the original
         cycleSquad_orig(thisptr);
-        if (SquadAutonomyPanel::getSingletonPtr()->isVisible())
+        if (SquadAutonomyPanel::getSingleton().isVisible())
         {
             Platoon* platoon = ou->player->getCurrentPlatoon();
             if (platoon)
             {
-                SquadAutonomyPanel::getSingletonPtr()->selectSquad(platoon);
-                SquadAutonomyPanel::getSingletonPtr()->refresh();
-                SquadAutonomyPanel::getSingletonPtr()->getOptionsTab()->refresh();
+                SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
+                SquadAutonomyPanel::getSingleton().refresh();
             }
         }
     }
@@ -547,14 +543,14 @@ namespace SquadAutonomy
         auto out = EscMenu_openedOtherWindows_orig(self);
         if (out)
         {
-            SquadAutonomyPanel::getSingletonPtr()->hide();
+            SquadAutonomyPanel::getSingleton().hide();
         }
         else
         {
-            auto settingsPanel = SquadAutonomyPanel::getSingletonPtr();
-            if (settingsPanel->isVisible())
+            auto& settingsPanel = SquadAutonomyPanel::getSingleton();
+            if (settingsPanel.isVisible())
             {
-                settingsPanel->hide();
+                settingsPanel.hide();
                 out = true;
             }
         }

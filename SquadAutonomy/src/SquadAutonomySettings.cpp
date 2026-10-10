@@ -543,7 +543,7 @@ bool SquadSettingsInfo::hasHome()
 {
     return (_homeBuilding || _workBuilding);
 }
-bool SquadSettingsInfo::getDoSleep()
+bool SquadSettingsInfo::getDoSleep() const
 {
     return _doSleep;
 }
@@ -551,35 +551,35 @@ void SquadSettingsInfo::setDoSleep(bool val)
 {
     _doSleep = val;
 }
-bool SquadSettingsInfo::getRestUntilHealed()
+bool SquadSettingsInfo::getRestUntilHealed() const
 {
     return _restUntilHealed;
 }
-float SquadAutonomy::SquadSettingsInfo::getRestThreshold()
+float SquadAutonomy::SquadSettingsInfo::getRestThreshold() const
 {
     return _restThreshold;
 }
-float SquadSettingsInfo::getHealedThreshold()
+float SquadSettingsInfo::getHealedThreshold() const
 {
     return _healedThreshold;
 }
-float SquadAutonomy::SquadSettingsInfo::getRestThresholdP()
+float SquadAutonomy::SquadSettingsInfo::getRestThresholdP() const
 {
     return _restThreshold/100.0;
 }
-float SquadSettingsInfo::getHealedThresholdP()
+float SquadSettingsInfo::getHealedThresholdP() const
 {
     return _healedThreshold/100.0;
 }
-bool SquadSettingsInfo::getUsePaidBeds()
+bool SquadSettingsInfo::getUsePaidBeds() const
 {
     return _usePaidBeds;
 }
-float SquadSettingsInfo::getStartWorkTime()
+float SquadSettingsInfo::getStartWorkTime() const
 {
     return _startWorkTime;
 }
-float SquadSettingsInfo::getEndWorkTime()
+float SquadSettingsInfo::getEndWorkTime() const
 {
     return _endWorkTime;
 }
@@ -634,7 +634,7 @@ bool SquadSettingsInfo::isRestTime()
     return restTime;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourScience()
+float SquadAutonomy::SquadSettingsInfo::getLabourScience() const
 {
     return _labourScience;
 }
@@ -644,7 +644,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourScience(float val)
     _labourScience = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourEngineer()
+float SquadAutonomy::SquadSettingsInfo::getLabourEngineer() const
 {
     return _labourEngineer;
 }
@@ -654,7 +654,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourEngineer(float val)
     _labourEngineer = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourRobotics()
+float SquadAutonomy::SquadSettingsInfo::getLabourRobotics() const
 {
     return _labourRobotics;
 }
@@ -664,7 +664,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourRobotics(float val)
     _labourRobotics = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourMedic()
+float SquadAutonomy::SquadSettingsInfo::getLabourMedic() const
 {
     return _labourMedic;
 }
@@ -674,7 +674,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourMedic(float val)
     _labourMedic = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourLabouring()
+float SquadAutonomy::SquadSettingsInfo::getLabourLabouring() const
 {
     return _labourLabouring;
 }
@@ -684,7 +684,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourLabouring(float val)
     _labourLabouring = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourFarming()
+float SquadAutonomy::SquadSettingsInfo::getLabourFarming() const
 {
     return _labourFarming;
 }
@@ -694,7 +694,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourFarming(float val)
     _labourFarming = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourCooking()
+float SquadAutonomy::SquadSettingsInfo::getLabourCooking() const
 {
     return _labourCooking;
 }
@@ -704,7 +704,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourCooking(float val)
     _labourCooking = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourWeaponSmith()
+float SquadAutonomy::SquadSettingsInfo::getLabourWeaponSmith() const
 {
     return _labourWeaponSmith;
 }
@@ -714,7 +714,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourWeaponSmith(float val)
     _labourWeaponSmith = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourArmourSmith()
+float SquadAutonomy::SquadSettingsInfo::getLabourArmourSmith() const
 {
     return _labourArmourSmith;
 }
@@ -724,7 +724,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourArmourSmith(float val)
     _labourArmourSmith = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourCrossbowSmith()
+float SquadAutonomy::SquadSettingsInfo::getLabourCrossbowSmith() const
 {
     return _labourCrossbowSmith;
 }
@@ -734,7 +734,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourCrossbowSmith(float val)
     _labourCrossbowSmith = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourAutomaticMachine()
+float SquadAutonomy::SquadSettingsInfo::getLabourAutomaticMachine() const
 {
     return _labourAutomaticMachine;
 }
@@ -744,7 +744,7 @@ void SquadAutonomy::SquadSettingsInfo::setLabourAutomaticMachine(float val)
     _labourAutomaticMachine = val;
 }
 
-float SquadAutonomy::SquadSettingsInfo::getLabourOther()
+float SquadAutonomy::SquadSettingsInfo::getLabourOther() const
 {
     return _labourOther;
 }
@@ -799,7 +799,7 @@ int SquadAutonomy::SquadSettingsInfo::getLabourPriority(UseableStuff* useable)
     
 }
 
-bool SquadSettingsInfo::getAttackEnemies()
+bool SquadSettingsInfo::getAttackEnemies() const
 {
     return _attackEnemies;
 }
@@ -807,7 +807,7 @@ void SquadSettingsInfo::setAttackEnemies(bool val)
 {
     _attackEnemies = val;
 }
-bool SquadSettingsInfo::getProtectAllies()
+bool SquadSettingsInfo::getProtectAllies() const
 {
     return _protectAllies;
 }
@@ -815,7 +815,7 @@ void SquadSettingsInfo::setProtectAllies(bool val)
 {
     _protectAllies = val;
 }
-bool SquadSettingsInfo::getDoMedic()
+bool SquadSettingsInfo::getDoMedic() const
 {
     return _doMedic;
 }
@@ -824,7 +824,7 @@ void SquadSettingsInfo::setDoMedic(bool val)
     _doMedic = val;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::getDoRescue()
+bool SquadAutonomy::SquadSettingsInfo::getDoRescue() const
 {
     return _doRescue;
 }
@@ -834,7 +834,7 @@ void SquadAutonomy::SquadSettingsInfo::setDoRescue(bool val)
     _doRescue = val;
 }
 
-bool SquadSettingsInfo::getManTurrets()
+bool SquadSettingsInfo::getManTurrets() const
 {
     return _manTurrets;
 }
@@ -842,7 +842,7 @@ void SquadSettingsInfo::setManTurrets(bool val)
 {
     _manTurrets = val;
 }
-bool SquadSettingsInfo::getStayInsideGate()
+bool SquadSettingsInfo::getStayInsideGate() const
 {
     return _stayInsideGate;
 }
@@ -851,7 +851,7 @@ void SquadSettingsInfo::setStayInsideGate(bool val)
     _stayInsideGate = val;
     ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
 }
-bool SquadAutonomy::SquadSettingsInfo::getCloseGate()
+bool SquadAutonomy::SquadSettingsInfo::getCloseGate() const
 {
     return _closeGate;
 }
