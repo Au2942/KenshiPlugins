@@ -98,7 +98,7 @@ void SquadAutonomyPanel::_createModSettingsButton()
     int height = closeBtn->getHeight();
     auto btn = header->createWidget<MyGUI::Button>("Kenshi_Button1", left - newWidth, top, newWidth, height, MyGUI::Align::Left | MyGUI::Align::Top, "SquadAutonomySettingsBtn");
     btn->setCaption(Localization::gettext("Settings"));
-    float margin = newWidth - btn->getTextRegion().width;
+    int margin = newWidth - btn->getTextRegion().width;
     newWidth = btn->getTextSize().width + margin;
     btn->setSize(newWidth, height);
     btn->setPosition(left - newWidth, top);

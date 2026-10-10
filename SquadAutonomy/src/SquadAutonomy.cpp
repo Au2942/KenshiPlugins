@@ -369,14 +369,19 @@ namespace SquadAutonomy
                 //w2 = right side text (in this case it's "version x")
                 if (settingsPanel->getWidget()->getSize().height > 0 && settingsPanel->getWidget()->getSize().width > 0)
                 {
-                    float right = static_cast<float>(modLine->w2->getRight() - modLine->w2->getTextSize().width) / settingsPanel->getWidget()->getSize().width;
-                    float left = right - 0.1;
-                    float top = static_cast<float>(modLine->w2->getTop()) / settingsPanel->getWidget()->getSize().height;
-                    float height = static_cast<float>(modLine->w2->getHeight()) / settingsPanel->getWidget()->getSize().height;
-                    float extendedHeight = height * 1.5;
-                    //DebugLog("left: " + Ogre::StringConverter::toString(left) + " top: " + Ogre::StringConverter::toString(top) + " height " + Ogre::StringConverter::toString(height));
-                    auto btn = settingsPanel->getWidget()->createWidgetReal<MyGUI::Button>("Kenshi_Button1", left, top - (extendedHeight - height) * 0.5, 0.1, extendedHeight, MyGUI::Align::Top | MyGUI::Align::Left, "SquadAutonomySettingsBtn");
+                    int right = modLine->w2->getRight() - modLine->w2->getTextSize().width;// / settingsPanel->getWidget()->getSize().width;
+                    int width = modLine->w2->getTextSize().width;
+                    int top = modLine->w2->getTop();// / settingsPanel->getWidget()->getSize().height;
+                    int height = modLine->w2->getHeight();// / settingsPanel->getWidget()->getSize().height;
+                    //DebugLog("width: " + Ogre::StringConverter::toString(width) + " right: " + Ogre::StringConverter::toString(right) + " height " + Ogre::StringConverter::toString(height));
+                    auto btn = modLine->w2->getParent()->createWidget<MyGUI::Button>("Kenshi_Button1", right - width, 0, width, height, MyGUI::Align::Left | MyGUI::Align::Top, "SquadAutonomySettingsBtn");
                     btn->setCaption(Localization::gettext("Settings"));
+                    int marginWidth = width - btn->getTextRegion().width;
+                    width = btn->getTextSize().width + marginWidth;
+                    int marginHeight = height - btn->getTextRegion().height;
+                    height = btn->getTextSize().height + marginHeight;
+                    btn->setSize(width, height);
+                    btn->setPosition(right - width, top);
                     btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
                 }
             }
