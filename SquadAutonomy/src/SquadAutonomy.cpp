@@ -1025,7 +1025,7 @@ namespace SquadAutonomy
         float minDist = std::numeric_limits<float>::max();
         int minOperators = std::numeric_limits<int>::max();
         int maxPriority = 0;
-        const float homeDistWeight = 1.0;
+        const float homeDistWeight = 2.0;
         AITaskSytem* taskSystem = ai->getTaskSystem();
         bool urgentOnly = false;
         bool homeOnly = false;
@@ -1044,6 +1044,8 @@ namespace SquadAutonomy
 
             bool inHome = (homeBuilding && useable->isFurniture() && useable->furnitureParentBuilding() == homeBuilding);
             int priority = settings->getLabourPriority(useable);
+            if (priority < maxPriority) continue;
+
             float characterDist = useable->getPosition().squaredDistance(character->getPosition());
             float homeDist = inHome ? 0.0 : useable->getPosition().squaredDistance(homeBuilding->getPosition()) * homeDistWeight;
             float dist = characterDist + homeDist;
@@ -1156,7 +1158,7 @@ namespace SquadAutonomy
             }
 
 
-            if (inHome && !homeOnly)
+            /*if (inHome && !homeOnly)
             {
                 homeOnly = inHome;
                 optimalLabour = useable;
@@ -1167,7 +1169,7 @@ namespace SquadAutonomy
                 labourStorage = storage;
                 takeFromStorage = takeFrom;
                 continue;
-            }
+            }*/
 
             if (priority > maxPriority)
             {
@@ -1180,8 +1182,6 @@ namespace SquadAutonomy
                 takeFromStorage = takeFrom;
                 continue;
             }
-            else if (priority < maxPriority) continue;
-
 
             if (urgentOnly && !urgent)
             {
