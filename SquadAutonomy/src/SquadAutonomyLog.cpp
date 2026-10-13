@@ -16,16 +16,16 @@ namespace SquadAutonomy
 		switch (severity)
 		{
 		case Info:
-			prefix = Localization::gettext("INF:") + ' ';
+			prefix = "INF: ";
 			break;
 		case Warning:
-			prefix = Localization::gettext("WRN:") + ' ';
+			prefix = "WRN: ";
 			break;
 		case Error:
-			prefix = Localization::gettext("ERR:") + ' ';
+			prefix = "ERR: ";
 			break;
 		case Debug:
-			prefix = Localization::gettext("DBG:") + ' ';
+			prefix = "DBG: ";
 			break;
 		default:
 			break;

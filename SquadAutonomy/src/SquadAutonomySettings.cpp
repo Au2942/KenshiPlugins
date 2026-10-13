@@ -216,6 +216,7 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _labourArmourSmith(1.0),
     _labourCrossbowSmith(1.0),
     _labourAutomaticMachine(1.0),
+    _labourOther(1.0),
     _attackEnemies(true),
     _protectAllies(true),
     _doMedic(true),
