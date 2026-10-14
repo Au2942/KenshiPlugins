@@ -413,7 +413,7 @@ namespace SquadAutonomy
         ModSettingsUI::getSingleton().saveSettings();
     }
 
-    void (*closeButton_orig)(OptionsWindow* thisptr, MyGUI::Widget* _sender);
+    /*void (*closeButton_orig)(OptionsWindow* thisptr, MyGUI::Widget* _sender);
     void closeButton_hook(OptionsWindow* thisptr, MyGUI::Widget* _sender)
     {
         auto& modSettingsUI = ModSettingsUI::getSingleton();
@@ -426,7 +426,7 @@ namespace SquadAutonomy
         {
             modSettingsUI.show();
         }
-    }
+    }*/
 
     std::vector<std::unique_ptr<SquadAutonomyButton>> squadAutButtons;
 
@@ -557,6 +557,7 @@ namespace SquadAutonomy
         if (out)
         {
             SquadAutonomyPanel::getSingleton().hide();
+            ModSettingsUI::getSingleton().hide();
         }
         else
         {
@@ -564,6 +565,12 @@ namespace SquadAutonomy
             if (settingsPanel.isVisible())
             {
                 settingsPanel.hide();
+                out = true;
+            }
+            auto& modSettingsPanel = ModSettingsUI::getSingleton();
+            if (modSettingsPanel.isVisible())
+            {
+                modSettingsPanel.hide();
                 out = true;
             }
         }
@@ -1028,7 +1035,7 @@ namespace SquadAutonomy
         const float homeDistWeight = 2.0;
         AITaskSytem* taskSystem = ai->getTaskSystem();
         bool urgentOnly = false;
-        bool homeOnly = false;
+        //bool homeOnly = false;
         Building* homeBuilding = nullptr;
         if (!own->_homeBuilding.isNull() && own->_homeBuilding.getBuilding()) homeBuilding = own->_homeBuilding.getBuilding();
         if (!taskSystem) return nullptr;
@@ -1047,7 +1054,12 @@ namespace SquadAutonomy
             if (priority < maxPriority) continue;
 
             float characterDist = useable->getPosition().squaredDistance(character->getPosition());
-            float homeDist = inHome ? 0.0 : useable->getPosition().squaredDistance(homeBuilding->getPosition()) * homeDistWeight;
+            float homeDist = 0.0;
+            if (!inHome && homeBuilding)
+            {
+                homeDist = useable->getPosition().squaredDistance(homeBuilding->getPosition()) * homeDistWeight;
+            }
+            
             float dist = characterDist + homeDist;
             //Logger::log(useable->displayName + " is " + (inHome ? "in home" : "not in home"));
             bool takeFrom = false;
@@ -1087,54 +1099,64 @@ namespace SquadAutonomy
                 
                 if (!storage)
                 {
-                    bool anyInputEmpty = false;
                     FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
-                    if (!(farmBuilding && farmBuilding->grown >= 1.0))
+                    if (farmBuilding && (farmBuilding->grown >= 1.0 || farmBuilding->deathThreshold <= farmBuilding->died))
                     {
-                        lektor<GameData*> out;
-                        production->getResourcesNeededBecauseNotFull(out);
+                        Logger::log(farmBuilding->displayName + " is operable");
+                    }
+                    else
+                    {
+                        
+                        //lektor<GameData*> out;
+                        //production->getResourcesNeededBecauseNotFull(out);
+                        StorageBuilding* source = nullptr;
+                        StorageBuilding* storageCandidate = nullptr;
                         // if one of the input is empty then find resources from other storages
                         // if none found then ignore
-                        if (out.size() > 0)
+                        for (int j = 0; j < production->getNumConsumtionItems(); ++j)
                         {
-                            StorageBuilding* source = nullptr;
-                            for (int j = 0; j < out.size(); ++j)
+                            auto cItem = production->getConsumtionItems(j);
+                            if (!cItem) continue;
+                            if (cItem->isFull()) continue;
+                            bool inputEmpty = cItem->isEmpty();
+                            source = FindResourceStorageBuildingFor(ai, cItem->item, production, own->_homeTown, true);
+                            if (source)
                             {
-                                if (production->getInventory() && production->getInventory()->countItems(out[j]) == 0 && production->getFuelConsumptionRate() <= 0.0)
+                                if (!IShouldHaul(character, production, source)) continue;
+                                Logger::log(source->displayName + " has input resource: " + cItem->item->name + " for " + production->displayName, Logger::Debug, false);
+
+                                storage = source;
+                                takeFrom = true;
+
+                                if (inputEmpty)
                                 {
-                                    anyInputEmpty = true;
-                                }
-                                source = FindResourceStorageBuildingFor(ai, out[j], production, own->_homeTown, true);
-                                if (source)
-                                {
-                                    if (!IShouldHaul(character, production, source)) continue;
-                                    Logger::log(source->displayName + " has input resource: " + out[j]->name + " for " + production->displayName, Logger::Debug, false);
-                                    storage = source;
-                                    takeFrom = true;
-                                    if (farmBuilding && farmBuilding->productionState == ProductionBuilding::PRODUCTION_STARVED) urgent = true;
-                                    if (production->numOperatorsMax <= 0 && production->productionState == ProductionBuilding::PRODUCTION_STARVED) urgent = true;
+                                    urgent = true;
                                     break;
                                 }
                             }
-                            if (anyInputEmpty && !storage)
+                        }
+                        if (production->isAnyInputsEmpty() && !storage)
+                        {
+                            if (production->isProductionEmpty())
                             {
-                                if (production->isProductionEmpty())
-                                {
-                                    continue;
-                                }
-                                source = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production, own->_homeTown, false);
+                                continue;
+                            }
+                            source = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production, own->_homeTown, false);
 
-                                if (source)
+                            if (source)
+                            {
+                                if (IShouldHaul(character, production, source))
                                 {
-                                    if (IShouldHaul(character, production, source))
-                                    {
-                                        storage = source;
-                                        takeFrom = false;
-                                    }
-                                    else continue;
+                                    storage = source;
+                                    takeFrom = false;
                                 }
                                 else continue;
                             }
+                            else continue;
+                        }
+                        if (farmBuilding || production->numOperatorsMax <= 0)
+                        {
+                            if (!storage || (takeFrom && !urgent)) continue;
                         }
                     }
                 }
@@ -1149,13 +1171,13 @@ namespace SquadAutonomy
             }
 
             // for automatic machinery we do an ai->scoreAutoMachinery check one more time to see if it can be operated
-            if (useable->numOperatorsMax <= 0)
+            /*if (useable->numOperatorsMax <= 0)
             {
                 if (!storage) continue;
-                /*float scoreAutoMachine = ai->scoreAutoMachinery(useable, useable->getPosition());
+                float scoreAutoMachine = ai->scoreAutoMachinery(useable, useable->getPosition());
                 Logger::log(character->displayName + " -> " + useable->displayName + " Automachine Score: " + Ogre::StringConverter::toString(scoreAutoMachine), Logger::Debug, false);
-                if (scoreAutoMachine <= 0) continue;*/
-            }
+                if (scoreAutoMachine <= 0) continue;
+            }*/
 
 
             /*if (inHome && !homeOnly)
@@ -2775,8 +2797,8 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add OptionsWindow::create constructor hook!");
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
         ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");*/
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
-        ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");
+    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
+        ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");*/
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&GameWorld::initialisation), &SquadAutonomy::initialisation_hook, &SquadAutonomy::initialisation_orig))
         ErrorLog("Could not add GameWorld::initialisation constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_threadedUpdate), &SquadAutonomy::_NV_threadedUpdate_hook, &SquadAutonomy::_NV_threadedUpdate_orig))

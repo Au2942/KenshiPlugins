@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2026-10-09 20:03+0700\n"
+"POT-Creation-Date: 2026-10-14 05:07+0700\n"
 "PO-Revision-Date: 2026-10-03 16:41+0700\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -15,7 +15,7 @@ msgstr ""
 "X-Poedit-KeywordsList: Localization::gettext:1\n"
 "X-Poedit-SearchPath-0: .\n"
 
-#: SquadAutonomy.cpp:379
+#: SquadAutonomy.cpp:394 SquadAutonomyPanel.cpp:137
 msgid "Settings"
 msgstr ""
 
@@ -37,22 +37,6 @@ msgstr ""
 
 #: SquadAutonomyLocalization.cpp:29
 msgid "Squad Autonomy:"
-msgstr ""
-
-#: SquadAutonomyLog.cpp:19
-msgid "INF:"
-msgstr ""
-
-#: SquadAutonomyLog.cpp:22
-msgid "WRN:"
-msgstr ""
-
-#: SquadAutonomyLog.cpp:25
-msgid "ERR:"
-msgstr ""
-
-#: SquadAutonomyLog.cpp:28
-msgid "DBG:"
 msgstr ""
 
 #: SquadAutonomyModSettingsUI.cpp:50
@@ -155,222 +139,214 @@ msgstr ""
 msgid "Reset to Default"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:73
+#: SquadAutonomyPanel.cpp:72
 msgid "Main"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:74
+#: SquadAutonomyPanel.cpp:73
 msgid "Options"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:96
+#: SquadAutonomyPanel.cpp:172
 msgid "Enable Autonomy"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:107
+#: SquadAutonomyPanel.cpp:177
 msgid "Set Squad Home Building"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:113
+#: SquadAutonomyPanel.cpp:180
 msgid "Set Squad Work Building"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:125
+#: SquadAutonomyPanel.cpp:186
 msgid "Clear Buildings"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:132
+#: SquadAutonomyPanel.cpp:192
 msgid "Search"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:142
+#: SquadAutonomyPanel.cpp:203
 msgid "Priority"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:147
+#: SquadAutonomyPanel.cpp:208
 msgid "Add AI Package"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:153
+#: SquadAutonomyPanel.cpp:211
 msgid "Clear AI Packages"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:169
+#: SquadAutonomyPanel.cpp:221
 msgid "Home:"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:183
+#: SquadAutonomyPanel.cpp:225
 msgid "Work:"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:309
-msgid ": Autonomy enable"
-msgstr ""
-
-#: SquadAutonomyPanel.cpp:313
-msgid ": Autonomy disable"
-msgstr ""
-
-#: SquadAutonomyPanel.cpp:421
+#: SquadAutonomyPanel.cpp:408
 msgid "Buildings cleared"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:437
+#: SquadAutonomyPanel.cpp:440
 msgid "No object selected!"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:445
+#: SquadAutonomyPanel.cpp:447
 msgid "Select a building!"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:464 SquadAutonomyPanel.cpp:747
+#: SquadAutonomyPanel.cpp:470 SquadAutonomyPanel.cpp:836
 msgid "Set"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:465
+#: SquadAutonomyPanel.cpp:473
 msgid "home building:"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:466
+#: SquadAutonomyPanel.cpp:477
 msgid "work building:"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:544
+#: SquadAutonomyPanel.cpp:599
 msgid "Category"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:548
+#: SquadAutonomyPanel.cpp:610
 msgid "Basic"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:549
+#: SquadAutonomyPanel.cpp:611
 msgid "Labour"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:550
+#: SquadAutonomyPanel.cpp:612
 msgid "Combat"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:551
+#: SquadAutonomyPanel.cpp:613
 msgid "Guard"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:636
+#: SquadAutonomyPanel.cpp:739
 msgid "Start Work Time"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:641
+#: SquadAutonomyPanel.cpp:742
 msgid "End Work Time"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:646
+#: SquadAutonomyPanel.cpp:745
 msgid "Rest Until Healed When Wounded"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:653
+#: SquadAutonomyPanel.cpp:750 SquadAutonomyPanel.cpp:752
 msgid "Rest Health Threshold"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:663
+#: SquadAutonomyPanel.cpp:755 SquadAutonomyPanel.cpp:757
 msgid "Healed Health Threshold"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:672
+#: SquadAutonomyPanel.cpp:761
 msgid "Allow Using Paid Beds"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:675
+#: SquadAutonomyPanel.cpp:764
 msgid "Allow Sleep Outside Work Hours"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:726
+#: SquadAutonomyPanel.cpp:813
 msgid "Stats Used:"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:726
+#: SquadAutonomyPanel.cpp:813
 msgid "(bigger number = higher priority, 0 = forbid)"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:729
+#: SquadAutonomyPanel.cpp:817
 msgid "Science"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:730
+#: SquadAutonomyPanel.cpp:818
 msgid "Labouring (Mining)"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:731
+#: SquadAutonomyPanel.cpp:819
 msgid "Farming"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:732
+#: SquadAutonomyPanel.cpp:820
 msgid "Cooking"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:733
+#: SquadAutonomyPanel.cpp:821
 msgid "Medic"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:734
+#: SquadAutonomyPanel.cpp:822
 msgid "Engineer"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:735
+#: SquadAutonomyPanel.cpp:823
 msgid "Robotics"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:736
+#: SquadAutonomyPanel.cpp:824
 msgid "Weapon Smith"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:737
+#: SquadAutonomyPanel.cpp:825
 msgid "Armour Smith"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:738
+#: SquadAutonomyPanel.cpp:826
 msgid "Crossbow Smith"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:739
+#: SquadAutonomyPanel.cpp:827
 msgid "Automatic Machine"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:740
+#: SquadAutonomyPanel.cpp:828
 msgid "Other"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:743
+#: SquadAutonomyPanel.cpp:832
 msgid "Set All"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:761
+#: SquadAutonomyPanel.cpp:913
 msgid "Attack Enemies"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:764
+#: SquadAutonomyPanel.cpp:916
 msgid "Protect Allies"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:767
+#: SquadAutonomyPanel.cpp:919
 msgid "Do Medic"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:770
+#: SquadAutonomyPanel.cpp:922
 msgid "Rescue Downed Allies"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:778
+#: SquadAutonomyPanel.cpp:953
 msgid "Man Turrets"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:781
+#: SquadAutonomyPanel.cpp:956
 msgid "Gate Guard:"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:782
+#: SquadAutonomyPanel.cpp:958
 msgid "Stay Inside Gate"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:785
+#: SquadAutonomyPanel.cpp:961
 msgid "Close Gate"
 msgstr ""
