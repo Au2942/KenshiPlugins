@@ -106,6 +106,7 @@ void SquadAutonomyPanel::hide()
 
 bool SquadAutonomyPanel::isVisible()
 {
+    if (!SquadAutonomySettings::getSingleton().initialized || !_panel) return false;
     return _panel->isVisible();
 }
 

@@ -462,36 +462,34 @@ namespace SquadAutonomy
         MainBarButton::getSingleton().updateButton();
     }
 
+    void UpdatePanelSelectedSquad()
+    {
+        auto& squadAutonomyPanel = SquadAutonomyPanel::getSingleton();
+        if (squadAutonomyPanel.isVisible())
+        {
+            Platoon* platoon = ou->player->getCurrentPlatoon();
+            if (platoon)
+            {
+                squadAutonomyPanel.selectSquad(*platoon);
+                squadAutonomyPanel.refresh();
+            }
+        }
+    }
+
     // next 3 hooks are for updating currently selected squad
     void (*_NV_autoChangeSelectedObject_orig)(MainBarGUI* thisptr, const hand& obj);
     void _NV_autoChangeSelectedObject_hook(MainBarGUI* thisptr, const hand& obj)
     {
         _NV_autoChangeSelectedObject_orig(thisptr, obj);
-        if (SquadAutonomyPanel::getSingleton().isVisible())
-        {
-            Platoon* platoon = ou->player->getCurrentPlatoon();
-            if (platoon)
-            {
-                SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
-                SquadAutonomyPanel::getSingleton().refresh();
-            }
-        }
+        UpdatePanelSelectedSquad();
     }
 
     void (*tabPlatoonChange_orig)(MainBarGUI* thisptr, MyGUI::TabControl* _sender, unsigned __int64 _index);
     void tabPlatoonChange_hook(MainBarGUI* thisptr, MyGUI::TabControl* _sender, unsigned __int64 _index)
     {
         tabPlatoonChange_orig(thisptr, _sender, _index);
-
-        if (SquadAutonomyPanel::getSingleton().isVisible())
-        {
-            Platoon* platoon = ou->player->getCurrentPlatoon();
-            if (platoon)
-            {
-                SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
-                SquadAutonomyPanel::getSingleton().refresh();
-            }
-        }
+        auto& squadAutonomyPanel = SquadAutonomyPanel::getSingleton();
+        UpdatePanelSelectedSquad();
     }
 
     void (*cycleSquad_orig)(PlayerInterface* thisptr);
@@ -499,15 +497,7 @@ namespace SquadAutonomy
     {
         // your code before/instead of the original
         cycleSquad_orig(thisptr);
-        if (SquadAutonomyPanel::getSingleton().isVisible())
-        {
-            Platoon* platoon = ou->player->getCurrentPlatoon();
-            if (platoon)
-            {
-                SquadAutonomyPanel::getSingleton().selectSquad(*platoon);
-                SquadAutonomyPanel::getSingleton().refresh();
-            }
-        }
+        UpdatePanelSelectedSquad();
     }
     
     void (*SquadCellView_update_orig)(SquadManagementScreen::SquadCellView* thisptr, const MyGUI::IBDrawItemInfo& _info, SquadManagementScreen::SquadData* _data);
@@ -864,11 +854,10 @@ namespace SquadAutonomy
             if (ai) taskSystem = ai->getTaskSystem();
             if (taskSystem && taskSystem->isPathImpossible(useable)) continue;
             Tasker* currentGoal = taskSystem->tryToGetCurrentGoal();
-            if (currentGoal && currentGoal->subject.isValid() && currentGoal->subject == useable) continue;
+            if (currentGoal) continue;
             Tasker* currentOrder = taskSystem->getFirstOrder();
-            if (currentOrder && currentOrder->subject == useable) continue;
-            if (body->isIdle()) continue;
-            if (body->currentAction && body->currentAction->subject == useable) continue;
+            if (currentOrder) continue;
+            if (!body->isIdle()) continue;
             float dist = obj->pos.squaredDistance(useable->pos);
             if (dist < minDist)
             {
@@ -882,14 +871,16 @@ namespace SquadAutonomy
     // TODO: still iffy about having other characters order the nearest character to do it instead of having the nearest character order themselves
     bool IShouldHaul(Character* character, Building* useable, Building* storage, bool takeFrom = false)
     {
-        if (!character || !useable || !storage) return false;
+        if (!character || !useable) return false;
         ActivePlatoon* squad = character->getPlatoon();
-        //float minDist = character->getPosition().squaredDistance(useable->getPosition());
+        if (!squad) return false;
+        float minDist = character->getPosition().squaredDistance(useable->getPosition());
         Building* to = takeFrom ? useable : storage;
         Building* from = takeFrom ? storage : useable;
         for (auto it = squad->things.begin(); it != squad->things.end(); ++it)
         {
             Character* obj = reinterpret_cast<Character*>(*it);
+            if (!obj) continue;
             if (character == obj) continue;
             CharBody* body = obj->getBody();
             AI* ai = obj->getAI();
@@ -900,16 +891,17 @@ namespace SquadAutonomy
                 Tasker* currentOrder = taskSystem->getFirstOrder();
                 if (currentOrder)
                 {
-                    if (currentOrder->key() == COLLECT_OUTPUT_RESOURCE && currentOrder->subject == from->getHandle())
+                    if (from && currentOrder->key() == COLLECT_OUTPUT_RESOURCE && currentOrder->subject == from)
                     {
                         Logger::log(obj->displayName + " already has a hauling order from " + from->displayName, Logger::Debug, false);
                         return false;
                     }
-                    if (currentOrder->key() == OPERATE_STORAGE && currentOrder->subject == to->getHandle())
+                    if (to && currentOrder->key() == OPERATE_STORAGE && currentOrder->subject == to)
                     {
                         Logger::log(obj->displayName + " already has a hauling order to " + to->displayName, Logger::Debug, false);
                         return false;
                     }
+                    continue;
                 }
             }
             if (body)
@@ -917,24 +909,25 @@ namespace SquadAutonomy
                 Tasker* currentAction = body->getCurrentAction();
                 if (currentAction)
                 {
-                    if (currentAction->key() == COLLECT_OUTPUT_RESOURCE && currentAction->subject == from->getHandle())
+                    if (from && currentAction->key() == COLLECT_OUTPUT_RESOURCE && currentAction->subject == from)
                     {
                         Logger::log(obj->displayName + " is already hauling from " + from->displayName, Logger::Debug, false);
                         return false;
                     }
-                    if (currentAction->key() == OPERATE_STORAGE && currentAction->subject == to->getHandle())
+                    if (to && currentAction->key() == OPERATE_STORAGE && currentAction->subject == to)
                     {
                         Logger::log(obj->displayName + " is already hauling to " + to->displayName, Logger::Debug, false);
                         return false;
                     }
+                    continue;
                 }
             }
-            /*float dist = obj->pos.squaredDistance(useable->pos);
+            float dist = obj->getPosition().squaredDistance(useable->getPosition());
             if (dist < minDist)
             {
                 Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
                 return false;
-            }*/
+            }
         }
         return true;
     }
@@ -1020,10 +1013,17 @@ namespace SquadAutonomy
         return best;
     }
 
+    bool HasRoomFor(Character* character, GameData* item)
+    {
+        if (!character || !item || !character->getInventory()) return false;
+        return character->getInventory()->hasRoomForItem(item);
+    }
+
     // the int value in the buildings unordered_map is for operators count
     // thinking of changing it to just std::vector<UseableStuff*> and get the operator counts again here
     // criteria is labourPriority > operators count > distance
-    UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, Ownerships* own, const std::vector<UseableStuff*>& useables, UseableStuff* current, SquadSettingsInfo* settings, StorageBuilding* &labourStorage, bool& takeFromStorage)
+    UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, Ownerships* own, const std::vector<UseableStuff*>& useables, UseableStuff* current, SquadSettingsInfo* settings, 
+        StorageBuilding* &labourStorage, bool& takeFromStorage, bool& operateStorage)
     {
         if (!character || !ai || !own || !settings) return nullptr;
         UseableStuff* optimalLabour = nullptr;
@@ -1045,9 +1045,9 @@ namespace SquadAutonomy
             auto useable = useables[i];
             if (!useable) continue;
             Logger::log("Check labour: " + useable->displayName, Logger::Debug, true);
-            int operators = useable->currentOperators.size();
-            bool isCurrent = (current && useable == current);
-            if (isCurrent && operators > 0) operators -= 1;
+            int operators = useable->numOperatorsMax > 0? useable->currentOperators.size() : 1;
+            bool useableIsCurrent = (current && useable == current);
+            if (useableIsCurrent && operators > 0) operators -= 1;
 
             bool inHome = (homeBuilding && useable->isFurniture() && useable->furnitureParentBuilding() == homeBuilding);
             int priority = settings->getLabourPriority(useable);
@@ -1063,6 +1063,7 @@ namespace SquadAutonomy
             float dist = characterDist + homeDist;
             //Logger::log(useable->displayName + " is " + (inHome ? "in home" : "not in home"));
             bool takeFrom = false;
+            bool doOperateStorage = false;
             bool urgent = false;
             StorageBuilding* storage = nullptr;
 
@@ -1070,14 +1071,15 @@ namespace SquadAutonomy
             if (useable->getBuildState() == 0) continue;
             //if (homeOnly && !inHome) continue;
 
-            if (useable->numOperatorsMax == 1.0 && !ImNearestFree(character, useable)) continue;
+            //if (!ImNearestFree(character, useable)) continue;
 
             ProductionBuilding* production = useable->getProductionBuilding();
             if (production)
             {
                 // if production is full then order someone to put it in storage
                 // if there's no compatible storage then ignore the building
-                if (production->isProductionFull() && production->getProductionItemData())
+                Logger::log("Check for full output");
+                if (production->productionState == ProductionBuilding::PRODUCTION_FULL)
                 {
                     Logger::log("Production full");
                     //no storage
@@ -1085,9 +1087,10 @@ namespace SquadAutonomy
                     if (source)
                     {
                         Logger::log(character->displayName + " -> " + production->displayName + " production full. Can haul " + production->getProductionItemData()->name + " to : " + source->displayName, Logger::Debug, false);
-                        if (IShouldHaul(character, production, source))
+                        if (HasRoomFor(character, production->getProductionItemData()) && IShouldHaul(character, production, source))
                         {
                             storage = source;
+                            doOperateStorage = true;
                             urgent = true;
                             takeFrom = false;
                         }
@@ -1097,8 +1100,9 @@ namespace SquadAutonomy
                 }
 
                 
-                if (!storage)
+                if (!doOperateStorage)
                 {
+                    Logger::log("Check for empty input");
                     FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
                     if (farmBuilding && (farmBuilding->grown >= 1.0 || farmBuilding->deathThreshold <= farmBuilding->died))
                     {
@@ -1110,32 +1114,48 @@ namespace SquadAutonomy
                         //lektor<GameData*> out;
                         //production->getResourcesNeededBecauseNotFull(out);
                         StorageBuilding* source = nullptr;
-                        StorageBuilding* storageCandidate = nullptr;
                         // if one of the input is empty then find resources from other storages
                         // if none found then ignore
                         for (int j = 0; j < production->getNumConsumtionItems(); ++j)
                         {
                             auto cItem = production->getConsumtionItems(j);
-                            if (!cItem) continue;
+                            if (!cItem || !cItem->item) continue;
                             if (cItem->isFull()) continue;
                             bool inputEmpty = cItem->isEmpty();
-                            source = FindResourceStorageBuildingFor(ai, cItem->item, production, own->_homeTown, true);
-                            if (source)
+                            bool characterHasItem = false;
+                            if (character->getInventory()) characterHasItem = character->getInventory()->hasItem(cItem->item, 1);
+                            if (characterHasItem && IShouldHaul(character, production, nullptr, true))
                             {
-                                if (!IShouldHaul(character, production, source)) continue;
-                                Logger::log(source->displayName + " has input resource: " + cItem->item->name + " for " + production->displayName, Logger::Debug, false);
-
-                                storage = source;
+                                Logger::log("Has input resource in backpack: " + cItem->item->name + " for " + production->displayName, Logger::Debug, false);
+                                doOperateStorage = true;
                                 takeFrom = true;
-
                                 if (inputEmpty)
                                 {
                                     urgent = true;
                                     break;
                                 }
+                                continue;
+                            }
+
+                            source = FindResourceStorageBuildingFor(ai, cItem->item, production, own->_homeTown, true);
+                            if (source)
+                            {
+                                if (HasRoomFor(character, cItem->item) && IShouldHaul(character, production, source, true))
+                                {
+                                    Logger::log(source->displayName + " has input resource: " + cItem->item->name + " for " + production->displayName, Logger::Debug, false);
+
+                                    storage = source;
+                                    doOperateStorage = true;
+                                    takeFrom = true;
+                                    if (inputEmpty)
+                                    {
+                                        urgent = true;
+                                        break;
+                                    }
+                                }
                             }
                         }
-                        if (production->isAnyInputsEmpty() && !storage)
+                        if (production->isAnyInputsEmpty() && !doOperateStorage)
                         {
                             if (production->isProductionEmpty())
                             {
@@ -1145,18 +1165,25 @@ namespace SquadAutonomy
 
                             if (source)
                             {
-                                if (IShouldHaul(character, production, source))
+                                if (HasRoomFor(character, production->getProductionItemData()) && IShouldHaul(character, production, source))
                                 {
                                     storage = source;
+                                    doOperateStorage = true;
                                     takeFrom = false;
                                 }
                                 else continue;
                             }
                             else continue;
                         }
-                        if (farmBuilding || production->numOperatorsMax <= 0)
+
+                        if (farmBuilding)
                         {
-                            if (!storage || (takeFrom && !urgent)) continue;
+                            if (!doOperateStorage) continue;
+                            if (takeFrom && !urgent) continue;
+                        }
+                        if (production->numOperatorsMax <= 0)
+                        {
+                            if (!doOperateStorage) continue;
                         }
                     }
                 }
@@ -1164,10 +1191,20 @@ namespace SquadAutonomy
             
             Logger::log(useable->displayName + ", " + Ogre::StringConverter::toString(operators) + ", " + Ogre::StringConverter::toString(dist));
 
-            if (isCurrent)
+            // if currently working on something
+            if (current)
             {
-                storage = nullptr;
-                urgent = true;
+                // don't refill input unless urgent while current
+                if (useableIsCurrent)
+                {
+                    Logger::log(useable->displayName + " is current");
+                    if (!urgent)
+                    {
+                        doOperateStorage = false;
+                    }
+                    urgent = true;
+                }
+                else urgent = false;
             }
 
             // for automatic machinery we do an ai->scoreAutoMachinery check one more time to see if it can be operated
@@ -1202,6 +1239,7 @@ namespace SquadAutonomy
                 urgentOnly = urgent;
                 labourStorage = storage;
                 takeFromStorage = takeFrom;
+                operateStorage = doOperateStorage;
                 continue;
             }
 
@@ -1217,6 +1255,7 @@ namespace SquadAutonomy
                 urgentOnly = urgent;
                 labourStorage = storage;
                 takeFromStorage = takeFrom;
+                operateStorage = doOperateStorage;
                 continue;
             }
 
@@ -1228,6 +1267,7 @@ namespace SquadAutonomy
                 minDist = dist;
                 labourStorage = storage;
                 takeFromStorage = takeFrom;
+                operateStorage = doOperateStorage;
                 continue;
             }
             else if (operators > minOperators) continue;
@@ -1238,6 +1278,7 @@ namespace SquadAutonomy
                 minDist = dist;
                 labourStorage = storage;
                 takeFromStorage = takeFrom;
+                operateStorage = doOperateStorage;
             }
         }
         if (optimalLabour) Logger::log(character->displayName + " found labour : " + optimalLabour->displayName + ", " + Ogre::StringConverter::toString(minOperators) + ", " + Ogre::StringConverter::toString(minDist), Logger::Info, false);
@@ -1250,8 +1291,12 @@ namespace SquadAutonomy
         AI* ai = character->getAI();
         if (!ai) return nullptr;
         UseableStuff* optimalLabour = nullptr;
+        OrdersReceiver* order = character->getOrdersReciever();
+        if (!order) return nullptr;
         std::vector<UseableStuff*> labourCandidates;
-        Ownerships* own = settings->getSquad()->getOwnerships();
+        Ownerships* own = nullptr;
+        if (settings->getSquad()) own = settings->getSquad()->getOwnerships();
+        if (!own) return nullptr;
         TownBase* town = own->_homeTown;
         if (!town && shou && shou->townList) town = shou->townList->getNearestTown(ai->getPosition(), ai->getFaction(), nullptr, nullptr, TOWN_NULL);
         Logger::log(character->displayName + " find Labour To Do", Logger::Info, true);
@@ -1270,6 +1315,7 @@ namespace SquadAutonomy
                     for (int i = 0; i < researchBuildings->size(); ++i)
                     {
                         auto useable = (*researchBuildings)[i]->getUseableStuff();
+                        if (!useable) continue;
                         int priority = settings->getLabourPriority(useable);
                         if (priority <= 0) continue;
                         auto operators = useable->currentOperators;
@@ -1287,7 +1333,7 @@ namespace SquadAutonomy
                 }
             }
 
-            BuildingFunction bfs[] = { BF_MINE, BF_REFINERY, BF_CRAFTING, BF_GENERATOR };
+            BuildingFunction bfs[] = { BF_MINE, BF_REFINERY, BF_CRAFTING, BF_GENERATOR};
             size_t length = sizeof(bfs) / sizeof(bfs[0]);
             for (int i = 0; i < length; ++i)
             {
@@ -1319,22 +1365,22 @@ namespace SquadAutonomy
                     }
                 }
             }
-            
+            if (current) Logger::log(character->displayName + " is currently working on: " + current->displayName);
             StorageBuilding* optimalStorage = nullptr;
             bool takeFromStorage = false;
-            optimalLabour = FindOptimalLabourFromList(character, ai, own, labourCandidates, current, settings, optimalStorage, takeFromStorage);
-            OrdersReceiver* order = character->getOrdersReciever();
-            if (optimalLabour && optimalStorage)
+            bool operateStorage = false;
+            optimalLabour = FindOptimalLabourFromList(character, ai, own, labourCandidates, current, settings, optimalStorage, takeFromStorage, operateStorage);
+            if (optimalLabour && operateStorage)
             {
-                Logger::log(optimalLabour->displayName + " found storage: " + optimalStorage->displayName);
+                Logger::log(optimalLabour->displayName + " found storage: " + (optimalStorage? optimalStorage->displayName : " backpack"));
                 if (takeFromStorage)
                 {
-                    Logger::log(character->displayName + " haul from " + optimalStorage->displayName + " to " + optimalLabour->displayName, Logger::Debug, false);
-                    order->addOrder(COLLECT_OUTPUT_RESOURCE, optimalStorage, Ogre::Vector3::ZERO, true, false);
+                    Logger::log(character->displayName + " haul from " + (optimalStorage ? optimalStorage->displayName : " backpack") + " to " + optimalLabour->displayName, Logger::Debug, false);
+                    if (optimalStorage) order->addOrder(COLLECT_OUTPUT_RESOURCE, optimalStorage, Ogre::Vector3::ZERO, true, false);
                     order->addOrder(OPERATE_STORAGE, optimalLabour, Ogre::Vector3::ZERO, false, false);
                     //order->addOrder(optimalLabour->numOperatorsMax > 0 ? OPERATE_MACHINERY : OPERATE_AUTOMATIC_MACHINERY, optimalLabour, Ogre::Vector3::ZERO, false, false);
                 }
-                else
+                else if (optimalStorage)
                 {
                     Logger::log(character->displayName + " haul from " + optimalLabour->displayName + " to " + optimalStorage->displayName, Logger::Debug, false);
                     order->addOrder(COLLECT_OUTPUT_RESOURCE, optimalLabour, Ogre::Vector3::ZERO, true, false);
