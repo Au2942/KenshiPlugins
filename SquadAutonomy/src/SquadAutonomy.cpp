@@ -852,29 +852,27 @@ namespace SquadAutonomy
             AI* ai = obj->getAI();
             AITaskSytem* taskSystem = nullptr;
             if (ai) taskSystem = ai->getTaskSystem();
-            if (taskSystem && taskSystem->isPathImpossible(useable)) continue;
             Tasker* currentGoal = taskSystem->tryToGetCurrentGoal();
             if (currentGoal) continue;
             Tasker* currentOrder = taskSystem->getFirstOrder();
             if (currentOrder) continue;
             if (!body->isIdle()) continue;
             float dist = obj->pos.squaredDistance(useable->pos);
-            if (dist < minDist)
-            {
-                Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
-                return false;
-            }
+            if (dist >= minDist) continue;
+            if (taskSystem && taskSystem->isPathImpossible(useable)) continue;
+            Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
+            return false;
         }
         return true;
     }
 
-    // TODO: still iffy about having other characters order the nearest character to do it instead of having the nearest character order themselves
     bool IShouldHaul(Character* character, Building* useable, Building* storage, bool takeFrom = false)
     {
         if (!character || !useable) return false;
         ActivePlatoon* squad = character->getPlatoon();
         if (!squad) return false;
-        float minDist = character->getPosition().squaredDistance(useable->getPosition());
+        Ogre::Vector3 useablePos = useable->getPosition();
+        float minDist = character->getPosition().squaredDistance(useablePos);
         Building* to = takeFrom ? useable : storage;
         Building* from = takeFrom ? storage : useable;
         for (auto it = squad->things.begin(); it != squad->things.end(); ++it)
@@ -886,87 +884,70 @@ namespace SquadAutonomy
             AI* ai = obj->getAI();
             AITaskSytem* taskSystem = nullptr;
             if (ai) taskSystem = ai->getTaskSystem();
-            if (taskSystem)
+            if (!taskSystem) continue;
+
+            Tasker* currentOrder = taskSystem->getFirstOrder();
+            if (currentOrder)
             {
-                Tasker* currentOrder = taskSystem->getFirstOrder();
-                if (currentOrder)
+                if (from && currentOrder->key() == COLLECT_OUTPUT_RESOURCE && currentOrder->subject == from)
                 {
-                    if (from && currentOrder->key() == COLLECT_OUTPUT_RESOURCE && currentOrder->subject == from)
-                    {
-                        Logger::log(obj->displayName + " already has a hauling order from " + from->displayName, Logger::Debug, false);
-                        return false;
-                    }
-                    if (to && currentOrder->key() == OPERATE_STORAGE && currentOrder->subject == to)
-                    {
-                        Logger::log(obj->displayName + " already has a hauling order to " + to->displayName, Logger::Debug, false);
-                        return false;
-                    }
-                    continue;
+                    Logger::log(obj->displayName + " already has a hauling order from " + from->displayName, Logger::Debug, false);
+                    return false;
                 }
-            }
-            if (body)
-            {
-                Tasker* currentAction = body->getCurrentAction();
-                if (currentAction)
+                if (to && currentOrder->key() == OPERATE_STORAGE && currentOrder->subject == to)
                 {
-                    if (from && currentAction->key() == COLLECT_OUTPUT_RESOURCE && currentAction->subject == from)
-                    {
-                        Logger::log(obj->displayName + " is already hauling from " + from->displayName, Logger::Debug, false);
-                        return false;
-                    }
-                    if (to && currentAction->key() == OPERATE_STORAGE && currentAction->subject == to)
-                    {
-                        Logger::log(obj->displayName + " is already hauling to " + to->displayName, Logger::Debug, false);
-                        return false;
-                    }
-                    continue;
+                    Logger::log(obj->displayName + " already has a hauling order to " + to->displayName, Logger::Debug, false);
+                    return false;
                 }
+                continue;
             }
-            float dist = obj->getPosition().squaredDistance(useable->getPosition());
-            if (dist < minDist)
+
+            if (!body) continue;
+            
+            Tasker* currentAction = body->getCurrentAction();
+            if (currentAction)
             {
-                Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
-                return false;
+                if (from && currentAction->key() == COLLECT_OUTPUT_RESOURCE && currentAction->subject == from)
+                {
+                    Logger::log(obj->displayName + " is already hauling from " + from->displayName, Logger::Debug, false);
+                    return false;
+                }
+                if (to && currentAction->key() == OPERATE_STORAGE && currentAction->subject == to)
+                {
+                    Logger::log(obj->displayName + " is already hauling to " + to->displayName, Logger::Debug, false);
+                    return false;
+                }
+                continue;
             }
+            
+            float dist = obj->getPosition().squaredDistance(useablePos);
+            if (dist >= minDist) continue;
+            if (taskSystem->isPathImpossible(useable)) continue;
+            Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
+            return false;
         }
         return true;
     }
 
     // the base game AI::findResourceStorageBulidingFor has a flaw where it counts inputs for having the resource needed
     // which led to problems like Plate Beating Station telling us it has iron resources we can use for Iron Refinery
-    StorageBuilding* FindResourceStorageBuildingFor(AI* ai, GameData* needed, StorageBuilding* skip, TownBase* town, bool takeFrom = false)
+    StorageBuilding* FindResourceStorageBuildingFor(AI* ai, GameData* needed, StorageBuilding* skip, std::vector<UseableStuff*>& toCheck, bool takeFrom = false)
     {
         //lektor<Building*> buildings;
         //ai->getAllLocalMachines(buildings, 67118134); //buildingfunction bitmask (I think?) copied from AI::findResourceStorageBulidingFor
         if (!ai || !needed) return nullptr;
         Character* character = ai->getCharacter();
         if (!character) return nullptr;
-        std::vector<Building*> useables;
-        if (!town && shou && shou->townList) town = shou->townList->getNearestTown(ai->getPosition(), ai->getFaction(), nullptr, nullptr, TOWN_NULL);
-        if (!town) return nullptr;
-        BuildingFunction bfs[] = { BF_MINE, BF_RESOURCE_STORAGE, BF_REFINERY, BF_CRAFTING,
-                                 BF_GENERATOR, BF_GENERAL_STORAGE, BF_RAIN_COLLECTOR, BF_LIQUID_TANK };
-        size_t length = sizeof(bfs) / sizeof(bfs[0]);
-        for (int i = 0; i < length; ++i)
-        {
-            auto list = town->findAllBuildingsWithFunction(bfs[i], character);
-            if (!list) continue;
-            for (int j = 0; j < list->size(); ++j)
-            {
-                auto useable = list->at(j) ? list->at(j)->getUseableStuff() : nullptr;
-                if (useable) useables.push_back(useable);
-            }
-        }
+        Ogre::Vector3 myPos = character->getPosition();
 
         AITaskSytem* taskSystem = ai->getTaskSystem();
         float minDist = std::numeric_limits<float>::max();
         StorageBuilding* best = nullptr;
-        for (int i = 0; i < useables.size(); ++i)
+        for (int i = 0; i < toCheck.size(); ++i)
         {
-            StorageBuilding* storage = useables[i]->getFunctionStuff();
+            StorageBuilding* storage = toCheck[i]->getFunctionStuff();
             if (!storage) continue;
-            if (storage->getGameData() == skip->getGameData()) continue;
-            if (taskSystem && taskSystem->isPathImpossible(storage)) continue;
+            if (skip && storage->getGameData() == skip->getGameData()) continue;
             if (!storage->getInventory()) continue;
 
             if (takeFrom)
@@ -1003,12 +984,11 @@ namespace SquadAutonomy
                     if (!needThis) continue;
                 }
             }
-            float dist = ai->getPosition().squaredDistance(storage->getPosition());
-            if (dist < minDist)
-            {
-                minDist = dist;
-                best = storage;
-            }
+            float dist = myPos.squaredDistance(storage->getPosition());
+            if (dist >= minDist) continue;
+            if (taskSystem && taskSystem->isPathImpossible(storage)) continue;
+            minDist = dist;
+            best = storage;
         }
         return best;
     }
@@ -1019,30 +999,35 @@ namespace SquadAutonomy
         return character->getInventory()->hasRoomForItem(item);
     }
 
-    // the int value in the buildings unordered_map is for operators count
-    // thinking of changing it to just std::vector<UseableStuff*> and get the operator counts again here
     // criteria is labourPriority > operators count > distance
-    UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, Ownerships* own, const std::vector<UseableStuff*>& useables, UseableStuff* current, SquadSettingsInfo* settings, 
+    UseableStuff* FindOptimalLabourFromList(Character* character, AI* ai, Ownerships* own, const std::vector<std::pair<int,UseableStuff*>>& useables, UseableStuff* current, SquadSettingsInfo* settings, 
         StorageBuilding* &labourStorage, bool& takeFromStorage, bool& operateStorage)
     {
         if (!character || !ai || !own || !settings) return nullptr;
+        AITaskSytem* taskSystem = ai->getTaskSystem();
+        if (!taskSystem) return nullptr;
+
         UseableStuff* optimalLabour = nullptr;
         labourStorage = nullptr;
         takeFromStorage = false;
         float minDist = std::numeric_limits<float>::max();
         int minOperators = std::numeric_limits<int>::max();
         int maxPriority = 0;
-        const float homeDistWeight = 2.0;
-        AITaskSytem* taskSystem = ai->getTaskSystem();
         bool urgentOnly = false;
-        //bool homeOnly = false;
+        const float homeDistWeight = 2.0;
+        Ogre::Vector3 characterPos = character->getPosition();
+        Ogre::Vector3 homePos = Ogre::Vector3::ZERO;
         Building* homeBuilding = nullptr;
         if (!own->_homeBuilding.isNull() && own->_homeBuilding.getBuilding()) homeBuilding = own->_homeBuilding.getBuilding();
-        if (!taskSystem) return nullptr;
+        if (homeBuilding) homePos = homeBuilding->getPosition();
+        TownBase* town = own->_homeTown;
+        if (!town && shou && shou->townList) town = shou->townList->getNearestTown(ai->getPosition(), ai->getFaction(), nullptr, nullptr, TOWN_NULL);
+        if (!town) return nullptr;
+
         Logger::log("Find optimal Labour from list", Logger::Severity::Info, true);
         for (int i = 0; i < useables.size(); ++i)
         {
-            auto useable = useables[i];
+            auto useable = useables[i].second;
             if (!useable) continue;
             Logger::log("Check labour: " + useable->displayName, Logger::Debug, true);
             int operators = useable->numOperatorsMax > 0? useable->currentOperators.size() : 1;
@@ -1050,46 +1035,59 @@ namespace SquadAutonomy
             if (useableIsCurrent && operators > 0) operators -= 1;
 
             bool inHome = (homeBuilding && useable->isFurniture() && useable->furnitureParentBuilding() == homeBuilding);
-            int priority = settings->getLabourPriority(useable);
+            int priority = useables[i].first;
             if (priority < maxPriority) continue;
-
-            float characterDist = useable->getPosition().squaredDistance(character->getPosition());
+            Ogre::Vector3 useablePos = useable->getPosition();
+            float characterDist = useablePos.squaredDistance(characterPos);
             float homeDist = 0.0;
             if (!inHome && homeBuilding)
             {
-                homeDist = useable->getPosition().squaredDistance(homeBuilding->getPosition()) * homeDistWeight;
+                homeDist = useablePos.squaredDistance(homePos) * homeDistWeight;
             }
             
             float dist = characterDist + homeDist;
-            //Logger::log(useable->displayName + " is " + (inHome ? "in home" : "not in home"));
             bool takeFrom = false;
             bool doOperateStorage = false;
             bool urgent = false;
             StorageBuilding* storage = nullptr;
 
-            if (taskSystem->isPathImpossible(useable)) continue;
             if (useable->getBuildState() == 0) continue;
-            //if (homeOnly && !inHome) continue;
 
-            //if (!ImNearestFree(character, useable)) continue;
+            if (!ImNearestFree(character,useable)) continue;
 
             ProductionBuilding* production = useable->getProductionBuilding();
             if (production)
             {
+                bool canHaulTo = false;
+                std::vector<UseableStuff*> toCheck;
+                BuildingFunction bfs[] = { BF_MINE, BF_RESOURCE_STORAGE, BF_REFINERY, BF_CRAFTING,
+                                     BF_GENERATOR, BF_GENERAL_STORAGE, BF_RAIN_COLLECTOR, BF_LIQUID_TANK };
+                size_t length = sizeof(bfs) / sizeof(bfs[0]);
+                for (int i = 0; i < length; ++i)
+                {
+                    auto list = town->findAllBuildingsWithFunction(bfs[i], character);
+                    if (!list) continue;
+                    for (int j = 0; j < list->size(); ++j)
+                    {
+                        auto useable = list->at(j) ? list->at(j)->getUseableStuff() : nullptr;
+                        if (useable) toCheck.push_back(useable);
+                    }
+                }
+                StorageBuilding* target = nullptr;
+
                 // if production is full then order someone to put it in storage
                 // if there's no compatible storage then ignore the building
-                Logger::log("Check for full output");
                 if (production->productionState == ProductionBuilding::PRODUCTION_FULL)
                 {
                     Logger::log("Production full");
-                    //no storage
-                    StorageBuilding* source = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production, own->_homeTown, false);
-                    if (source)
+                    target = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production, toCheck, false);
+                    canHaulTo = HasRoomFor(character, production->getProductionItemData()) && IShouldHaul(character, production, target);
+                    if (target)
                     {
-                        Logger::log(character->displayName + " -> " + production->displayName + " production full. Can haul " + production->getProductionItemData()->name + " to : " + source->displayName, Logger::Debug, false);
-                        if (HasRoomFor(character, production->getProductionItemData()) && IShouldHaul(character, production, source))
+                        Logger::log(character->displayName + " -> " + production->displayName + " production full. Can haul " + production->getProductionItemData()->name + " to : " + target->displayName, Logger::Debug, false);
+                        if (canHaulTo)
                         {
-                            storage = source;
+                            storage = target;
                             doOperateStorage = true;
                             urgent = true;
                             takeFrom = false;
@@ -1102,7 +1100,6 @@ namespace SquadAutonomy
                 
                 if (!doOperateStorage)
                 {
-                    Logger::log("Check for empty input");
                     FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
                     if (farmBuilding && (farmBuilding->grown >= 1.0 || farmBuilding->deathThreshold <= farmBuilding->died))
                     {
@@ -1111,9 +1108,6 @@ namespace SquadAutonomy
                     else
                     {
                         
-                        //lektor<GameData*> out;
-                        //production->getResourcesNeededBecauseNotFull(out);
-                        StorageBuilding* source = nullptr;
                         // if one of the input is empty then find resources from other storages
                         // if none found then ignore
                         for (int j = 0; j < production->getNumConsumtionItems(); ++j)
@@ -1137,7 +1131,7 @@ namespace SquadAutonomy
                                 continue;
                             }
 
-                            source = FindResourceStorageBuildingFor(ai, cItem->item, production, own->_homeTown, true);
+                            StorageBuilding* source = FindResourceStorageBuildingFor(ai, cItem->item, production, toCheck, true);
                             if (source)
                             {
                                 if (HasRoomFor(character, cItem->item) && IShouldHaul(character, production, source, true))
@@ -1161,13 +1155,12 @@ namespace SquadAutonomy
                             {
                                 continue;
                             }
-                            source = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production, own->_homeTown, false);
 
-                            if (source)
+                            if (target)
                             {
-                                if (HasRoomFor(character, production->getProductionItemData()) && IShouldHaul(character, production, source))
+                                if (canHaulTo)
                                 {
-                                    storage = source;
+                                    storage = target;
                                     doOperateStorage = true;
                                     takeFrom = false;
                                 }
@@ -1207,28 +1200,8 @@ namespace SquadAutonomy
                 else urgent = false;
             }
 
-            // for automatic machinery we do an ai->scoreAutoMachinery check one more time to see if it can be operated
-            /*if (useable->numOperatorsMax <= 0)
-            {
-                if (!storage) continue;
-                float scoreAutoMachine = ai->scoreAutoMachinery(useable, useable->getPosition());
-                Logger::log(character->displayName + " -> " + useable->displayName + " Automachine Score: " + Ogre::StringConverter::toString(scoreAutoMachine), Logger::Debug, false);
-                if (scoreAutoMachine <= 0) continue;
-            }*/
+            if (taskSystem->isPathImpossible(useable)) continue;
 
-
-            /*if (inHome && !homeOnly)
-            {
-                homeOnly = inHome;
-                optimalLabour = useable;
-                minOperators = operators;
-                minDist = dist;
-                maxPriority = priority;
-                urgentOnly = urgent;
-                labourStorage = storage;
-                takeFromStorage = takeFrom;
-                continue;
-            }*/
 
             if (priority > maxPriority)
             {
@@ -1258,7 +1231,6 @@ namespace SquadAutonomy
                 operateStorage = doOperateStorage;
                 continue;
             }
-
 
             else if (operators < minOperators)
             {
@@ -1293,7 +1265,8 @@ namespace SquadAutonomy
         UseableStuff* optimalLabour = nullptr;
         OrdersReceiver* order = character->getOrdersReciever();
         if (!order) return nullptr;
-        std::vector<UseableStuff*> labourCandidates;
+        //std::vector<UseableStuff*> labourCandidates;
+        std::vector<std::pair<int, UseableStuff*>> labourCandidates;
         Ownerships* own = nullptr;
         if (settings->getSquad()) own = settings->getSquad()->getOwnerships();
         if (!own) return nullptr;
@@ -1318,7 +1291,7 @@ namespace SquadAutonomy
                         if (!useable) continue;
                         int priority = settings->getLabourPriority(useable);
                         if (priority <= 0) continue;
-                        auto operators = useable->currentOperators;
+                        auto& operators = useable->currentOperators;
                         int opCount = operators.size();
                         if (operators.find(character) != operators.end())
                         {
@@ -1327,7 +1300,7 @@ namespace SquadAutonomy
                         }
                         if (opCount < useable->numOperatorsMax)
                         {
-                            labourCandidates.push_back(useable);
+                            labourCandidates.push_back(std::make_pair<int, UseableStuff*>(priority, useable));
                         }
                     }
                 }
@@ -1348,7 +1321,7 @@ namespace SquadAutonomy
                     if (priority <= 0) continue;                    
                     if (production->numOperatorsMax <= 0)
                     {
-                        labourCandidates.push_back(production);
+                        labourCandidates.push_back(std::make_pair<int, UseableStuff*>(priority, production));
                         continue;
                     }
                     auto& operators = production->currentOperators;
@@ -1361,10 +1334,16 @@ namespace SquadAutonomy
                     }
                     if (opCount < production->numOperatorsMax)
                     {
-                        labourCandidates.push_back(production);
+                        labourCandidates.push_back(std::make_pair<int, UseableStuff*>(priority, production));
                     }
                 }
             }
+
+            // sort labourCandidates by priority
+            std::sort(labourCandidates.begin(), labourCandidates.end(), [](const std::pair<int, UseableStuff*>& a, const std::pair<int, UseableStuff*>& b) {
+                return a.first > b.first;
+            });
+
             if (current) Logger::log(character->displayName + " is currently working on: " + current->displayName);
             StorageBuilding* optimalStorage = nullptr;
             bool takeFromStorage = false;
@@ -2166,30 +2145,32 @@ namespace SquadAutonomy
         if (thisptr && thisptr->getPlatoon()) squad = thisptr->getPlatoon()->me;
         SquadSettingsInfo* settings = nullptr;
         Tasker* currentTask = nullptr;
+        Tasker* currentOrder = nullptr;
         Tasker* currentAction = nullptr;
         TaskRepertoire* repertoire = nullptr;
-        AITaskSytem* order = nullptr;
+        AITaskSytem* taskSystem = nullptr;
         CharBody * body = nullptr;
         if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            order = thisptr->ai->getTaskSystem();
+            taskSystem = thisptr->ai->getTaskSystem();
             body = thisptr->getBody();
             if (body)
             {
                 currentAction = body->getCurrentAction();
             }
-            if (order)
+            if (taskSystem)
             {
-                currentTask = order->tryToGetCurrentGoal();
-                if (order->aiImplementation) repertoire = order->aiImplementation->taskRepertoire;
+                currentTask = taskSystem->tryToGetCurrentGoal();
+                if (taskSystem->aiImplementation) repertoire = taskSystem->aiImplementation->taskRepertoire;
             }
             if (currentAction)
             {
                 TaskType actionKey = currentAction->key();
-                if (actionKey == OPERATE_STORAGE || actionKey == DITCH_ALL_RESOURCES || actionKey == PUT_LOOT_IN_STORAGE)
+                if (actionKey == COLLECT_OUTPUT_RESOURCE || actionKey == OPERATE_STORAGE || actionKey == DITCH_ALL_RESOURCES || actionKey == PUT_LOOT_IN_STORAGE)
                 {
                     lockedEquippedItems = true;
+                    // TODO: memorize items that are added while locked and allow those to be transferred
                 }
             }
         }
@@ -2219,7 +2200,7 @@ namespace SquadAutonomy
                     {
                         // create Tasker with GOAPTaskMgr::createNewTask because you can set start time and end time
                         // the tasker created doesn't seem to work with AITaskSytem::setCurrentGoal nor _forcedSetCurrentAction
-                        Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, 
+                        Tasker* newTask = GOAPTaskMgr_createNewTask(taskSystem->aiImplementation->taskRepertoire, 
                             REPAIR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
                         if (body) body->setCurrentAction(newTask);
                         //order->addOrder(REPAIR, door, door->pos, true, false);
@@ -2257,10 +2238,10 @@ namespace SquadAutonomy
                                 {
                                     //Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, CLOSE_DOOR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
                                     //if (body) body->setCurrentAction(newTask);
-                                    order->addOrder(CLOSE_DOOR , door, door->pos, true, false);
-                                    order->getFirstOrder()->startTime = settings->getStartWorkTime();
-                                    order->getFirstOrder()->endTime = settings->getEndWorkTime();
-                                    order->setTaskExpiryTimer();
+                                    taskSystem->addOrder(CLOSE_DOOR , door, door->pos, true, false);
+                                    taskSystem->getFirstOrder()->startTime = settings->getStartWorkTime();
+                                    taskSystem->getFirstOrder()->endTime = settings->getEndWorkTime();
+                                    taskSystem->setTaskExpiryTimer();
                                     closeGateCDTimer = 0.0;
                                     closeGateTimerOn = false;
                                 }
@@ -2276,10 +2257,10 @@ namespace SquadAutonomy
                             //Tasker* newTask = GOAPTaskMgr_createNewTask(order->aiImplementation->taskRepertoire, OPEN_DOOR, door, currentTask->priority, currentTask->weight, door->getPosition(), settings->getStartWorkTime(), settings->getEndWorkTime());
                             //order->setCurrentGoal(newTask, order->currentGoalScore + 1.0, order->currentGoalPriority);
                             //if (body) body->setCurrentAction(newTask);
-                            order->addOrder(OPEN_DOOR, door, door->pos, true, false);
-                            order->getFirstOrder()->startTime = settings->getStartWorkTime();
-                            order->getFirstOrder()->endTime = settings->getEndWorkTime();
-                            order->setTaskExpiryTimer();
+                            taskSystem->addOrder(OPEN_DOOR, door, door->pos, true, false);
+                            taskSystem->getFirstOrder()->startTime = settings->getStartWorkTime();
+                            taskSystem->getFirstOrder()->endTime = settings->getEndWorkTime();
+                            taskSystem->setTaskExpiryTimer();
                         }
                     }
                 }
@@ -2292,7 +2273,7 @@ namespace SquadAutonomy
     {
         
         Item* out = takeOneItemOnly_orig(thisptr, item);
-        if (lockedEquippedItems)
+        if (out && lockedEquippedItems)
         {
             if (out->isEquipped) return nullptr;
         }
@@ -2301,27 +2282,50 @@ namespace SquadAutonomy
     bool (*takeItem_EntireStack_orig)(Inventory* thisptr, Item* what);
     bool takeItem_EntireStack_hook(Inventory* thisptr, Item* what)
     {
-        if (what->isEquipped) return false;
+        if (what && what->isEquipped) return false;
         return takeItem_EntireStack_orig(thisptr, what);
     }
-    void (*getAllItemsOfType_orig)(Inventory* thisptr, lektor<Item*>& all, itemType ty, bool skipEquipped);
-    void getAllItemsOfType_hook(Inventory* thisptr, lektor<Item*>& all, itemType ty, bool skipEquipped)
+
+    bool (*canItemGoHere_orig)(InventorySection* thisptr, Item* item, int x, int y);
+    bool canItemGoHere_hook(InventorySection* thisptr, Item* item, int x, int y)
     {
-        if (lockedEquippedItems)
+        if (lockedEquippedItems && thisptr->isAnEquippedItemSection)
         {
-            skipEquipped = true;
+            return false;
         }
-        getAllItemsOfType_orig(thisptr, all, ty, skipEquipped);
+        return canItemGoHere_orig(thisptr, item, x, y);
     }
-    bool (*hasItemType_orig)(Inventory* thisptr, itemType item, bool skipEquipped);
-    bool hasItemType_hook(Inventory* thisptr, itemType item, bool skipEquipped)
+
+    bool (*_NV_hasRoomForItem_orig)(InventorySection* thisptr, GameData* _itemData, int quantity);
+    bool _NV_hasRoomForItem_hook(InventorySection* thisptr, GameData* _itemData, int quantity)
     {
-        if (lockedEquippedItems)
+        if (lockedEquippedItems && thisptr->isAnEquippedItemSection)
         {
-            skipEquipped = true;
+            return false;
         }
-        return hasItemType_orig(thisptr, item, skipEquipped);
+        return _NV_hasRoomForItem_orig(thisptr, _itemData, quantity);
     }
+
+    bool (*getValidInventoryPosition_orig)(InventorySection* thisptr, Item* item, int& x, int& y);
+    bool getValidInventoryPosition_hook(InventorySection* thisptr, Item* item, int& x, int& y)
+    {
+        if (lockedEquippedItems && thisptr->isAnEquippedItemSection)
+        {
+            return false;
+        }
+        return getValidInventoryPosition_orig(thisptr, item, x, y);
+    }
+
+    bool (*_NV_addItem_orig)(InventorySection* thisptr, Item* itemToAdd, int quantity);
+    bool _NV_addItem_hook(InventorySection* thisptr, Item* itemToAdd, int quantity)
+    {
+        if (lockedEquippedItems && thisptr->isAnEquippedItemSection)
+        {
+            return false;
+        }
+        return _NV_addItem_orig(thisptr, itemToAdd, quantity);
+    }
+
     // preventing the package with wanderingTrader blackboard signal from starting until all members are ready
     bool (*Package_WanderingTrader_signalStart_orig)(AIPackage* thisptr);
     bool Package_WanderingTrader_signalStart_hook(AIPackage* thisptr)
@@ -2825,38 +2829,48 @@ __declspec(dllexport) void startPlugin()
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&ForgottenGUI::changeFontSize), &SquadAutonomy::ForgottenGUI_changeFontSize_hook, &SquadAutonomy::ForgottenGUI_changeFontSize_orig))
         ErrorLog("Could not add ForgottenGUI::changeFontSize hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_update), &SquadAutonomy::_NV_update_hook, &SquadAutonomy::_NV_update_orig))
-        ErrorLog("Could not add MainBarGUI::_NV_update constructor hook!");
+        ErrorLog("Could not add MainBarGUI::_NV_update hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
-        ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR constructor hook!");
+        ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_DESTRUCTOR), &SquadAutonomy::MainbarGUIDESTRUCTOR_hook, &SquadAutonomy::MainbarGUIDESTRUCTOR_orig))
         ErrorLog("Could not add &MainBarGUI::_DESTRUCTOR hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_autoChangeSelectedObject), &SquadAutonomy::_NV_autoChangeSelectedObject_hook, &SquadAutonomy::_NV_autoChangeSelectedObject_orig))
-        ErrorLog("Could not add MainBarGUI::_NV_autoChangeSelectedObject constructor hook!");
+        ErrorLog("Could not add MainBarGUI::_NV_autoChangeSelectedObject hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::tabPlatoonChange), &SquadAutonomy::tabPlatoonChange_hook, &SquadAutonomy::tabPlatoonChange_orig))
-        ErrorLog("Could not add MainBarGUI::tabPlatoonChange constructor hook!");
+        ErrorLog("Could not add MainBarGUI::tabPlatoonChange hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&PlayerInterface::cycleSquad), &SquadAutonomy::cycleSquad_hook, &SquadAutonomy::cycleSquad_orig))
-        ErrorLog("Could not add PlayerInterface::cycleSquad constructor hook!");
+        ErrorLog("Could not add PlayerInterface::cycleSquad hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&DialogueWindow::getVisible), &SquadAutonomy::getVisible_hook, &SquadAutonomy::getVisible_orig))
-        ErrorLog("Could not add DialogueWindow::getVisible constructor hook!");
+        ErrorLog("Could not add DialogueWindow::getVisible hook!");
 
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::create), &SquadAutonomy::OptionsWindow_create_hook, &SquadAutonomy::OptionsWindow_create_orig))
-        ErrorLog("Could not add OptionsWindow::create constructor hook!");
+        ErrorLog("Could not add OptionsWindow::create hook!");
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
         ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");*/
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
         ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");*/
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&GameWorld::initialisation), &SquadAutonomy::initialisation_hook, &SquadAutonomy::initialisation_orig))
-        ErrorLog("Could not add GameWorld::initialisation constructor hook!");
+        ErrorLog("Could not add GameWorld::initialisation hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_threadedUpdate), &SquadAutonomy::_NV_threadedUpdate_hook, &SquadAutonomy::_NV_threadedUpdate_orig))
-        ErrorLog("Could not add Character::_NV_threadedUpdate constructor hook!");
+        ErrorLog("Could not add Character::_NV_threadedUpdate hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::wantsToEatNow), &SquadAutonomy::wantsToEatNow_hook, &SquadAutonomy::wantsToEatNow_orig))
-        ErrorLog("Could not add Character::wantsToEatNow constructor hook!");
+        ErrorLog("Could not add Character::wantsToEatNow hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
         ErrorLog("Could not add CharMovement::_NV_setDestination hook!");
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::takeOneItemOnly), &SquadAutonomy::takeOneItemOnly_hook, &SquadAutonomy::takeOneItemOnly_orig))
-        ErrorLog("Could not add Inventory::takeOneItemOnly constructor hook!");
+        ErrorLog("Could not add Inventory::takeOneItemOnly hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<bool (Inventory::*)(Item*)>(&Inventory::takeItem_EntireStack)), &SquadAutonomy::takeItem_EntireStack_hook, &SquadAutonomy::takeItem_EntireStack_orig))
-        ErrorLog("Could not add Inventory::takeItem_EntireStack constructor hook!");
+        ErrorLog("Could not add Inventory::takeItem_EntireStack hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::canItemGoHere), &SquadAutonomy::canItemGoHere_hook, &SquadAutonomy::canItemGoHere_orig))
+        ErrorLog("Could not add InventorySection::canItemGoHere hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_hasRoomForItem), &SquadAutonomy::_NV_hasRoomForItem_hook, &SquadAutonomy::_NV_hasRoomForItem_orig))
+        ErrorLog("Could not add InventorySection::_NV_hasRoomForItem hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::getValidInventoryPosition), &SquadAutonomy::getValidInventoryPosition_hook, &SquadAutonomy::getValidInventoryPosition_orig))
+        ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_addItem), &SquadAutonomy::_NV_addItem_hook, &SquadAutonomy::_NV_addItem_orig))
+        ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
+
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllItemsOfType), &SquadAutonomy::getAllItemsOfType_hook, &SquadAutonomy::getAllItemsOfType_orig))
         ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::hasItemType), &SquadAutonomy::hasItemType_hook, &SquadAutonomy::hasItemType_orig))
