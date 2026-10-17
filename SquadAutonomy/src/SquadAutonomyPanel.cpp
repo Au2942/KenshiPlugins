@@ -597,6 +597,7 @@ void SquadAutonomyPanel::OptionsTab::refresh()
         _panel->setCaption(Localization::lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
     }
 
+    // TODO: make this a floating panel so it'll always be showing even when scrolled down
     auto dropBox = _panel->setLineDropBox(Localization::gettext("Category"), _category, &_subCategory, false, 1.0f);
 
     if (_subCategory < 0)
@@ -619,17 +620,21 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     switch (_subCategory)
     {
     case 1:
-        _labour->refresh();
+        _labour->refresh(*settings);
         break;
     case 2:
-        _combat->refresh();
+        _combat->refresh(*settings);
         break;
     case 3:
-        _guard->refresh();
+        _guard->refresh(*settings);
         break;
     default:
-        _basic->refresh();
+        _basic->refresh(*settings);
         break;
+    }
+    if (_panel->getNumLines(_category) == 1)
+    {
+        Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("No settings available for current packages"), false, false);
     }
 }
 
@@ -735,7 +740,7 @@ SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTa
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::BasicOptions::refresh()
+void SquadAutonomyPanel::OptionsTab::BasicOptions::refresh(SquadSettingsInfo& settings)
 {
     auto startSlider = Utils::addSlider(*_panel, _category, Localization::gettext("Start Work Time"), true, startWorkTime, 0.0f, 24.0f, 0);
     Utils::setCallback(*startSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
@@ -807,8 +812,9 @@ SquadAutonomyPanel::OptionsTab::LabourOptions::LabourOptions(OptionsTab& options
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::LabourOptions::refresh()
+void SquadAutonomyPanel::OptionsTab::LabourOptions::refresh(SquadSettingsInfo& settings)
 {
+    if (!settings.hasTask(AUTO_LABOURING_MINES)) return;
     _panel->setLineSpacing(28.0);
 
     const std::string statsUsedLabel = *_MainColorCode + Localization::gettext("Stats Used:") + ' ' + Localization::gettext("(bigger number = higher priority, 0 = forbid)");
@@ -909,7 +915,7 @@ SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& options
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::CombatOptions::refresh()
+void SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& settings)
 {
     auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Attack Enemies"), attackEnemies);
     Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
@@ -949,18 +955,23 @@ SquadAutonomyPanel::OptionsTab::GuardOptions::GuardOptions(OptionsTab& optionsTa
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::GuardOptions::refresh()
+void SquadAutonomyPanel::OptionsTab::GuardOptions::refresh(SquadSettingsInfo& settings)
 {
-    auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Man Turrets"), manTurrets);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    if (settings.hasTask(MAN_A_TURRET) || settings.hasTask(MAN_A_TURRET_ON_BUILDING))
+    {
+        auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Man Turrets"), manTurrets);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
+    if (settings.hasTask(MAN_THE_GATE))
+    {
+        Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Gate Guard:"), false, false);
 
-    Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Gate Guard:"), false, false);
+        auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Stay Inside Gate"), stayInsideGate);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Stay Inside Gate"), stayInsideGate);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
-
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Close Gate"), closeGate);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Close Gate"), closeGate);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
 }
 
 void SquadAutonomyPanel::OptionsTab::GuardOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)

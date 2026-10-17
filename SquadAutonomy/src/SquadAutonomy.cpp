@@ -2869,7 +2869,7 @@ __declspec(dllexport) void startPlugin()
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::getValidInventoryPosition), &SquadAutonomy::getValidInventoryPosition_hook, &SquadAutonomy::getValidInventoryPosition_orig))
         ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_addItem), &SquadAutonomy::_NV_addItem_hook, &SquadAutonomy::_NV_addItem_orig))
-        ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
+        ErrorLog("Could not add InventorySection::_NV_addItem hook!");
 
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllItemsOfType), &SquadAutonomy::getAllItemsOfType_hook, &SquadAutonomy::getAllItemsOfType_orig))
         ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");

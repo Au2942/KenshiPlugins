@@ -102,11 +102,13 @@ namespace SquadAutonomy
         static bool writeBuildingSettingToStream(std::ostream& stream, const Building* building, const std::string& tag);
         void writeSquadPackagesToStream(std::ostream& stream) const;
         void writeSquadOptionsToStream(std::ostream& stream) const;
-
+        void addTasksFromPackage(GameData* data);
+        void addTasksFromGoals(GameData* data, lektor<GameData*>& goalDatas);
         Platoon* _squad;
         PlayerInterface* _pi;
         bool _enabled;
         std::map<int, std::vector<GameData*>> _squadPackages;
+        std::unordered_set<TaskType> _squadTasks;
         //TownBase* _homeTown;
         Building* _homeBuilding;
         //TownBase* _workTown;

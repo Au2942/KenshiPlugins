@@ -141,7 +141,7 @@ namespace SquadAutonomy
     public:
         BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh();
+        void refresh(SquadSettingsInfo& squadSettings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -161,7 +161,7 @@ namespace SquadAutonomy
     public:
         LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh();
+        void refresh(SquadSettingsInfo& squadSettings);
 
         void setAllTo(MyGUI::Widget*);
 
@@ -189,7 +189,7 @@ namespace SquadAutonomy
     public:
         CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh();
+        void refresh(SquadSettingsInfo& squadSettings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -206,7 +206,7 @@ namespace SquadAutonomy
     public:
         GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh();
+        void refresh(SquadSettingsInfo& squadSettings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;

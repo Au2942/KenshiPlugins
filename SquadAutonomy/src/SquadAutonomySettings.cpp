@@ -389,7 +389,40 @@ void SquadSettingsInfo::addPackage(int priority, GameData* data)
     {
         _squadPackages[priority].push_back(data);
     }
+
+    addTasksFromPackage(data);
 }
+
+void SquadSettingsInfo::addTasksFromPackage(GameData* data)
+{
+    lektor<GameData*> aiGoalDatas;
+    lektor<GameData*> inheritDatas;
+    data->getAllFromListAsDatas("inherits from", inheritDatas, data->sourceContainer, AI_PACKAGE);
+    for (int i = 0; i < inheritDatas.size(); ++i)
+    {
+        addTasksFromPackage(inheritDatas[i]);
+    }
+    addTasksFromGoals(data, aiGoalDatas);
+}
+
+void SquadSettingsInfo::addTasksFromGoals(GameData* data, lektor<GameData*> &goalDatas)
+{
+    std::string keys[] = { "Leader AI Goals", "Slave AI Goals", "Squad AI Goals", "Squad2 AI Goals" };
+    Logger::log(data->name);
+    size_t length = sizeof(keys) / sizeof(keys[0]);
+    for (int i = 0; i < length; ++i)
+    {
+        Logger::log(keys[i]);
+        data->getAllFromListAsDatas(keys[i], goalDatas, data->getSourceContainer(), AI_TASK);
+        for (int j = 0; j < goalDatas.size(); ++j)
+        {
+            _squadTasks.insert(static_cast<TaskType>(goalDatas[j]->idata["enum"]));
+            Logger::log("Add task: " + goalDatas[j]->name);
+        }
+        goalDatas.clear();
+    }
+}
+
 void SquadSettingsInfo::setPackages(const std::map<int, std::vector<GameData*>>& packages)
 {
     _squadPackages = packages;
@@ -397,21 +430,28 @@ void SquadSettingsInfo::setPackages(const std::map<int, std::vector<GameData*>>&
 void SquadSettingsInfo::clearPackages()
 {
     _squadPackages.clear();
+    _squadTasks.clear();
 }
 const std::map<int, std::vector<GameData*>>& SquadSettingsInfo::getSquadPackages()
 {
     return _squadPackages;
 }
 
-bool SquadAutonomy::SquadSettingsInfo::hasTask(TaskType)
+bool SquadAutonomy::SquadSettingsInfo::hasTask(TaskType key)
 {
-    for (int i = 0; i < _squadPackages.size(); ++i)
+    auto it = _squadTasks.find(key);
+    if (it != _squadTasks.end()) return true;
+    else return false;
+}
+
+void getTasksFromData(GameData* data, std::unordered_set<TaskType>& type)
+{
+    type.clear();
+    lektor<GameData*> aiTasks;
+    data->getAllFromListAsDatas("Leader AI goal", aiTasks, data->getSourceContainer(), AI_TASK);
+    for (int i = 0; i < aiTasks.size(); ++i)
     {
-        for (int j = 0; j < _squadPackages.size(); ++j)
-        {
-            lektor<GameData*> goals;
-            _squadPackages[i][j];
-        }
+        
     }
 }
 
@@ -944,14 +984,8 @@ void SquadSettingsInfo::readSquadPackagesFromStream(std::istream& stream)
             [&packageName](GameData* packageData){ return packageName == packageData->name; }
         );
 
-        if (packageInListIt != _AIPackageList->end())
-        {
-            const bool alreadyHasPackage = std::find(_squadPackages[priority].begin(), _squadPackages[priority].end(), *packageInListIt) != _squadPackages[priority].end();
-            if (!alreadyHasPackage)
-            {
-                _squadPackages[priority].push_back(*packageInListIt);
-            }
-        }
+        addPackage(priority, *packageInListIt);
+
     }
 }
 
