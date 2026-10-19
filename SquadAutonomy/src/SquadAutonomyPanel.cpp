@@ -748,27 +748,31 @@ void SquadAutonomyPanel::OptionsTab::BasicOptions::refresh(SquadSettingsInfo& se
     auto endSlider = Utils::addSlider(*_panel, _category, Localization::gettext("End Work Time"), true, endWorkTime, 0.0f, 24.0f, 0);
     Utils::setCallback(*endSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
-    auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rest Until Healed When Wounded"), restUntilHealed);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
 
-    if (restUntilHealed)
+    if (settings.hasTask(GO_HOME_AND_GO_TO_BED) || settings.hasTask(GO_HOME_AND_GO_TO_BED_SECURE))
     {
-        Utils::addText(*_panel, _category, Localization::gettext("Rest Health Threshold"));
+        auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rest Until Healed When Wounded"), restUntilHealed);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
 
-        auto restThresholdSlider = Utils::addSlider(*_panel, _category, Localization::gettext("Rest Health Threshold"), false, restThreshold, 0.0f, 100.0f, 0);
-        Utils::setCallback(*restThresholdSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        if (restUntilHealed)
+        {
+            Utils::addText(*_panel, _category, Localization::gettext("Rest Health Threshold"));
 
-        Utils::addText(*_panel, _category, Localization::gettext("Healed Health Threshold"));
+            auto restThresholdSlider = Utils::addSlider(*_panel, _category, Localization::gettext("Rest Health Threshold"), false, restThreshold, 0.0f, 100.0f, 0);
+            Utils::setCallback(*restThresholdSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
-        auto healthThresholdSlider = Utils::addSlider(*_panel, _category, Localization::gettext("Healed Health Threshold"), false, healedThreshold, 0.0f, 100.0f, 0);
-        Utils::setCallback(*healthThresholdSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+            Utils::addText(*_panel, _category, Localization::gettext("Healed Health Threshold"));
+
+            auto healthThresholdSlider = Utils::addSlider(*_panel, _category, Localization::gettext("Healed Health Threshold"), false, healedThreshold, 0.0f, 100.0f, 0);
+            Utils::setCallback(*healthThresholdSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        }
+
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Allow Using Paid Beds"), usePaidBeds);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Allow Sleep Outside Work Hours"), doSleep);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
     }
-
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Allow Using Paid Beds"), usePaidBeds);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
-
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Allow Sleep Outside Work Hours"), doSleep);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 }
 
 void SquadAutonomyPanel::OptionsTab::BasicOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
@@ -917,17 +921,27 @@ SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& options
 
 void SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& settings)
 {
-    auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Attack Enemies"), attackEnemies);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
-
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Protect Allies"), protectAllies);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
-
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Medic"), doMedic);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
-
-    checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rescue Downed Allies"), doRescue);
-    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    DataPanelLine_CheckBox* checkbox; 
+    if (settings.hasTask(TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME) || settings.hasTask(ATTACK_ENEMIES))
+    {
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Attack Enemies"), attackEnemies);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
+    if (settings.hasTask(PROTECT_ALLIES) || settings.hasTask(PROTECT_ALLIES_STAY_IN_TOWN) || settings.hasTask(PROTECT_OWN_SQUAD))
+    {
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Protect Allies"), protectAllies);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
+    if (settings.hasTask(JOB_MEDIC) || settings.hasTask(JOB_REPAIR_ROBOT))
+    {
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Medic"), doMedic);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
+    if (settings.hasTask(FIND_AND_RESCUE) || settings.hasTask(FIND_AND_RESCUE_LEADER) || settings.hasTask(FIND_AND_RESCUE_IF_THERES_BEDS))
+    {
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rescue Downed Allies"), doRescue);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
 }
 
 void SquadAutonomyPanel::OptionsTab::CombatOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)

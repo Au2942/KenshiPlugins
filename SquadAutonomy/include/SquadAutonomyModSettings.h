@@ -18,6 +18,7 @@ namespace SquadAutonomy
             bool showInSquad;
             bool enableLogging;
             Logger::Severity logSeverity;
+            Logger::Category logCategory;
             bool logSpam;
             float btnWidth;
             float btnHeight;
@@ -50,6 +51,7 @@ namespace SquadAutonomy
         ModSettings& operator=(ModSettings&& other);
 
         static bool parseLogSeveritySetting(const std::string& stringValue, Logger::Severity& outValue);
+        static bool parseLogCategorySetting(const std::string& stringValue, Logger::Category& outValue);
 
         SettingsValues _settingsValues;
         std::vector<std::string> _configPackages;

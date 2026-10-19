@@ -8,6 +8,8 @@
 #include "SquadAutonomyMainBarButton.h"
 #include "SquadAutonomyLog.h"
 
+#include "extern/TradingInfo.h"
+
 #include <Debug.h>
 
 #include <ogre/OgreStringConverter.h>
@@ -75,7 +77,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-
+typedef Ogre::StringConverter sc;
 
 /*class TaskPathfinder 
 {
@@ -742,7 +744,7 @@ namespace SquadAutonomy
             int cost = 0;
             cost = b->getCostToUse(character);
 
-            //DebugLog("rentedBeds : " + Ogre::StringConverter::toString((*rentedBeds).size()));
+            //DebugLog("rentedBeds : " + sc::toString((*rentedBeds).size()));
             if (rentedBeds)
             {
                 for (auto it = (*rentedBeds).begin(); it != (*rentedBeds).end(); ++it)
@@ -758,7 +760,7 @@ namespace SquadAutonomy
                             //TODO: check time as well
                             //DebugLog("Bed already rented!");
                             float currentTime = ou->getTimeStamp_inGameHours().getTotalHours();
-                            //DebugLog("Time now: " + Ogre::StringConverter::toString(currentTime) + " rented time: " + Ogre::StringConverter::toString(it->second));
+                            //DebugLog("Time now: " + sc::toString(currentTime) + " rented time: " + sc::toString(it->second));
                             if (currentTime - it->second < 24.0)
                             {
                                 //DebugLog("Bed was rented!");
@@ -860,7 +862,7 @@ namespace SquadAutonomy
             float dist = obj->pos.squaredDistance(useable->pos);
             if (dist >= minDist) continue;
             if (taskSystem && taskSystem->isPathImpossible(useable)) continue;
-            Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
+            Logger::logDebug(obj->displayName + " is closer to " + useable->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
             return false;
         }
         return true;
@@ -891,12 +893,12 @@ namespace SquadAutonomy
             {
                 if (from && currentOrder->key() == COLLECT_OUTPUT_RESOURCE && currentOrder->subject == from)
                 {
-                    Logger::log(obj->displayName + " already has a hauling order from " + from->displayName, Logger::Debug, false);
+                    Logger::logDebug(obj->displayName + " already has a hauling order from " + from->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                     return false;
                 }
                 if (to && currentOrder->key() == OPERATE_STORAGE && currentOrder->subject == to)
                 {
-                    Logger::log(obj->displayName + " already has a hauling order to " + to->displayName, Logger::Debug, false);
+                    Logger::logDebug(obj->displayName + " already has a hauling order to " + to->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                     return false;
                 }
                 continue;
@@ -909,12 +911,12 @@ namespace SquadAutonomy
             {
                 if (from && currentAction->key() == COLLECT_OUTPUT_RESOURCE && currentAction->subject == from)
                 {
-                    Logger::log(obj->displayName + " is already hauling from " + from->displayName, Logger::Debug, false);
+                    Logger::logDebug(obj->displayName + " is already hauling from " + from->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                     return false;
                 }
                 if (to && currentAction->key() == OPERATE_STORAGE && currentAction->subject == to)
                 {
-                    Logger::log(obj->displayName + " is already hauling to " + to->displayName, Logger::Debug, false);
+                    Logger::logDebug(obj->displayName + " is already hauling to " + to->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                     return false;
                 }
                 continue;
@@ -923,7 +925,7 @@ namespace SquadAutonomy
             float dist = obj->getPosition().squaredDistance(useablePos);
             if (dist >= minDist) continue;
             if (taskSystem->isPathImpossible(useable)) continue;
-            Logger::log(obj->displayName + " is closer to " + useable->displayName, Logger::Debug, false);
+            Logger::logDebug(obj->displayName + " is closer to " + useable->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
             return false;
         }
         return true;
@@ -1024,12 +1026,12 @@ namespace SquadAutonomy
         if (!town && shou && shou->townList) town = shou->townList->getNearestTown(ai->getPosition(), ai->getFaction(), nullptr, nullptr, TOWN_NULL);
         if (!town) return nullptr;
 
-        Logger::log("Find optimal Labour from list", Logger::Severity::Info, true);
+        Logger::logDebug("Find optimal Labour from list", Logger::LABOUR | Logger::AI_TARGETFINDING, true);
         for (int i = 0; i < useables.size(); ++i)
         {
             auto useable = useables[i].second;
             if (!useable) continue;
-            Logger::log("Check labour: " + useable->displayName, Logger::Debug, true);
+            Logger::logDebug("Check labour: " + useable->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, true);
             int operators = useable->numOperatorsMax > 0? useable->currentOperators.size() : 1;
             bool useableIsCurrent = (current && useable == current);
             if (useableIsCurrent && operators > 0) operators -= 1;
@@ -1079,12 +1081,12 @@ namespace SquadAutonomy
                 // if there's no compatible storage then ignore the building
                 if (production->productionState == ProductionBuilding::PRODUCTION_FULL)
                 {
-                    Logger::log("Production full");
+                    Logger::logDebug("Production full", Logger::LABOUR | Logger::AI_TARGETFINDING);
                     target = FindResourceStorageBuildingFor(ai, production->getProductionItemData(), production, toCheck, false);
                     canHaulTo = HasRoomFor(character, production->getProductionItemData()) && IShouldHaul(character, production, target);
                     if (target)
                     {
-                        Logger::log(character->displayName + " -> " + production->displayName + " production full. Can haul " + production->getProductionItemData()->name + " to : " + target->displayName, Logger::Debug, false);
+                        Logger::logDebug(character->displayName + " -> " + production->displayName + " production full. Can haul " + production->getProductionItemData()->name + " to : " + target->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                         if (canHaulTo)
                         {
                             storage = target;
@@ -1103,7 +1105,7 @@ namespace SquadAutonomy
                     FarmBuilding* farmBuilding = dynamic_cast<FarmBuilding*>(production);
                     if (farmBuilding && (farmBuilding->grown >= 1.0 || farmBuilding->deathThreshold <= farmBuilding->died))
                     {
-                        Logger::log(farmBuilding->displayName + " is operable");
+                        Logger::logDebug(farmBuilding->displayName + " is operable", Logger::LABOUR | Logger::AI_TARGETFINDING);
                     }
                     else
                     {
@@ -1120,7 +1122,7 @@ namespace SquadAutonomy
                             if (character->getInventory()) characterHasItem = character->getInventory()->hasItem(cItem->item, 1);
                             if (characterHasItem && IShouldHaul(character, production, nullptr, true))
                             {
-                                Logger::log("Has input resource in backpack: " + cItem->item->name + " for " + production->displayName, Logger::Debug, false);
+                                Logger::logDebug("Has input resource in backpack: " + cItem->item->name + " for " + production->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                                 doOperateStorage = true;
                                 takeFrom = true;
                                 if (inputEmpty)
@@ -1136,7 +1138,7 @@ namespace SquadAutonomy
                             {
                                 if (HasRoomFor(character, cItem->item) && IShouldHaul(character, production, source, true))
                                 {
-                                    Logger::log(source->displayName + " has input resource: " + cItem->item->name + " for " + production->displayName, Logger::Debug, false);
+                                    Logger::logDebug(source->displayName + " has input resource: " + cItem->item->name + " for " + production->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING);
 
                                     storage = source;
                                     doOperateStorage = true;
@@ -1182,7 +1184,7 @@ namespace SquadAutonomy
                 }
             }
             
-            Logger::log(useable->displayName + ", " + Ogre::StringConverter::toString(operators) + ", " + Ogre::StringConverter::toString(dist));
+            Logger::logDebug(useable->displayName + ", " + sc::toString(operators) + ", " + sc::toString(dist), Logger::LABOUR | Logger::AI_TARGETFINDING);
 
             // if currently working on something
             if (current)
@@ -1190,7 +1192,7 @@ namespace SquadAutonomy
                 // don't refill input unless urgent while current
                 if (useableIsCurrent)
                 {
-                    Logger::log(useable->displayName + " is current");
+                    Logger::logDebug(useable->displayName + " is current", Logger::LABOUR | Logger::AI_TARGETFINDING);
                     if (!urgent)
                     {
                         doOperateStorage = false;
@@ -1253,7 +1255,7 @@ namespace SquadAutonomy
                 operateStorage = doOperateStorage;
             }
         }
-        if (optimalLabour) Logger::log(character->displayName + " found labour : " + optimalLabour->displayName + ", " + Ogre::StringConverter::toString(minOperators) + ", " + Ogre::StringConverter::toString(minDist), Logger::Info, false);
+        if (optimalLabour) Logger::logDebug(character->displayName + " found labour : " + optimalLabour->displayName + ", " + sc::toString(minOperators) + ", " + sc::toString(minDist), Logger::LABOUR | Logger::AI_TARGETFINDING, false);
         return optimalLabour;
     }
 
@@ -1272,7 +1274,7 @@ namespace SquadAutonomy
         if (!own) return nullptr;
         TownBase* town = own->_homeTown;
         if (!town && shou && shou->townList) town = shou->townList->getNearestTown(ai->getPosition(), ai->getFaction(), nullptr, nullptr, TOWN_NULL);
-        Logger::log(character->displayName + " find Labour To Do", Logger::Info, true);
+        Logger::logDebug(character->displayName + " find Labour To Do", Logger::LABOUR | Logger::AI_TARGETFINDING, true);
         if (town)
         {
             UseableStuff* current = nullptr;
@@ -1344,24 +1346,24 @@ namespace SquadAutonomy
                 return a.first > b.first;
             });
 
-            if (current) Logger::log(character->displayName + " is currently working on: " + current->displayName);
+            if (current) Logger::logDebug (character->displayName + " is currently working on: " + current->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING);
             StorageBuilding* optimalStorage = nullptr;
             bool takeFromStorage = false;
             bool operateStorage = false;
             optimalLabour = FindOptimalLabourFromList(character, ai, own, labourCandidates, current, settings, optimalStorage, takeFromStorage, operateStorage);
             if (optimalLabour && operateStorage)
             {
-                Logger::log(optimalLabour->displayName + " found storage: " + (optimalStorage? optimalStorage->displayName : " backpack"));
+                Logger::logDebug(optimalLabour->displayName + " found storage: " + (optimalStorage? optimalStorage->displayName : " backpack"), Logger::LABOUR | Logger::AI_TARGETFINDING);
                 if (takeFromStorage)
                 {
-                    Logger::log(character->displayName + " haul from " + (optimalStorage ? optimalStorage->displayName : " backpack") + " to " + optimalLabour->displayName, Logger::Debug, false);
+                    Logger::logDebug(character->displayName + " haul from " + (optimalStorage ? optimalStorage->displayName : " backpack") + " to " + optimalLabour->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                     if (optimalStorage) order->addOrder(COLLECT_OUTPUT_RESOURCE, optimalStorage, Ogre::Vector3::ZERO, true, false);
                     order->addOrder(OPERATE_STORAGE, optimalLabour, Ogre::Vector3::ZERO, false, false);
                     //order->addOrder(optimalLabour->numOperatorsMax > 0 ? OPERATE_MACHINERY : OPERATE_AUTOMATIC_MACHINERY, optimalLabour, Ogre::Vector3::ZERO, false, false);
                 }
                 else if (optimalStorage)
                 {
-                    Logger::log(character->displayName + " haul from " + optimalLabour->displayName + " to " + optimalStorage->displayName, Logger::Debug, false);
+                    Logger::logDebug(character->displayName + " haul from " + optimalLabour->displayName + " to " + optimalStorage->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
                     order->addOrder(COLLECT_OUTPUT_RESOURCE, optimalLabour, Ogre::Vector3::ZERO, true, false);
                     order->addOrder(OPERATE_STORAGE, optimalStorage, Ogre::Vector3::ZERO, false, false);
                     //order->addOrder(optimalStorage->numOperatorsMax > 0 ? OPERATE_MACHINERY : OPERATE_AUTOMATIC_MACHINERY, optimalStorage, Ogre::Vector3::ZERO, false, false);
@@ -1484,7 +1486,7 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled() && character)
         {
             TaskType type = key.key();
-            //Logger::log("RuntargetFind TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)), Logger::Info, true);
+            //Logger::log("RuntargetFind TaskType: " + sc::toString(static_cast<int>(type)), Logger::Info, true);
             if (type == GO_HOME_AND_GO_TO_BED || type == FIND_BED_AND_PUT_IN)
             {
                 out = FindOptimalBed(character, settings->getUsePaidBeds());
@@ -1520,6 +1522,33 @@ namespace SquadAutonomy
             //Logger::log("EndRuntargetFind", Logger::Info, true);
         }
         return score;
+    }
+
+    bool (*buySomething_orig)(AI* thisptr, Building* shop);
+    bool buySomething_hook(AI* thisptr, Building* shop)
+    {
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+        {
+            TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
+            Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " + 
+                sc::toString(item.priority) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+        }
+        thisptr->tradingInfo->tradeItems.clear();
+        TradingInfo::TradeItem item;
+        item.itemFunction = ITEM_FOOD;
+        item.priority = 0;
+        item.quantity = 10;
+        bool result = buySomething_orig(thisptr, shop);
+        
+        thisptr->_createTradingInfo();
+        for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+        {
+            TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
+            Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                sc::toString(item.priority) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+        }
+        return result;
     }
 
     // AITaskSytem::periodicUpdate is where most of stuffs related to the AI goals happens
@@ -1667,7 +1696,7 @@ namespace SquadAutonomy
                     {
                         if (it->second)
                         {
-                            DebugLog("After Choose PermaJob: " + it->second->getDescription() + " score: " + Ogre::StringConverter::toString(it->first));
+                            DebugLog("After Choose PermaJob: " + it->second->getDescription() + " score: " + sc::toString(it->first));
                         }
                     }
                 }
@@ -1696,7 +1725,7 @@ namespace SquadAutonomy
                 //is player order?
                 if (thisptr->hasPlayerOrder(type)) return;
 
-                //Logger::log("CurrentActionChecks TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)), Logger::Info, true);
+                //Logger::log("CurrentActionChecks TaskType: " + sc::toString(static_cast<int>(type)), Logger::Info, true);
                 if (type == MAN_A_TURRET || type == MAN_A_TURRET_ON_BUILDING || type == MAN_THE_GATE || type == AUTO_LABOURING_MINES ||
                     type == STAND_AT_GUARD_NODE_HOMEBUILDING_INDOORS_ONLY || type == STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT ||
                     type == STAND_AT_GUARD_NODE_HOMETOWN_OUTSIDE || type == REPAIR || type == BUILD)
@@ -1822,7 +1851,7 @@ namespace SquadAutonomy
                 if (currentTask && currentTask.key() == MAN_THE_GATE && closeGateTimerOn)
                 {
                     closeGateCDTimer -= time;
-                    Logger::log("Close Gate Timer: " + Ogre::StringConverter::toString(closeGateCDTimer), Logger::Debug, true);
+                    Logger::logDebug("Close Gate Timer: " + sc::toString(closeGateCDTimer), Logger::GUARD, true);
                 }
             }
         }
@@ -2127,13 +2156,13 @@ namespace SquadAutonomy
             }
             if (currentAction)
             {
-                Logger::log(thisptr->displayName + " current action task: " + Ogre::StringConverter::toString(static_cast<int>(currentAction->key())), Logger::Debug, true);
+                Logger::log(thisptr->displayName + " current action task: " + sc::toString(static_cast<int>(currentAction->key())), Logger::Debug, true);
                 if (currentAction->subject && currentAction->subject.getRootObject())
                 {
                     Logger::log("subject: " + currentAction->subject.getRootObject()->displayName, Logger::Debug, true);
-                    Logger::log("subject location: " + Ogre::StringConverter::toString(currentAction->subject.getRootObject()->getPosition()), Logger::Debug, true);
+                    Logger::log("subject location: " + sc::toString(currentAction->subject.getRootObject()->getPosition()), Logger::Debug, true);
                 }
-                Logger::log("location: " + Ogre::StringConverter::toString(currentAction->getLocation()), Logger::Debug, true);
+                Logger::log("location: " + sc::toString(currentAction->getLocation()), Logger::Debug, true);
                 if (currentAction->key() == OPERATE_STORAGE)
                 {
                     DebugLog("Operate storage action!");
@@ -2184,7 +2213,7 @@ namespace SquadAutonomy
             {
                 //DebugLog("ManTheGate");
                 //const TaskData* taskData = currentTask->getTaskData();
-                //if (taskData) DebugLog("Man The Gate Permajob Associate: " + Ogre::StringConverter::toString(taskData->getPermaJobType()) + ", " + Ogre::StringConverter::toString(taskData->getPermaJobAssociation()) + ", " + Ogre::StringConverter::toString(taskData->getPermaJobAssociation_secondary()));
+                //if (taskData) DebugLog("Man The Gate Permajob Associate: " + sc::toString(taskData->getPermaJobType()) + ", " + sc::toString(taskData->getPermaJobAssociation()) + ", " + sc::toString(taskData->getPermaJobAssociation_secondary()));
                 Building* gate = nullptr;
                 if (squad->getOwnerships() && squad->getOwnerships()->_homeBuilding) gate = squad->getOwnerships()->_homeBuilding.getBuilding();
                 DoorStuff* door = nullptr;
@@ -2223,7 +2252,7 @@ namespace SquadAutonomy
                                 }
                             }
                         }
-                        //DebugLog("IsInsideGate: " + Ogre::StringConverter::toString(isInsideGate));
+                        //DebugLog("IsInsideGate: " + sc::toString(isInsideGate));
                         if (isInsideGate)
                         {
                             if (door->getDoorState() == DOORSTATE_OPEN)
@@ -2394,7 +2423,7 @@ namespace SquadAutonomy
             const TaskData* taskData = thisptr->getTaskData();
             if (taskData && taskData->isPermaJob()) return score;
 
-            Logger::log("score TaskType: " + Ogre::StringConverter::toString(static_cast<int>(type)) + " - "  +Ogre::StringConverter::toString(score), Logger::Debug, true);
+            Logger::logDebug("score TaskType: " + sc::toString(static_cast<int>(type)) + " - "  +sc::toString(score), Logger::AI_SCORING, true);
             if (type == STAY_IN_HOME || type == SIT_AROUND)
             {
                 if (taskSystem && taskSystem->hasOrders()) return 0;
@@ -2484,7 +2513,7 @@ namespace SquadAutonomy
                     {
                         float score = taskSystem->currentGoalScore;
                         score *= 0.95;
-                        //DebugLog("Patrol score: " + Ogre::StringConverter::toString(score));
+                        //DebugLog("Patrol score: " + sc::toString(score));
                         taskSystem->currentGoalScore = std::max(score, 0.0001f);
                         return taskSystem->currentGoalScore;
                     }
@@ -2595,7 +2624,7 @@ namespace SquadAutonomy
                     if (stateBroadcast && stateBroadcast->isSleeping)
                     {
                         //DebugLog("GoToBed continue sleep until healed");
-                        //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
+                        //DebugLog(character->displayName + " medical restedstate: " + sc::toString(medical->restedState));
                         return 5.0;
                     }
                     if (settings->isRestTime())
@@ -2681,7 +2710,7 @@ namespace SquadAutonomy
                 }
                 if (settings->getRestUntilHealed() && race && !race->robot && medical && medical->restedState < settings->getHealedThresholdP() && medical->scoreFirstAidNeed(false) < 0.1)
                 {
-                    //DebugLog(character->displayName + " medical restedstate: " + Ogre::StringConverter::toString(medical->restedState));
+                    //DebugLog(character->displayName + " medical restedstate: " + sc::toString(medical->restedState));
                     //DebugLog("GetOutOfBed rest until healed");
                     return 0.0;
                 }
@@ -2736,13 +2765,13 @@ namespace SquadAutonomy
             auto relaxData = getTaskDataConst(RELAX_IN_TOWN_PACKAGE);
             OriginalTaskDataDuration* relaxOrig = new OriginalTaskDataDuration(relaxData->durationMin, relaxData->durationFuzz, relaxData->isDurationBased, relaxData->endsAfterTime);
             taskTypeOrigDataDuration[RELAX_IN_TOWN_PACKAGE] = relaxOrig;
-            /*DebugLog("relax Task : " + Ogre::StringConverter::toString(relaxData->durationMin) + ", " + Ogre::StringConverter::toString(relaxData->durationFuzz)
-                + ", " + Ogre::StringConverter::toString(relaxData->isDurationBased) + ", " + Ogre::StringConverter::toString(relaxData->endsAfterTime));*/
+            /*DebugLog("relax Task : " + sc::toString(relaxData->durationMin) + ", " + sc::toString(relaxData->durationFuzz)
+                + ", " + sc::toString(relaxData->isDurationBased) + ", " + sc::toString(relaxData->endsAfterTime));*/
             auto goHomeToBedData = getTaskDataConst(GO_HOME_AND_GO_TO_BED);
             OriginalTaskDataDuration* goHomeToBedOrig = new OriginalTaskDataDuration(goHomeToBedData->durationMin, goHomeToBedData->durationFuzz, goHomeToBedData->isDurationBased, goHomeToBedData->endsAfterTime);
             taskTypeOrigDataDuration[GO_HOME_AND_GO_TO_BED] = goHomeToBedOrig;
-            /*DebugLog("go bed Task : " + Ogre::StringConverter::toString(goHomeToBedData->durationMin) + ", " + Ogre::StringConverter::toString(goHomeToBedData->durationFuzz)
-                + ", " + Ogre::StringConverter::toString(goHomeToBedData->isDurationBased) + ", " + Ogre::StringConverter::toString(goHomeToBedData->endsAfterTime));*/
+            /*DebugLog("go bed Task : " + sc::toString(goHomeToBedData->durationMin) + ", " + sc::toString(goHomeToBedData->durationFuzz)
+                + ", " + sc::toString(goHomeToBedData->isDurationBased) + ", " + sc::toString(goHomeToBedData->endsAfterTime));*/
         }
         return result;
     }
@@ -2786,8 +2815,8 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f48350;
             *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce80f0;
             *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283F40;
-            *(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6430;
-            *(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x6607E0;
+            //*(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6430;
+            //*(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x6607E0;
             *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_Update = baseAddr + 0x342bf0;
             *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_FindGate = baseAddr + 0x338650;
             *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332ef0;
@@ -2809,8 +2838,8 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f46360;
             *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce60F0;
             *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283AD0;
-            *(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6740;
-            *(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x660AF0;
+            //*(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6740;
+            //*(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x660AF0;
             *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_Update = baseAddr + 0x3427a0;
             *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_FindGate = baseAddr + 0x3381e0;
             *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332a80;
@@ -2855,8 +2884,11 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add Character::_NV_threadedUpdate hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::wantsToEatNow), &SquadAutonomy::wantsToEatNow_hook, &SquadAutonomy::wantsToEatNow_orig))
         ErrorLog("Could not add Character::wantsToEatNow hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
-        ErrorLog("Could not add CharMovement::_NV_setDestination hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<void (CharMovement::*)(const Ogre::Vector3&, UpdatePriority, bool)>(&CharMovement::_NV_setDestination)), 
+        &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
+        ErrorLog("Could not add Character::wantsToEatNow hook!");
+    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
+        ErrorLog("Could not add CharMovement::_NV_setDestination hook!");*/
 
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::takeOneItemOnly), &SquadAutonomy::takeOneItemOnly_hook, &SquadAutonomy::takeOneItemOnly_orig))
         ErrorLog("Could not add Inventory::takeOneItemOnly hook!");
@@ -2906,6 +2938,9 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AI::findMineToWorkAt hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findKOIntruder_town), &SquadAutonomy::findKOIntruder_town_hook, &SquadAutonomy::findKOIntruder_town_orig))
         ErrorLog("Could not add AI::findKOIntruder_town hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::buySomething), &SquadAutonomy::buySomething_hook, &SquadAutonomy::buySomething_orig))
+        ErrorLog("Could not add AI::findKOIntruder_town hook!");
+
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
         ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
 

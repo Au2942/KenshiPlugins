@@ -22,7 +22,7 @@ ModSettingsUI& ModSettingsUI::getSingleton()
     return *singleton.get();
 }
 
-ModSettingsUI::ModSettingsUI() : _category(0), _panel(nullptr), _optionsWindow(nullptr), _logSeverityIndex(0)
+ModSettingsUI::ModSettingsUI() : _category(0), _panel(nullptr), _optionsWindow(nullptr), _logSeverityIndex(0), _logCategoryIndex(0)
 {
     create();
 }
@@ -69,8 +69,17 @@ void ModSettingsUI::resetSettingsToDefault(MyGUI::Widget* sender)
 
 void ModSettingsUI::updateLogSeverity(MyGUI::ComboBox* sender, size_t index)
 {
+    if (!ModSettings::getSingleton().getValues().enableLogging)
+    {
+        sender->setIndexSelected(_logSeverityIndex);
+        return;
+    }
+    else _logSeverityIndex = index;
     auto& settingsValuesMutable = ModSettings::getSingleton().getValuesMutable();
-    switch (_logSeverityIndex)
+    if (_logSeverityIndex < 0 || _logSeverityIndex >= sizeof(Logger::severities) / sizeof(Logger::severities[0])) return;
+    else settingsValuesMutable.logSeverity = Logger::severities[_logSeverityIndex];
+    refresh();
+    /*switch (_logSeverityIndex)
     {
     case static_cast<int>(Logger::None):
     case static_cast<int>(Logger::Info):
@@ -82,7 +91,35 @@ void ModSettingsUI::updateLogSeverity(MyGUI::ComboBox* sender, size_t index)
     default:
         settingsValuesMutable.logSeverity = Logger::None;
     }
-    sender->setIndexSelected(_logSeverityIndex);
+    sender->setIndexSelected(_logSeverityIndex);*/
+}
+
+void ModSettingsUI::updateLogCategory(MyGUI::ComboBox* sender, size_t index)
+{
+    if (ModSettings::getSingleton().getValues().logSeverity < Logger::Debug)
+    {
+        sender->setIndexSelected(_logCategoryIndex);
+        return;
+    }
+    else _logCategoryIndex = index;
+    auto& settingsValuesMutable = ModSettings::getSingleton().getValuesMutable();
+    if (_logCategoryIndex < 0 || _logCategoryIndex >= sizeof(Logger::categories) / sizeof(Logger::categories[0])) return;
+    else settingsValuesMutable.logCategory = Logger::categories[_logCategoryIndex];
+    refresh();
+    /*switch (_logCategoryIndex)
+    {
+    case static_cast<uint32_t>(Logger::Any):
+    case static_cast<uint32_t>(Logger::AI_SCORING):
+    case static_cast<uint32_t>(Logger::AI_TARGETFINDING):
+    case static_cast<uint32_t>(Logger::LABOUR):
+    case static_cast<uint32_t>(Logger::GUARD):
+    case static_cast<uint32_t>(Logger::SHOPPING):
+        settingsValuesMutable.logCategory = static_cast<Logger::Category>(_logCategoryIndex);
+        break;
+    default:
+        settingsValuesMutable.logCategory = Logger::Any;
+    }
+    sender->setIndexSelected(_logCategoryIndex);*/
 }
 
 void ModSettingsUI::updatePanel(DataPanelLine* line)
@@ -153,9 +190,9 @@ void ModSettingsUI::refresh()
     std::string logGreyed;
     _logSeverityIndex = static_cast<int>(settingsValuesMutable.logSeverity);
     if (!ModSettings::getSingleton().getValues().enableLogging) logGreyed = *_GreyedColorCode;
-    int listIndex = _logSeverityIndex;
-    auto dropbox = _panel->setLineDropBox(logGreyed+Localization::gettext("Log Severity"), _category, 
-        ModSettings::getSingleton().getValues().enableLogging ? &_logSeverityIndex : &listIndex, false, 1.0);
+    // severity
+    int severityListIndex = _logSeverityIndex;
+    auto dropbox = _panel->setLineDropBox(logGreyed+Localization::gettext("Log Severity"), _category, &severityListIndex, false, 1.0);
     dropbox->addAValue(logGreyed+Localization::gettext("None"), 0);
     dropbox->addAValue(logGreyed+Localization::gettext("Error"), 1);
     dropbox->addAValue(logGreyed+Localization::gettext("Warning"), 2);
@@ -171,6 +208,29 @@ void ModSettingsUI::refresh()
         _optionsWindow->tooltip->setup(dropbox->w1,
             dropboxTooltip);
     }
+    // category
+    std::string logDebugGreyed;
+    _logSeverityIndex = static_cast<int>(settingsValuesMutable.logCategory);
+    int categoryListIndex = _logCategoryIndex;
+    if (ModSettings::getSingleton().getValues().logSeverity < Logger::Debug) logDebugGreyed = *_GreyedColorCode;
+    dropbox = _panel->setLineDropBox(logDebugGreyed + Localization::gettext("Log Debug Category"), _category, &categoryListIndex, false, 1.0);
+    dropbox->addAValue(logDebugGreyed + "Any", 0);
+    dropbox->addAValue(logDebugGreyed + "AI_SCORING", 1);
+    dropbox->addAValue(logDebugGreyed + "AI_TARGETFINDING", 2);
+    dropbox->addAValue(logDebugGreyed + "LABOUR", 3);
+    dropbox->addAValue(logDebugGreyed + "GUARD", 4);
+    dropbox->addAValue(logDebugGreyed + "SHOPPING", 5);
+    dropbox->setSelectedValue(_logCategoryIndex);
+    dropbox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &ModSettingsUI::updateLogCategory);
+    if (_optionsWindow && _optionsWindow->tooltip)
+    {
+        std::string dropboxTooltip = Localization::gettext("Select log debug category to be logged.");
+        _optionsWindow->tooltip->setup(dropbox->getComboBox(),
+            dropboxTooltip);
+        _optionsWindow->tooltip->setup(dropbox->w1,
+            dropboxTooltip);
+    }
+
 
     checkbox = addCheckbox(
         logGreyed + Localization::gettext("Allow Spam"),
