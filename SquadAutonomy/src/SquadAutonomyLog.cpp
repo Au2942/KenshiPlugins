@@ -51,16 +51,16 @@ namespace SquadAutonomy
 		DebugLog(prefix + log);
 		return true;
 	}
-	bool Logger::logDebug(const std::string& log, Category category, bool spam)
+	/*bool Logger::logDebug(const std::string& log, Category category, bool spam)
 	{
 		ModSettings::SettingsValues settings = ModSettings::getSingleton().getValues();
 		if (category != Any && category != settings.logCategory) return false;
 		return Logger::log(log, Logger::Debug, spam);
-	}
+	}*/
 	bool Logger::logDebug(const std::string& log, uint32_t categories, bool spam)
 	{
 		ModSettings::SettingsValues settings = ModSettings::getSingleton().getValues();
-		if (categories != 0 && !(settings.logCategory & categories)) return false;
+		if (categories != 0 && settings.logCategory != 0 && !(settings.logCategory & categories)) return false;
 		return Logger::log(log, Logger::Debug, spam);
 	}
 }

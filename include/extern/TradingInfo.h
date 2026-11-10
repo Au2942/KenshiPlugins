@@ -14,7 +14,7 @@ public:
 	public:
 		ItemFunction itemFunction;
 		int quantity;
-		int priority;
+		int count;
 	};
 
 	GameData* data;

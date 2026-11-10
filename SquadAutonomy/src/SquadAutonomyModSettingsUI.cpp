@@ -105,6 +105,7 @@ void ModSettingsUI::updateLogCategory(MyGUI::ComboBox* sender, size_t index)
     auto& settingsValuesMutable = ModSettings::getSingleton().getValuesMutable();
     if (_logCategoryIndex < 0 || _logCategoryIndex >= sizeof(Logger::categories) / sizeof(Logger::categories[0])) return;
     else settingsValuesMutable.logCategory = Logger::categories[_logCategoryIndex];
+    //settingsValuesMutable.logCategory = static_cast<Logger::Category>(_logCategoryIndex);
     refresh();
     /*switch (_logCategoryIndex)
     {
@@ -193,11 +194,11 @@ void ModSettingsUI::refresh()
     // severity
     int severityListIndex = _logSeverityIndex;
     auto dropbox = _panel->setLineDropBox(logGreyed+Localization::gettext("Log Severity"), _category, &severityListIndex, false, 1.0);
-    dropbox->addAValue(logGreyed+Localization::gettext("None"), 0);
-    dropbox->addAValue(logGreyed+Localization::gettext("Error"), 1);
-    dropbox->addAValue(logGreyed+Localization::gettext("Warning"), 2);
-    dropbox->addAValue(logGreyed+Localization::gettext("Info"), 3);
-    dropbox->addAValue(logGreyed+Localization::gettext("Debug"), 4);
+    dropbox->addAValue(logGreyed+Localization::gettext("None"), Logger::None);
+    dropbox->addAValue(logGreyed+Localization::gettext("Error"), Logger::Error);
+    dropbox->addAValue(logGreyed+Localization::gettext("Warning"), Logger::Warning);
+    dropbox->addAValue(logGreyed+Localization::gettext("Info"), Logger::Info);
+    dropbox->addAValue(logGreyed+Localization::gettext("Debug"), Logger::Debug);
     dropbox->setSelectedValue(_logSeverityIndex);
     dropbox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &ModSettingsUI::updateLogSeverity);
     if (_optionsWindow && _optionsWindow->tooltip)
@@ -214,12 +215,20 @@ void ModSettingsUI::refresh()
     int categoryListIndex = _logCategoryIndex;
     if (ModSettings::getSingleton().getValues().logSeverity < Logger::Debug) logDebugGreyed = *_GreyedColorCode;
     dropbox = _panel->setLineDropBox(logDebugGreyed + Localization::gettext("Log Debug Category"), _category, &categoryListIndex, false, 1.0);
+
     dropbox->addAValue(logDebugGreyed + "Any", 0);
     dropbox->addAValue(logDebugGreyed + "AI_SCORING", 1);
     dropbox->addAValue(logDebugGreyed + "AI_TARGETFINDING", 2);
     dropbox->addAValue(logDebugGreyed + "LABOUR", 3);
     dropbox->addAValue(logDebugGreyed + "GUARD", 4);
     dropbox->addAValue(logDebugGreyed + "SHOPPING", 5);
+    // TODO: make this works
+    /*dropbox->addAValue(logDebugGreyed + "Any", Logger::Any);
+    dropbox->addAValue(logDebugGreyed + "AI_SCORING", Logger::AI_SCORING);
+    dropbox->addAValue(logDebugGreyed + "AI_TARGETFINDING", Logger::AI_TARGETFINDING);
+    dropbox->addAValue(logDebugGreyed + "LABOUR", Logger::LABOUR);
+    dropbox->addAValue(logDebugGreyed + "GUARD", Logger::GUARD);
+    dropbox->addAValue(logDebugGreyed + "SHOPPING", Logger::SHOPPING);*/
     dropbox->setSelectedValue(_logCategoryIndex);
     dropbox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &ModSettingsUI::updateLogCategory);
     if (_optionsWindow && _optionsWindow->tooltip)

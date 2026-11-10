@@ -317,6 +317,7 @@ namespace SquadAutonomy
         auto& modSettingsUI = ModSettingsUI::getSingleton();
         if (modSettingsUI.isVisible())
         {
+            modSettingsUI.saveSettings();
             modSettingsUI.hide();
         }
         else
@@ -562,6 +563,7 @@ namespace SquadAutonomy
             auto& modSettingsPanel = ModSettingsUI::getSingleton();
             if (modSettingsPanel.isVisible())
             {
+                modSettingsPanel.saveSettings();
                 modSettingsPanel.hide();
                 out = true;
             }
@@ -678,7 +680,6 @@ namespace SquadAutonomy
                     if (state) state->homeBuilding = home;
                 }
             }
-            //DebugLog("set town to: " + currentTown->getKnownName());
             return;
         }
         else
@@ -1410,7 +1411,7 @@ namespace SquadAutonomy
                     if (out.size() > 0) return false;
                 }
             }
-            // attempt at stopping characters with protect squad/allies goal from using turrets (this didn't work iirc)
+            // attempt at stopping characters with protect squad/allies goal from using turrets
             if (thisptr->getSpecialFunction() == BF_TURRET)
             {
                 if (!settings->getManTurrets())
@@ -1524,29 +1525,146 @@ namespace SquadAutonomy
         return score;
     }
 
+    bool (*_NV_giveItem_orig)(Character* thisptr, Item* item, bool dropOnFail, bool destroyOnFail);
+    bool _NV_giveItem_hook(Character* thisptr, Item* item, bool dropOnFail, bool destroyOnFail)
+    {
+        Platoon* squad = nullptr;
+
+        bool result = _NV_giveItem_orig(thisptr, item, dropOnFail, destroyOnFail);
+        if (thisptr && thisptr->getPlatoon())
+        {
+            squad = thisptr->getPlatoon()->me;
+        }
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            Logger::logDebug(thisptr->displayName + " give " + item->displayName + " " + sc::toString(result), Logger::SHOPPING);
+        }
+        return result;
+    }
+
+
+
+    Item* (*buyItem_orig)(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo);
+    Item* buyItem_hook(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo)
+    {
+        Character* character = sendingTo->getHandle().getCharacter();
+        Platoon* squad = nullptr;
+        Faction* inventoryFaction = nullptr;
+        AI* ai = character->getAI();
+        
+        if (character && character->getPlatoon())
+        {
+            squad = character->getPlatoon()->me;
+        }
+
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (ai && ai->boughtShitComplete(nullptr, Ogre::Vector3::ZERO))
+            {
+                Logger::logDebug(sendingTo->displayName + " finished buying", Logger::SHOPPING);
+                return nullptr;
+            }
+
+            if (thisptr->getOwner()) inventoryFaction = thisptr->getOwner()->getFaction();
+            if (inventoryFaction)
+            {
+                // there's a random 20% chance to not get the item if the seller is not of player faction for some reason
+                inventoryFaction->isPlayer = settings->getPlayerInterface();
+            }
+        }
+
+        Item* item = buyItem_orig(thisptr, itemToBuy, sendingTo);
+
+        if (settings && settings->isEnabled() && inventoryFaction)
+        {
+            inventoryFaction->isPlayer = nullptr;
+        }
+
+        if (item)
+        {
+            Logger::logDebug(sendingTo->displayName + " bought " + item->displayName, Logger::SHOPPING);
+        }
+
+        return item;
+    }
+
+    bool (*boughtShitComplete_orig)(AI* thisptr, const hand& subject, const Ogre::Vector3& _a2);
+    bool boughtShitComplete_hook(AI* thisptr, const hand& subject, const Ogre::Vector3& _a2)
+    {
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            Faction* faction = character->getFaction();
+            faction->isPlayer = settings->getPlayerInterface();
+
+            thisptr->tradingInfo->tradeItems.clear();
+            TradingInfo::TradeItem item;
+            item.itemFunction = ITEM_FOOD;
+            lektor<Item*> itemsOfType;
+            character->getInventory()->getAllItemsWithFunction(itemsOfType, ITEM_FOOD);
+            item.count = itemsOfType.count;
+            item.quantity = 4;
+            thisptr->tradingInfo->tradeItems.push_back(item);
+            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+            {
+                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
+                Logger::logDebug("bought shit " + thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            }
+        }
+        return boughtShitComplete_orig(thisptr, subject, _a2);
+    }
+
     bool (*buySomething_orig)(AI* thisptr, Building* shop);
     bool buySomething_hook(AI* thisptr, Building* shop)
     {
-        TradingInfo* tradingInfo = thisptr->tradingInfo;
-        for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
-        {
-            TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
-            Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " + 
-                sc::toString(item.priority) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
-        }
-        thisptr->tradingInfo->tradeItems.clear();
-        TradingInfo::TradeItem item;
-        item.itemFunction = ITEM_FOOD;
-        item.priority = 0;
-        item.quantity = 10;
-        bool result = buySomething_orig(thisptr, shop);
         
-        thisptr->_createTradingInfo();
-        for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
         {
-            TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
-            Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
-                sc::toString(item.priority) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            Faction* faction = character->getFaction();
+            faction->isPlayer = settings->getPlayerInterface();
+
+            thisptr->tradingInfo->tradeItems.clear();
+            TradingInfo::TradeItem item;
+            item.itemFunction = ITEM_FOOD;
+            item.count = 0;
+            item.quantity = 4;
+            thisptr->tradingInfo->tradeItems.push_back(item);
+            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+            {
+                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
+                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " + 
+                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            }
+        }
+        
+        // have a bool to change Inventory::BuyItem behavior inside (restricted food for certain races, ammo of the equipped weapon type etc.)
+
+        bool result = buySomething_orig(thisptr, shop);
+
+        
+        if (settings && settings->isEnabled())
+        {
+            Faction* faction = character->getFaction();
+            faction->isPlayer = nullptr;
+
+            for (int i = 0; i < thisptr->tradingInfo->tradeItems.size(); ++i)
+            {
+                TradingInfo::TradeItem item = thisptr->tradingInfo->tradeItems[i];
+                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            }
         }
         return result;
     }
@@ -1643,7 +1761,7 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = nullptr;
         Platoon* platoon = nullptr;
         Faction* faction = nullptr;
-        bool origAutoSit = false;
+        //bool origAutoSit = false;
         if (character && character->getPlatoon()) platoon = character->getPlatoon()->me;
         if (platoon)
         {
@@ -1663,9 +1781,9 @@ namespace SquadAutonomy
                 // also not sure if SIT_AROUND is better than STAY_IN_HOME. will have to do a more through comparison
                 if (faction && settings->getPlayerInterface())
                 {
-                    origAutoSit = settings->getPlayerInterface()->aiOptions.autoSit;
                     faction->isPlayer = settings->getPlayerInterface();
-                    faction->isPlayer->aiOptions.autoSit = false;
+                    //origAutoSit = faction->isPlayer->aiOptions.autoSit;
+                    //faction->isPlayer->aiOptions.autoSit = false;
                 }
             }
 
@@ -1683,7 +1801,7 @@ namespace SquadAutonomy
             // gives faction the playerInterface back so the character can function properly (receive player order, hunger decay etc.)
             if (faction && faction->isPlayer && settings->getPlayerInterface())
             {
-                faction->isPlayer->aiOptions.autoSit = origAutoSit;
+                //faction->isPlayer->aiOptions.autoSit = origAutoSit;
                 faction->isPlayer = nullptr;
             }
             //Logger::log("End PermaJob", Logger::Info, true);
@@ -1820,7 +1938,7 @@ namespace SquadAutonomy
 
     // Another place where TaskData duration is used
     // it checks TaskData->isDurationBased/endsAfterTime (I don't remember which one) and ends the task if it's true
-    // also uses this for timer cause why not
+    // also use this for updating gate timer cause why not
     void (*update4Frame_orig)(AITaskSytem* thisptr, Ogre::Vector3 position, float time);
     void update4Frame_hook(AITaskSytem* thisptr, Ogre::Vector3 position, float time)
     {
@@ -2543,31 +2661,6 @@ namespace SquadAutonomy
 
                 }
             }
-
-            /*else if (type == GET_OUT_OF_BED_IF_ITS_EMERGENCY || type == GET_OUT_OF_BED)
-            {
-                MedicalSystem* medical = nullptr;
-                RaceData* race = nullptr;
-                if (character)
-                {
-                    race = character->getRace();
-                    medical = character->getMedical();
-                }
-                if (settings->getDoSleep())
-                {
-                    if (race && !race->robot && medical && medical->scoreFirstAidNeed(false) < 0.1 && !character->isLiterallyUnderMeleeAttackRightNowForSure())
-                    {
-                        if (settings->getRestUntilHealed() && medical->restedState < settings->getHealedThreshold())
-                        {
-                            return 0.0;
-                        }
-                        if (medical->restedState < settings->getRestThreshold())
-                        {
-                            return 0.0;
-                        }
-                    }
-                }
-            }*/
             else if (type == FIND_AND_RESCUE || type == FIND_AND_RESCUE_IF_THERES_BEDS || type == FIND_AND_RESCUE_LEADER)
             {
                 if (!settings->getDoRescue())
@@ -2939,11 +3032,18 @@ __declspec(dllexport) void startPlugin()
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findKOIntruder_town), &SquadAutonomy::findKOIntruder_town_hook, &SquadAutonomy::findKOIntruder_town_orig))
         ErrorLog("Could not add AI::findKOIntruder_town hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::buySomething), &SquadAutonomy::buySomething_hook, &SquadAutonomy::buySomething_orig))
-        ErrorLog("Could not add AI::findKOIntruder_town hook!");
+        ErrorLog("Could not add AI::buySomething hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::boughtShitComplete), &SquadAutonomy::boughtShitComplete_hook, &SquadAutonomy::boughtShitComplete_orig))
+        ErrorLog("Could not add AI::boughtShitComplete hook!");
+
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::buyItem), &SquadAutonomy::buyItem_hook, &SquadAutonomy::buyItem_orig))
+        ErrorLog("Could not add Inventory::buyItem hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_giveItem), &SquadAutonomy::_NV_giveItem_hook, &SquadAutonomy::_NV_giveItem_orig))
+        ErrorLog("Could not add RootObject::Character hook!");
+
 
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
         ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
-
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OrdersReceiver::clearCurrentGoal), &SquadAutonomy::clearCurrentGoal_hook, &SquadAutonomy::clearCurrentGoal_orig))
         ErrorLog("Could not add OrdersReceiver::clearCurrentGoal hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::periodicUpdate), &SquadAutonomy::periodicUpdate_hook, &SquadAutonomy::periodicUpdate_orig))

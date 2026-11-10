@@ -1,4 +1,5 @@
 #pragma once
+#include "extern/TradingInfo.h"
 #include <kenshi/GameData.h>
 #include <kenshi/PlayerInterface.h>
 #include <kenshi/Faction.h>
@@ -143,6 +144,8 @@ namespace SquadAutonomy
         bool _manTurrets;
         bool _stayInsideGate;
         bool _closeGate;
+        // Shopping
+        std::vector<TradingInfo::TradeItem> tradeItems;
     };
 
     class SquadAutonomySettings

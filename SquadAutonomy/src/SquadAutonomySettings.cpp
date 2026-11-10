@@ -75,9 +75,10 @@ void SquadAutonomySettings::_initGameData()
 
     auto newEndIt = std::unique(_AIPackageList.begin(), _AIPackageList.end());
     _AIPackageList.erase(newEndIt, _AIPackageList.end());
-
     datas.clear();
-    ou->gamedata.getDataOfType(datas, SQUAD_TEMPLATE);
+
+
+    /*ou->gamedata.getDataOfType(datas, SQUAD_TEMPLATE);
     {
         for (uint32_t i = 0; i < datas.size(); ++i)
         {
@@ -88,7 +89,7 @@ void SquadAutonomySettings::_initGameData()
                 _squadTemplateList.push_back(datas[i]);
             }
         }
-    }
+    }*/
 }
 
 bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)

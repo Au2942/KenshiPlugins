@@ -228,14 +228,11 @@ void SquadAutonomyPanel::MainTab::refresh()
 
         const auto& squadPackages = squadSettings->getSquadPackages();
 
-        //DebugLog("Squad Settings exist: " + Ogre::StringConverter::toString(squadPackages.size()));
         for (auto it = squadPackages.begin(); it != squadPackages.end(); ++it)
         {
             auto packages = it->second;
-            //DebugLog(Ogre::StringConverter::toString(it->first) + " Packages: " + Ogre::StringConverter::toString(packages.size()));
             for (int i = 0; i < packages.size(); ++i)
             {
-                //DebugLog(Ogre::StringConverter::toString(it->first) + " " + packages[i]->name);
                 Utils::addText(*_panel, _category, Ogre::StringConverter::toString(it->first) + " " + packages[i]->name);
             }
         }
@@ -497,8 +494,8 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
         return;
     }
 
-    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineAIPackage, _category));
-    if (!dropBox)
+    auto dropbox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineAIPackage, _category));
+    if (!dropbox)
     {
         return;
     }
@@ -510,7 +507,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
     }
 
     int selectVal = -1;
-    dropBox->clearValues();
+    dropbox->clearValues();
 
     SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
 
@@ -519,7 +516,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
         selectVal = currentSelected;
         for (uint32_t i = 0; i < settings.getAIPackageList()->size(); ++i)
         {
-            dropBox->addAValue(settings.getAIPackageList()->at(i)->name, i);
+            dropbox->addAValue(settings.getAIPackageList()->at(i)->name, i);
         }
     }
     else
@@ -537,7 +534,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
 
             if (nameUpper.find(keywordUpper) != std::string::npos)
             {
-                dropBox->addAValue(name, i);
+                dropbox->addAValue(name, i);
                 if (selectVal == -1 || i == currentSelected)
                 {
                     selectVal = i;
@@ -546,7 +543,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
         }
     }
 
-    dropBox->setSelectedValue(selectVal);
+    dropbox->setSelectedValue(selectVal);
 }
 
 std::string SquadAutonomyPanel::MainTab::getBuildingName(const Building& building)
@@ -571,7 +568,8 @@ SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, int category) :
     _basic(new BasicOptions(*this, panel, category)),
     _labour(new LabourOptions(*this, panel, category)),
     _combat(new CombatOptions(*this, panel, category)),
-    _guard(new GuardOptions(*this, panel, category))
+    _guard(new GuardOptions(*this, panel, category)),
+    _shopping(new ShoppingOptions(*this, panel, category))
 {
 }
 
@@ -628,6 +626,8 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     case 3:
         _guard->refresh(*settings);
         break;
+    case 4:
+        _shopping->refresh(*settings);
     default:
         _basic->refresh(*settings);
         break;
@@ -1001,4 +1001,59 @@ void SquadAutonomyPanel::OptionsTab::GuardOptions::writeToSquadSettings(SquadSet
     squadSettings.setStayInsideGate(stayInsideGate);
     squadSettings.setCloseGate(closeGate);
     squadSettings.updateSquadPackages();
+}
+
+const ItemFunction itemFunctions[] =
+{
+    ITEM_NO_FUNCTION,
+    ITEM_FIRSTAID,
+    ITEM_MEDRIGGING,
+    ITEM_FOOD,
+    ITEM_CONTAINER,
+    ITEM_WEAPON,
+    ITEM_CLOTHING,
+    // skip
+    ITEM____, 
+    ITEM_NARCOTIC,
+    ITEM_TOOL,
+    ITEM_ANYTHING,
+    ITEM_BLUEPRINT,
+    ITEM_ROBOTREPAIR,
+    ITEM_BOOK,
+    // skip
+    ITEM_MONEY, 
+    ITEM_FOOD_RESTRICTED,
+    ITEM_AMMO,
+    ITEM_SEVERED_LIMB
+};
+
+SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
+    OptionsBase(optionsTab, panel, category),
+    itemFunctionListIndex(0),
+    quantity(0),
+    priority(0)
+{
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo& settings)
+{
+    if (!settings.hasTask(SHOPPING)) return;
+    
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateItemFunctionList(DataPanelLine_DropBox* dropbox)
+{
+    dropbox->addAValue(Localization::gettext("Anything"), ITEM_ANYTHING);
+    dropbox->addAValue(Localization::gettext("First Aid"), ITEM_FIRSTAID);
+    dropbox->addAValue(Localization::gettext("Skeleton Repair Kit"), ITEM_ROBOTREPAIR);
+    dropbox->addAValue(Localization::gettext("Med Rigging"), ITEM_MEDRIGGING);
+    dropbox->addAValue(Localization::gettext("Backpack"), ITEM_CONTAINER);
+    dropbox->addAValue(Localization::gettext("Food"), ITEM_FOOD);
+    dropbox->addAValue(Localization::gettext("Weapon"), ITEM_WEAPON);
+    dropbox->addAValue(Localization::gettext("Ammo"), ITEM_AMMO);
+    dropbox->addAValue(Localization::gettext("Clothing"), ITEM_CLOTHING);
+    dropbox->addAValue(Localization::gettext("Narcotic"), ITEM_NARCOTIC);
+    dropbox->addAValue(Localization::gettext("Blueprint"), ITEM_BLUEPRINT);
+    dropbox->addAValue(Localization::gettext("Book"), ITEM_BOOK);
+
 }

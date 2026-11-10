@@ -274,30 +274,20 @@ bool ModSettings::parseLogCategorySetting(const std::string& stringValue, Logger
     ss >> tempOutValue;
     if (ss)
     {
-        if (tempOutValue >= 0 && tempOutValue < sizeof(Logger::categories) / sizeof(Logger::categories[0]))
+        switch (tempOutValue)
         {
-            outValue = Logger::categories[tempOutValue];
-            return true;
+            case Logger::Any:
+            case Logger::AI_SCORING:
+            case Logger::AI_TARGETFINDING:
+            case Logger::LABOUR:
+            case Logger::GUARD:
+            case Logger::SHOPPING:
+                outValue = static_cast<Logger::Category>(tempOutValue);
+                return true;
+            default:
+                outValue = Logger::Any;
+                return false;
         }
-        else
-        {
-            outValue = Logger::Any;
-            return false;
-        }
-        /*switch (tempOutValue)
-        {
-        case static_cast<uint32_t>(Logger::Any):
-        case static_cast<uint32_t>(Logger::AI_SCORING):
-        case static_cast<uint32_t>(Logger::AI_TARGETFINDING):
-        case static_cast<uint32_t>(Logger::LABOUR):
-        case static_cast<uint32_t>(Logger::GUARD):
-        case static_cast<uint32_t>(Logger::SHOPPING):
-            outValue = static_cast<Logger::Category>(tempOutValue);
-            return true;
-        default:
-            outValue = Logger::Any;
-            return false;
-        }*/
     }
     return false;
 }

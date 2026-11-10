@@ -86,6 +86,7 @@ namespace SquadAutonomy
         class LabourOptions;
         class CombatOptions;
         class GuardOptions;
+        class ShoppingOptions;
 
         // Disable copy and move operations by declaring them private.
         // Reason: sub-options (_basic etc) store `this` pointer, executing copy/move will leave them with the wrong pointer.
@@ -112,6 +113,7 @@ namespace SquadAutonomy
         std::unique_ptr<LabourOptions> _labour;
         std::unique_ptr<CombatOptions> _combat;
         std::unique_ptr<GuardOptions> _guard;
+        std::unique_ptr<ShoppingOptions> _shopping;
         //bool _manTurrets;
         //bool _closeGate;
         //bool _doSleep;
@@ -216,4 +218,17 @@ namespace SquadAutonomy
         bool stayInsideGate;
         bool closeGate;
     };
+
+    class SquadAutonomyPanel::OptionsTab::ShoppingOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
+    {
+    public:
+        ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        void refresh(SquadSettingsInfo& squadSettings);
+        void updateItemFunctionList(DataPanelLine_DropBox* dropbox);
+    private:
+        int itemFunctionListIndex;
+        float quantity;
+        float priority;
+    };
+
 }
