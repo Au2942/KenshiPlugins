@@ -20,11 +20,7 @@ namespace SquadAutonomyPanelUtils
     {
         if (object && callback)
         {
-            target.callback = new MyGUI::delegates::CMethodDelegate1<T, DataPanelLine*>(
-                MyGUI::delegates::GetDelegateUnlink(object),
-                object,
-                callback
-            );
+            target.callback = MyGUI::newDelegate(object, callback);
         }
     }
 }

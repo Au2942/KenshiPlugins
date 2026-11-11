@@ -1525,150 +1525,6 @@ namespace SquadAutonomy
         return score;
     }
 
-    bool (*_NV_giveItem_orig)(Character* thisptr, Item* item, bool dropOnFail, bool destroyOnFail);
-    bool _NV_giveItem_hook(Character* thisptr, Item* item, bool dropOnFail, bool destroyOnFail)
-    {
-        Platoon* squad = nullptr;
-
-        bool result = _NV_giveItem_orig(thisptr, item, dropOnFail, destroyOnFail);
-        if (thisptr && thisptr->getPlatoon())
-        {
-            squad = thisptr->getPlatoon()->me;
-        }
-        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-        if (settings && settings->isEnabled())
-        {
-            Logger::logDebug(thisptr->displayName + " give " + item->displayName + " " + sc::toString(result), Logger::SHOPPING);
-        }
-        return result;
-    }
-
-
-
-    Item* (*buyItem_orig)(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo);
-    Item* buyItem_hook(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo)
-    {
-        Character* character = sendingTo->getHandle().getCharacter();
-        Platoon* squad = nullptr;
-        Faction* inventoryFaction = nullptr;
-        AI* ai = character->getAI();
-        
-        if (character && character->getPlatoon())
-        {
-            squad = character->getPlatoon()->me;
-        }
-
-        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-        if (settings && settings->isEnabled())
-        {
-            if (ai && ai->boughtShitComplete(nullptr, Ogre::Vector3::ZERO))
-            {
-                Logger::logDebug(sendingTo->displayName + " finished buying", Logger::SHOPPING);
-                return nullptr;
-            }
-
-            if (thisptr->getOwner()) inventoryFaction = thisptr->getOwner()->getFaction();
-            if (inventoryFaction)
-            {
-                // there's a random 20% chance to not get the item if the seller is not of player faction for some reason
-                inventoryFaction->isPlayer = settings->getPlayerInterface();
-            }
-        }
-
-        Item* item = buyItem_orig(thisptr, itemToBuy, sendingTo);
-
-        if (settings && settings->isEnabled() && inventoryFaction)
-        {
-            inventoryFaction->isPlayer = nullptr;
-        }
-
-        if (item)
-        {
-            Logger::logDebug(sendingTo->displayName + " bought " + item->displayName, Logger::SHOPPING);
-        }
-
-        return item;
-    }
-
-    bool (*boughtShitComplete_orig)(AI* thisptr, const hand& subject, const Ogre::Vector3& _a2);
-    bool boughtShitComplete_hook(AI* thisptr, const hand& subject, const Ogre::Vector3& _a2)
-    {
-        Character* character = thisptr->getCharacter();
-        Platoon* squad = nullptr;
-        TradingInfo* tradingInfo = thisptr->tradingInfo;
-        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
-        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-        if (settings && settings->isEnabled())
-        {
-            Faction* faction = character->getFaction();
-            faction->isPlayer = settings->getPlayerInterface();
-
-            thisptr->tradingInfo->tradeItems.clear();
-            TradingInfo::TradeItem item;
-            item.itemFunction = ITEM_FOOD;
-            lektor<Item*> itemsOfType;
-            character->getInventory()->getAllItemsWithFunction(itemsOfType, ITEM_FOOD);
-            item.count = itemsOfType.count;
-            item.quantity = 4;
-            thisptr->tradingInfo->tradeItems.push_back(item);
-            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
-            {
-                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
-                Logger::logDebug("bought shit " + thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
-                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
-            }
-        }
-        return boughtShitComplete_orig(thisptr, subject, _a2);
-    }
-
-    bool (*buySomething_orig)(AI* thisptr, Building* shop);
-    bool buySomething_hook(AI* thisptr, Building* shop)
-    {
-        
-        Character* character = thisptr->getCharacter();
-        Platoon* squad = nullptr;
-        TradingInfo* tradingInfo = thisptr->tradingInfo;
-        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
-        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-        if (settings && settings->isEnabled())
-        {
-            Faction* faction = character->getFaction();
-            faction->isPlayer = settings->getPlayerInterface();
-
-            thisptr->tradingInfo->tradeItems.clear();
-            TradingInfo::TradeItem item;
-            item.itemFunction = ITEM_FOOD;
-            item.count = 0;
-            item.quantity = 4;
-            thisptr->tradingInfo->tradeItems.push_back(item);
-            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
-            {
-                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
-                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " + 
-                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
-            }
-        }
-        
-        // have a bool to change Inventory::BuyItem behavior inside (restricted food for certain races, ammo of the equipped weapon type etc.)
-
-        bool result = buySomething_orig(thisptr, shop);
-
-        
-        if (settings && settings->isEnabled())
-        {
-            Faction* faction = character->getFaction();
-            faction->isPlayer = nullptr;
-
-            for (int i = 0; i < thisptr->tradingInfo->tradeItems.size(); ++i)
-            {
-                TradingInfo::TradeItem item = thisptr->tradingInfo->tradeItems[i];
-                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
-                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
-            }
-        }
-        return result;
-    }
-
     // AITaskSytem::periodicUpdate is where most of stuffs related to the AI goals happens
     // things like AITaskSytem::chooseGoal runGoals runGOAP setcurrentGoal currentActionChecks etc.
     // it's called by AI::periodicUpdate
@@ -2847,6 +2703,175 @@ namespace SquadAutonomy
         return result;
     }
 
+    bool (*_NV_giveItem_orig)(Character* thisptr, Item* item, bool dropOnFail, bool destroyOnFail);
+    bool _NV_giveItem_hook(Character* thisptr, Item* item, bool dropOnFail, bool destroyOnFail)
+    {
+        Platoon* squad = nullptr;
+
+        bool result = _NV_giveItem_orig(thisptr, item, dropOnFail, destroyOnFail);
+        if (thisptr && thisptr->getPlatoon())
+        {
+            squad = thisptr->getPlatoon()->me;
+        }
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            Logger::logDebug(thisptr->displayName + " give " + item->displayName + " " + sc::toString(result), Logger::SHOPPING);
+        }
+        return result;
+    }
+
+
+
+    Item* (*buyItem_orig)(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo);
+    Item* buyItem_hook(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo)
+    {
+        Character* character = sendingTo->getHandle().getCharacter();
+        Platoon* squad = nullptr;
+        Faction* inventoryFaction = nullptr;
+        AI* ai = character->getAI();
+
+        if (character && character->getPlatoon())
+        {
+            squad = character->getPlatoon()->me;
+        }
+
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (ai && ai->boughtShitComplete(nullptr, Ogre::Vector3::ZERO))
+            {
+                Logger::logDebug(sendingTo->displayName + " finished buying", Logger::SHOPPING);
+                return nullptr;
+            }
+
+            if (thisptr->getOwner()) inventoryFaction = thisptr->getOwner()->getFaction();
+            if (inventoryFaction)
+            {
+                // there's a random 20% chance to not get the item if the seller is not of player faction for some reason
+                inventoryFaction->isPlayer = settings->getPlayerInterface();
+            }
+        }
+
+        Item* item = buyItem_orig(thisptr, itemToBuy, sendingTo);
+
+        if (settings && settings->isEnabled() && inventoryFaction)
+        {
+            inventoryFaction->isPlayer = nullptr;
+        }
+
+        if (item)
+        {
+            Logger::logDebug(sendingTo->displayName + " bought " + item->displayName, Logger::SHOPPING);
+        }
+
+        return item;
+    }
+
+    bool (*boughtShitComplete_orig)(AI* thisptr, const hand& subject, const Ogre::Vector3& _a2);
+    bool boughtShitComplete_hook(AI* thisptr, const hand& subject, const Ogre::Vector3& _a2)
+    {
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            Faction* faction = character->getFaction();
+            faction->isPlayer = settings->getPlayerInterface();
+
+            thisptr->tradingInfo->tradeItems.clear();
+            TradingInfo::TradeItem item;
+            item.itemFunction = ITEM_FOOD;
+            lektor<Item*> itemsOfType;
+            character->getInventory()->getAllItemsWithFunction(itemsOfType, ITEM_FOOD);
+            item.count = itemsOfType.count;
+            item.quantity = 4;
+            thisptr->tradingInfo->tradeItems.push_back(item);
+            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+            {
+                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
+                Logger::logDebug("bought shit " + thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            }
+        }
+        return boughtShitComplete_orig(thisptr, subject, _a2);
+    }
+
+    bool (*buySomething_orig)(AI* thisptr, Building* shop);
+    bool buySomething_hook(AI* thisptr, Building* shop)
+    {
+
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            Faction* faction = character->getFaction();
+            faction->isPlayer = settings->getPlayerInterface();
+
+            thisptr->tradingInfo->tradeItems.clear();
+            TradingInfo::TradeItem item;
+            item.itemFunction = ITEM_FOOD;
+            item.count = 0;
+            item.quantity = 4;
+            thisptr->tradingInfo->tradeItems.push_back(item);
+            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
+            {
+                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
+                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            }
+        }
+
+        // have a bool to change Inventory::BuyItem behavior inside (restricted food for certain races, ammo of the equipped weapon type etc.)
+
+        bool result = buySomething_orig(thisptr, shop);
+
+
+        if (settings && settings->isEnabled())
+        {
+            Faction* faction = character->getFaction();
+            faction->isPlayer = nullptr;
+
+            for (int i = 0; i < thisptr->tradingInfo->tradeItems.size(); ++i)
+            {
+                TradingInfo::TradeItem item = thisptr->tradingInfo->tradeItems[i];
+                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
+            }
+        }
+        return result;
+    }
+
+    void (*_createTradingInfo_orig)(AI* thisptr);
+    void _createTradingInfo_hook(AI* thisptr)
+    {
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (settings->getDoShopping())
+            {
+                auto tradeItemsTemplate = settings->getTradeItems();
+                thisptr->tradingInfo->tradeItems.clear();
+                for (int i = 0; i < tradeItemsTemplate.size(); ++i)
+                {
+                    thisptr->tradingInfo->tradeItems.push_back(tradeItemsTemplate[i]);
+                }
+                return;
+            }
+        }
+        _createTradingInfo_orig(thisptr);
+
+    }
+
     // GOAPTaskMgr::setupGOAP is called in the orig so we can get our original TaskData duration here
     bool (*initialisation_orig)(GameWorld* thisptr);
     bool initialisation_hook(GameWorld* thisptr)
@@ -3035,6 +3060,8 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AI::buySomething hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::boughtShitComplete), &SquadAutonomy::boughtShitComplete_hook, &SquadAutonomy::boughtShitComplete_orig))
         ErrorLog("Could not add AI::boughtShitComplete hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_createTradingInfo), &SquadAutonomy::_createTradingInfo_hook, &SquadAutonomy::_createTradingInfo_orig))
+        ErrorLog("Could not add AI::_createTradingInfo hook!");
 
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::buyItem), &SquadAutonomy::buyItem_hook, &SquadAutonomy::buyItem_orig))
         ErrorLog("Could not add Inventory::buyItem hook!");

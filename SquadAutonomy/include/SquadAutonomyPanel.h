@@ -15,6 +15,7 @@ namespace SquadAutonomy
 
         void create();
         void refresh();
+        void onTabChanged(DatapanelGUI* panel, int category);
 
         void show();
         void hide();
@@ -77,8 +78,10 @@ namespace SquadAutonomy
         void refresh();
 
         int getCategory() const;
-
+        MyGUI::Widget* getFloatingPanelPtr();
+        void setFloatingPanelPtr(MyGUI::Widget* ptr);
         void setSelectedSquad(Platoon& selectedSquad);
+        void updateFloatingPanel(int category);
 
     private:
         class OptionsBase;
@@ -105,6 +108,7 @@ namespace SquadAutonomy
         DataPanelLine_SliderEditable* createOptionsSlider(std::string, float*, int, float, float, bool = false);
 
         DatapanelGUI* _panel;
+        MyGUI::Widget* _floatingPanel;
         Platoon* _selectedSquad;
         int _category;
         int _subCategory;
@@ -114,17 +118,7 @@ namespace SquadAutonomy
         std::unique_ptr<CombatOptions> _combat;
         std::unique_ptr<GuardOptions> _guard;
         std::unique_ptr<ShoppingOptions> _shopping;
-        //bool _manTurrets;
-        //bool _closeGate;
-        //bool _doSleep;
-        //float _startWorkTime;
-        //float _endWorkTime;
-        //bool _restUntilHealed;
-        //bool _usePaidBeds;
-        //bool _buySupplies;
-        //item type?
-        //bool _sellLoots;
-        //item type?
+
     };
 
     class SquadAutonomyPanel::OptionsTab::OptionsBase
@@ -143,7 +137,7 @@ namespace SquadAutonomy
     public:
         BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& squadSettings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -163,7 +157,7 @@ namespace SquadAutonomy
     public:
         LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& squadSettings);
 
         void setAllTo(MyGUI::Widget*);
 
@@ -191,7 +185,7 @@ namespace SquadAutonomy
     public:
         CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& squadSettings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -208,7 +202,7 @@ namespace SquadAutonomy
     public:
         GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        void refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& squadSettings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -223,12 +217,17 @@ namespace SquadAutonomy
     {
     public:
         ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
-        void refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& squadSettings);
         void updateItemFunctionList(DataPanelLine_DropBox* dropbox);
+        void addTradeItem(DataPanelLine* line);
+        void clearTradeItem(DataPanelLine* line);
+
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
     private:
         int itemFunctionListIndex;
-        float quantity;
-        float priority;
+        float amount;
     };
+
 
 }

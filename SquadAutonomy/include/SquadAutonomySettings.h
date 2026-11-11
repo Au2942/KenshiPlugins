@@ -92,6 +92,11 @@ namespace SquadAutonomy
         bool getCloseGate() const;
         void setCloseGate(bool val);
 
+        bool getDoShopping() const;
+        void setDoShopping(bool val);
+        std::vector<TradingInfo::TradeItem> getTradeItems() const;
+        void setTradeItems(std::vector<TradingInfo::TradeItem> val);
+
     private:
         static hand parseHandSetting(const std::string& dataLine);
         static Building* parseBuildingSetting(const std::string& dataLine);
@@ -145,7 +150,8 @@ namespace SquadAutonomy
         bool _stayInsideGate;
         bool _closeGate;
         // Shopping
-        std::vector<TradingInfo::TradeItem> tradeItems;
+        bool _doShopping;
+        std::vector<TradingInfo::TradeItem> _tradeItems;
     };
 
     class SquadAutonomySettings

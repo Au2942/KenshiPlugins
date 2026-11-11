@@ -3,6 +3,7 @@
 namespace SquadAutonomy
 {
 	std::string Localization::lineAIPackage = "";
+	std::string Localization::lineItemCategory = "";
 	std::string Localization::lineInvalidSquad = "";
 	std::string Localization::lineSquadAutonomy = "";
 	std::string Localization::lineSquadAutonomyTitle = "";
@@ -24,6 +25,7 @@ namespace SquadAutonomy
 	void Localization::initLine()
 	{
 		lineAIPackage = Localization::gettext("AI package");
+		lineItemCategory = Localization::gettext("Item Category");
 		lineInvalidSquad = Localization::gettext("No squad selected/invalid squad");
 		lineSquadAutonomy = Localization::gettext("Squad Autonomy");
 		lineSquadAutonomyTitle = Localization::gettext("Squad Autonomy:");

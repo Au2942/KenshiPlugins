@@ -224,7 +224,9 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _doRescue(true),
     _manTurrets(false),
     _stayInsideGate(false),
-    _closeGate(false)
+    _closeGate(false),
+    _doShopping(false),
+    _tradeItems()
 {
     Faction* faction = squad.getFaction();
     if (faction)
@@ -901,6 +903,26 @@ void SquadAutonomy::SquadSettingsInfo::setCloseGate(bool val)
 {
     _closeGate = val;
     ClearTask(_squad, STAND_AT_GUARD_NODE_HOMEBUILDING_IN_OUT);
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getDoShopping() const
+{
+    return _doShopping;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setDoShopping(bool val)
+{
+    _doShopping = val;
+}
+
+std::vector<TradingInfo::TradeItem> SquadAutonomy::SquadSettingsInfo::getTradeItems() const
+{
+    return _tradeItems;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setTradeItems(std::vector<TradingInfo::TradeItem> val)
+{
+    _tradeItems = val;
 }
 
 hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)

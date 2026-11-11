@@ -71,13 +71,37 @@ void SquadAutonomyPanel::create()
     _panel->showTabs(true);
     _panel->addTab(_mainTab->getCategory(), Localization::gettext("Main"), "");
     _panel->addTab(_optionsTab->getCategory(), Localization::gettext("Options"), "");
+
+    /*
+    _panel->tabEvent += new MyGUI::delegates::CMethodDelegate2<OptionsTab, DatapanelGUI*, int>(
+        MyGUI::delegates::GetDelegateUnlink(&_optionsTab),
+        _optionsTab.get(),
+        &OptionsTab::updateFloatingPanel
+    );
+    */
     _panel->changeCategory(_mainTab->getCategory());
+    _panel->tabEvent += MyGUI::newDelegate(this, &SquadAutonomyPanel::onTabChanged);
 
     refresh();
 
     createModSettingsButton();
 
     _panel->show(false);
+}
+
+void SquadAutonomyPanel::onTabChanged(DatapanelGUI* panel, int category)
+{
+    if (_optionsTab)
+    {
+        _optionsTab->updateFloatingPanel(category);
+    }
+}
+
+void SquadAutonomyPanel::OptionsTab::updateFloatingPanel(int category)
+{
+    refresh();
+    if (!_floatingPanel) return;
+    _floatingPanel->setVisible(category == 1);
 }
 
 void SquadAutonomyPanel::refresh()
@@ -163,6 +187,7 @@ void SquadAutonomyPanel::MainTab::refresh()
 
     auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
     _panel->setLineSpacing(32.0);
+    _panel->scrollView->setViewOffset(MyGUI::IntPoint(0, 0));
     _panel->clearPage(_category);
 
     if (_selectedSquad->activePlatoon)
@@ -298,8 +323,8 @@ void SquadAutonomyPanel::MainTab::addAI(DataPanelLine* line)
     }
 
     SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
-    SquadSettingsInfo* settingsInfo = settings.getSquadSettings(_selectedSquad, true);
-    if (!settingsInfo)
+    SquadSettingsInfo* squadSettings = settings.getSquadSettings(_selectedSquad, true);
+    if (!squadSettings)
     {
         return;
     }
@@ -315,9 +340,9 @@ void SquadAutonomyPanel::MainTab::addAI(DataPanelLine* line)
         return;
     }
 
-    settingsInfo->addPackage(static_cast<int>(_priority), data);
+    squadSettings->addPackage(static_cast<int>(_priority), data);
     //DebugLog("Add " + data->name + " package");
-    settingsInfo->updateSquadPackages();
+    squadSettings->updateSquadPackages();
 
     refresh();
 }
@@ -562,6 +587,7 @@ std::string SquadAutonomyPanel::MainTab::getBuildingName(const Building& buildin
 
 SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, int category) :
     _panel(&panel),
+    _floatingPanel(nullptr),
     _selectedSquad(nullptr),
     _category(category),
     _subCategory(0),
@@ -573,6 +599,8 @@ SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, int category) :
 {
 }
 
+// TODO: Fix scrolling bar staying after changing subcategory
+// The scrollbar is gone after switching back to main tab so look there
 void SquadAutonomyPanel::OptionsTab::refresh()
 {
     if (!SquadAutonomySettings::getSingleton().initialized || !_panel || !_selectedSquad)
@@ -588,6 +616,7 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     }
 
     _panel->setLineSpacing(24.0);
+    _panel->scrollView->setViewOffset(MyGUI::IntPoint(0, 0));
     _panel->clearPage(_category);
 
     if (_selectedSquad->activePlatoon)
@@ -596,43 +625,66 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     }
 
     // TODO: make this a floating panel so it'll always be showing even when scrolled down
+
+    if (!_floatingPanel)
+    {
+        _floatingPanel = _panel->win->createWidgetReal<MyGUI::Widget>("Kenshi_GenericWindowSkin", 0.0, float(_panel->tabWin->getBottom()) / _panel->getHeight(), 1.0, 0.0, MyGUI::Align::Top | MyGUI::Align::Left, "");
+        _floatingPanel->setWidgetStyle(MyGUI::WidgetStyle::Overlapped);
+        _floatingPanel->setVisible(false);
+    }
+    
     auto dropBox = _panel->setLineDropBox(Localization::gettext("Category"), _category, &_subCategory, false, 1.0f);
+    _panel->addSpace(_category, 0.25);
+    _floatingPanel->setSize(_floatingPanel->getWidth(), _panel->getContentHeight(_category));
+
+    for (int i = 0; i < dropBox->getNumWidgets(); ++i)
+    {
+        MyGUI::Widget* widget = dropBox->getWidget(i);
+        float left = float(widget->getLeft()) / widget->getParent()->getWidth();
+        float top = 0.5 - float(widget->getHeight()) / _floatingPanel->getHeight() * 0.5;
+        widget->attachToWidget(_floatingPanel);
+        widget->setRealPosition(left, top);
+    }
+
 
     if (_subCategory < 0)
     {
         _subCategory = 0;
     }
-    else if (_subCategory > 3)
+    else if (_subCategory > 4)
     {
-        _subCategory = 3;
+        _subCategory = 4;
     }
 
     dropBox->addAValue(Localization::gettext("Basic"), 0);
     dropBox->addAValue(Localization::gettext("Labour"), 1);
     dropBox->addAValue(Localization::gettext("Combat"), 2);
     dropBox->addAValue(Localization::gettext("Guard"), 3);
+    dropBox->addAValue(Localization::gettext("Shopping"), 4);
     dropBox->setSelectedValue(_subCategory);
 
     dropBox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &SquadAutonomyPanel::OptionsTab::refreshCallback);
     readFromSquadSettings(*settings);
+    bool hasSettings = false;
     switch (_subCategory)
     {
     case 1:
-        _labour->refresh(*settings);
+        hasSettings = _labour->refresh(*settings);
         break;
     case 2:
-        _combat->refresh(*settings);
+        hasSettings = _combat->refresh(*settings);
         break;
     case 3:
-        _guard->refresh(*settings);
+        hasSettings = _guard->refresh(*settings);
         break;
     case 4:
-        _shopping->refresh(*settings);
+        hasSettings = _shopping->refresh(*settings);
+        break;
     default:
-        _basic->refresh(*settings);
+        hasSettings = _basic->refresh(*settings);
         break;
     }
-    if (_panel->getNumLines(_category) == 1)
+    if (!hasSettings)
     {
         Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("No settings available for current packages"), false, false);
     }
@@ -641,6 +693,16 @@ void SquadAutonomyPanel::OptionsTab::refresh()
 int SquadAutonomy::SquadAutonomyPanel::OptionsTab::getCategory() const
 {
     return _category;
+}
+
+MyGUI::Widget* SquadAutonomy::SquadAutonomyPanel::OptionsTab::getFloatingPanelPtr()
+{
+    return _floatingPanel;
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::setFloatingPanelPtr(MyGUI::Widget* ptr)
+{
+    _floatingPanel = ptr;
 }
 
 void SquadAutonomyPanel::OptionsTab::setSelectedSquad(Platoon& selectedSquad)
@@ -654,7 +716,7 @@ void SquadAutonomyPanel::OptionsTab::refreshCallback(MyGUI::ComboBox* sender, si
     {
         return;
     }
-
+    
     refresh();
 }
 
@@ -671,6 +733,7 @@ void SquadAutonomyPanel::OptionsTab::writeToSelectedSquadSettings(DataPanelLine*
     _labour->writeToSquadSettings(*squadSettings);
     _combat->writeToSquadSettings(*squadSettings);
     _guard->writeToSquadSettings(*squadSettings);
+    _shopping->writeToSquadSettings(*squadSettings);
 }
 
 void SquadAutonomyPanel::OptionsTab::writeToSelectedSquadSettingsAndRefresh(DataPanelLine* line)
@@ -690,6 +753,7 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::readFromSquadSettings(const 
     _labour->readFromSquadSettings(squadSettings);
     _combat->readFromSquadSettings(squadSettings);
     _guard->readFromSquadSettings(squadSettings);
+    _shopping->readFromSquadSettings(squadSettings);
 }
 
 DataPanelLine_SliderEditable* SquadAutonomyPanel::OptionsTab::createOptionsSlider(std::string key, float* var, int precision, float min, float max, bool seperateTextLine)
@@ -709,12 +773,15 @@ DataPanelLine_SliderEditable* SquadAutonomyPanel::OptionsTab::createOptionsSlide
     int nameTextMid = slider->nameText->getTop() + slider->nameText->getHeight() * 0.5;
     slider->sliderBar->setPosition(slider->sliderBar->getLeft(), nameTextMid - slider->sliderBar->getHeight() * 0.5);
     slider->valueEditBox->setPosition(slider->valueEditBox->getLeft(), nameTextMid - slider->valueEditBox->getHeight() * 0.5);
-
+    Utils::setCallback(*slider, this, &OptionsTab::writeToSelectedSquadSettings);
+    //slider->callback = MyGUI::newDelegate(this, &OptionsTab::writeToSelectedSquadSettings);
+    /*
     slider->callback = new MyGUI::delegates::CMethodDelegate1<OptionsTab, DataPanelLine*>(
         MyGUI::delegates::GetDelegateUnlink(this),
         this,
         &OptionsTab::writeToSelectedSquadSettings
     );
+    */
 
     return slider;
 }
@@ -740,7 +807,7 @@ SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTa
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::BasicOptions::refresh(SquadSettingsInfo& settings)
+bool SquadAutonomyPanel::OptionsTab::BasicOptions::refresh(SquadSettingsInfo& settings)
 {
     auto startSlider = Utils::addSlider(*_panel, _category, Localization::gettext("Start Work Time"), true, startWorkTime, 0.0f, 24.0f, 0);
     Utils::setCallback(*startSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
@@ -773,6 +840,7 @@ void SquadAutonomyPanel::OptionsTab::BasicOptions::refresh(SquadSettingsInfo& se
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Allow Sleep Outside Work Hours"), doSleep);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
     }
+    return true;
 }
 
 void SquadAutonomyPanel::OptionsTab::BasicOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
@@ -816,43 +884,50 @@ SquadAutonomyPanel::OptionsTab::LabourOptions::LabourOptions(OptionsTab& options
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::LabourOptions::refresh(SquadSettingsInfo& settings)
+bool SquadAutonomyPanel::OptionsTab::LabourOptions::refresh(SquadSettingsInfo& settings)
 {
-    if (!settings.hasTask(AUTO_LABOURING_MINES)) return;
-    _panel->setLineSpacing(28.0);
+    bool hasTask = false;
+    if (settings.hasTask(AUTO_LABOURING_MINES))
+    {
+        hasTask = true;
 
-    const std::string statsUsedLabel = *_MainColorCode + Localization::gettext("Stats Used:") + ' ' + Localization::gettext("(bigger number = higher priority, 0 = forbid)");
-    Utils::addText(*_panel, _category, statsUsedLabel, false, false);
+        _panel->setLineSpacing(28.0);
 
-    const float maxPriority = 10.0;
-    _optionsTab->createOptionsSlider(Localization::gettext("Science"), &science, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Labouring (Mining)"), &labouring, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Farming"), &farming, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Cooking"), &cooking, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Medic"), &medic, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Engineer"), &engineer, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Robotics"), &robotics, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Weapon Smith"), &weaponSmith, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Armour Smith"), &armourSmith, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Crossbow Smith"), &crossbowSmith, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Automatic Machine"), &automaticMachine, 0, 0.0, maxPriority, false);
-    _optionsTab->createOptionsSlider(Localization::gettext("Other"), &other, 0, 0.0, maxPriority, false);
+        const std::string statsUsedLabel = *_MainColorCode + Localization::gettext("Stats Used:") + ' ' + Localization::gettext("(bigger number = higher priority, 0 = forbid)");
+        Utils::addText(*_panel, _category, statsUsedLabel, false, false);
 
-    _panel->addSpace(_category, 0.25);
+        const float maxPriority = 10.0;
+        _optionsTab->createOptionsSlider(Localization::gettext("Science"), &science, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Labouring (Mining)"), &labouring, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Farming"), &farming, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Cooking"), &cooking, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Medic"), &medic, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Engineer"), &engineer, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Robotics"), &robotics, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Weapon Smith"), &weaponSmith, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Armour Smith"), &armourSmith, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Crossbow Smith"), &crossbowSmith, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Automatic Machine"), &automaticMachine, 0, 0.0, maxPriority, false);
+        _optionsTab->createOptionsSlider(Localization::gettext("Other"), &other, 0, 0.0, maxPriority, false);
 
-    auto slider = _panel->setLineSliderEditable(Localization::gettext("Set All"), _category, true, 0.0, maxPriority, &setAll);
-    slider->setPrecision(0);
-    auto editBox = slider->valueEditBox;
-    auto valueEditPos = editBox->getPosition();
-    auto button = _panel->setLineButton("", Localization::gettext("Set"), _category);
-    button->button->setPosition(valueEditPos.left, valueEditPos.top + editBox->getHeight());
-    button->button->setSize(editBox->getWidth(), editBox->getHeight());
-    slider->sliderBar->setPosition(slider->sliderBar->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->sliderBar->getHeight() * 0.5);
-    slider->nameText->setPosition(slider->nameText->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->nameText->getHeight() * 0.5);
-    //button->button->setCaption(Localization::gettext("Set"));
-    button->button->setUserData(_optionsTab);
-    button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &LabourOptions::setAllTo);
-    _panel->addSpace(_category, 1.0);
+        _panel->addSpace(_category, 0.25);
+
+        // set all button
+        auto slider = _panel->setLineSliderEditable(Localization::gettext("Set All"), _category, true, 0.0, maxPriority, &setAll); 
+        slider->setPrecision(0);
+        auto editBox = slider->valueEditBox;
+        auto valueEditPos = editBox->getPosition();
+        auto button = _panel->setLineButton("", Localization::gettext("Set"), _category);
+        button->button->setPosition(valueEditPos.left, valueEditPos.top + editBox->getHeight());
+        button->button->setSize(editBox->getWidth(), editBox->getHeight());
+        slider->sliderBar->setPosition(slider->sliderBar->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->sliderBar->getHeight() * 0.5);
+        slider->nameText->setPosition(slider->nameText->getLeft(), (editBox->getTop() + editBox->getHeight()) - slider->nameText->getHeight() * 0.5);
+        //button->button->setCaption(Localization::gettext("Set"));
+        button->button->setUserData(_optionsTab);
+        button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &LabourOptions::setAllTo);
+        _panel->addSpace(_category, 1.0);
+    }
+    return hasTask;
 }
 
 void SquadAutonomyPanel::OptionsTab::LabourOptions::setAllTo(MyGUI::Widget* sender)
@@ -919,29 +994,35 @@ SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& options
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& settings)
+bool SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& settings)
 {
+    bool hasTask = false;
     DataPanelLine_CheckBox* checkbox; 
     if (settings.hasTask(TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME) || settings.hasTask(ATTACK_ENEMIES))
     {
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Attack Enemies"), attackEnemies);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        hasTask = true;
     }
     if (settings.hasTask(PROTECT_ALLIES) || settings.hasTask(PROTECT_ALLIES_STAY_IN_TOWN) || settings.hasTask(PROTECT_OWN_SQUAD))
     {
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Protect Allies"), protectAllies);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        hasTask = true;
     }
     if (settings.hasTask(JOB_MEDIC) || settings.hasTask(JOB_REPAIR_ROBOT))
     {
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Medic"), doMedic);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        hasTask = true;
     }
     if (settings.hasTask(FIND_AND_RESCUE) || settings.hasTask(FIND_AND_RESCUE_LEADER) || settings.hasTask(FIND_AND_RESCUE_IF_THERES_BEDS))
     {
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rescue Downed Allies"), doRescue);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        hasTask = true;
     }
+    return hasTask;
 }
 
 void SquadAutonomyPanel::OptionsTab::CombatOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
@@ -969,12 +1050,14 @@ SquadAutonomyPanel::OptionsTab::GuardOptions::GuardOptions(OptionsTab& optionsTa
 {
 }
 
-void SquadAutonomyPanel::OptionsTab::GuardOptions::refresh(SquadSettingsInfo& settings)
+bool SquadAutonomyPanel::OptionsTab::GuardOptions::refresh(SquadSettingsInfo& settings)
 {
+    bool hasTask = false;
     if (settings.hasTask(MAN_A_TURRET) || settings.hasTask(MAN_A_TURRET_ON_BUILDING))
     {
         auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Man Turrets"), manTurrets);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        hasTask = true;
     }
     if (settings.hasTask(MAN_THE_GATE))
     {
@@ -985,7 +1068,9 @@ void SquadAutonomyPanel::OptionsTab::GuardOptions::refresh(SquadSettingsInfo& se
 
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Close Gate"), closeGate);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        hasTask = true;
     }
+    return hasTask;
 }
 
 void SquadAutonomyPanel::OptionsTab::GuardOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
@@ -1027,21 +1112,85 @@ const ItemFunction itemFunctions[] =
     ITEM_SEVERED_LIMB
 };
 
-SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
+SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
     OptionsBase(optionsTab, panel, category),
     itemFunctionListIndex(0),
-    quantity(0),
-    priority(0)
+    amount(0)
 {
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo& settings)
+std::string getItemFunctionName(ItemFunction itemFunc)
 {
-    if (!settings.hasTask(SHOPPING)) return;
+    std::string name = "";
+    switch (itemFunc)
+    {
+    case ITEM_ANYTHING:
+        name = Localization::gettext("Anything");
+        break;
+    case ITEM_FIRSTAID:
+        name = Localization::gettext("First Aid");
+        break;
+    case ITEM_ROBOTREPAIR:
+        name = Localization::gettext("Skeleton Repair Kit");
+        break;
+    case ITEM_MEDRIGGING:
+        name = Localization::gettext("Med Rigging");
+        break;
+    case ITEM_CONTAINER:
+        name = Localization::gettext("Backpack");
+        break;
+    case ITEM_FOOD:
+        name = Localization::gettext("Food");
+        break;
+    case ITEM_WEAPON:
+        name = Localization::gettext("Weapon");
+        break;
+    case ITEM_AMMO:
+        name = Localization::gettext("Ammo");
+        break;
+    case ITEM_CLOTHING:
+        name = Localization::gettext("Clothing");
+        break;
+    case ITEM_NARCOTIC:
+        name = Localization::gettext("Narcotic");
+        break;
+    case ITEM_BLUEPRINT:
+        name = Localization::gettext("Blueprint");
+        break;
+    case ITEM_BOOK:
+        name = Localization::gettext("Book");
+        break;
+    }
+    return name;
+}
+
+bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo& settings)
+{
+    bool hasTask = false;
+
+    if (settings.hasTask(SHOPPING))
+    {
+        auto dropBox = _panel->setLineDropBox(Localization::lineItemCategory, _category, &itemFunctionListIndex, false, 1.0f);
+        updateItemFunctionList(dropBox);
+        Utils::addSlider(*_panel, _category, Localization::gettext("Min Amount"), true, amount, 0.0f, 100.0f, 0);
+        auto addTradeItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Buy Item"));
+        Utils::setCallback(*addTradeItemButton, this, &OptionsTab::ShoppingOptions::addTradeItem);
+
+        auto clearTradeItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buy Items"));
+        Utils::setCallback(*clearTradeItemButton, this, &OptionsTab::ShoppingOptions::clearTradeItem);
+        hasTask = true;
+
+        auto tradeItems = settings.getTradeItems();
+        for (int i = 0; i < tradeItems.size(); ++i)
+        {
+            Utils::addText(*_panel, _category, getItemFunctionName(tradeItems[i].itemFunction) + " " + Ogre::StringConverter::toString(tradeItems[i].quantity));
+        }
+    }
+    return hasTask;
     
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateItemFunctionList(DataPanelLine_DropBox* dropbox)
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateItemFunctionList(DataPanelLine_DropBox* dropbox)
 {
     dropbox->addAValue(Localization::gettext("Anything"), ITEM_ANYTHING);
     dropbox->addAValue(Localization::gettext("First Aid"), ITEM_FIRSTAID);
@@ -1055,5 +1204,57 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateItemF
     dropbox->addAValue(Localization::gettext("Narcotic"), ITEM_NARCOTIC);
     dropbox->addAValue(Localization::gettext("Blueprint"), ITEM_BLUEPRINT);
     dropbox->addAValue(Localization::gettext("Book"), ITEM_BOOK);
+}
 
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addTradeItem(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+    auto dropbox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
+    if (!dropbox)
+    {
+        return;
+    }
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+
+    if (squadSettings)
+    {
+        auto tradeItems = squadSettings->getTradeItems();
+        TradingInfo::TradeItem tradeItem;
+        tradeItem.itemFunction = static_cast<ItemFunction>(dropbox->getSelectedValue());
+        tradeItem.quantity = amount;
+        tradeItems.push_back(tradeItem);
+        squadSettings->setTradeItems(tradeItems);
+    }
+    
+    _optionsTab->refresh();
+}
+
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearTradeItem(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+
+    if (squadSettings)
+    {
+        auto tradeItems = squadSettings->getTradeItems();
+        tradeItems.clear();
+        squadSettings->setTradeItems(tradeItems);
+    }
+
+    _optionsTab->refresh();
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
+{
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
+{
 }
