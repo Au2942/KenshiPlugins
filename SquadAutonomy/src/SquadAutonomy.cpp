@@ -29,6 +29,7 @@
 #include <kenshi/gui/SquadManagementScreen.h>
 #include <kenshi/gui/DialogueWindow.h>
 #include <kenshi/gui/MessageBoxManager.h>
+#include <kenshi/gui/InventoryGUI.h>
 
 #include <kenshi/util/hand.h>
 #include <kenshi/util/PerfTimer.h>
@@ -36,6 +37,7 @@
 #include <kenshi/GameWorld.h>
 #include <kenshi/GameData.h>
 #include <kenshi/RootObject.h>
+#include <kenshi/RootObjectFactory.h>
 #include <kenshi/PlayerInterface.h>
 #include <kenshi/Character.h>
 #include <kenshi/CharMovement.h>
@@ -64,6 +66,9 @@
 #include <kenshi/Building/DoorStuff.h>
 #include <kenshi/Building/ResearchBuilding.h>
 #include <kenshi/Research.h>
+#include <kenshi/Gear.h>
+#include <kenshi/GunClass.h>
+#include <kenshi/TradeCulture.h>
 
 #include <mygui/MyGUI_Gui.h>
 #include <mygui/MyGUI_Window.h>
@@ -109,6 +114,11 @@ namespace SquadAutonomy
     void (*Task_MoveToDoor_Gate_ChooseSide_gatePosition)(Tasker*, Ogre::Vector3&, CharBody*) = nullptr;
     void (*Task_OpenDoor_StartAction)(Tasker*, CharBody*) = nullptr;
     void (*Task_OpenDoor_Update)(Tasker*, CharBody*) = nullptr;
+    void (*Task_Shopping_StartAction)(Tasker*, CharBody*) = nullptr; //0x33a480
+    void (*Task_Shopping_Update)(Tasker*, CharBody*) = nullptr; //0x33a480
+    Building* (*BuildingFinderClass_getNearest)(BuildingFinderClass*) = nullptr;//0x9fa0b0
+    std::vector<Building*>* buildingFinderBuildings = nullptr;//0x2037e58
+    int* buildingFinderBuildingsCount = nullptr;//0x2037e50
     Tasker* (*GOAPTaskMgr_createNewTask)(TaskRepertoire*, TaskType key, const hand& subject, taskPriority priority, float weight, Ogre::Vector3 location, int startTime, int endTime) = nullptr;
     static MyGUI::Window* (*MessageBoxManager_createMessageBox)
     (
@@ -631,6 +641,20 @@ namespace SquadAutonomy
         }
     }
 
+    void (*setHomeTown_orig)(Ownerships* thisptr, TownBase* t, SquadType squadtype);
+    void setHomeTown_hook(Ownerships* thisptr, TownBase* t, SquadType squadtype)
+    {
+        setHomeTown_orig(thisptr, t, squadtype);
+        Platoon* squad = thisptr->me;
+        SquadSettingsInfo* settings = nullptr;
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (t) DebugLog("set hometown to: " + t->displayName);
+            else DebugLog("set hometown to: null");
+        }
+    }
+
     // for assigning home to homeless squad (mostly the wandering squad)
     // used to do this by getting everything towns and compare the distance to each
     // changed to using currentTownLocation from blackboard
@@ -647,9 +671,9 @@ namespace SquadAutonomy
         {
             currentTown = bb->getCurrentTownLocation();
         }
+        Building* home = nullptr;
         if (currentTown)
         {
-            Building* home = nullptr;
             if (leader && leader->isInsideBuilding)
             {
                 Building* building = leader->isInsideBuilding.getBuilding();
@@ -667,36 +691,24 @@ namespace SquadAutonomy
                     }
                 }
             }
-            //if (home) DebugLog("set home to: " + home->displayName);
-            //else DebugLog("no home");
-            squad->getOwnerships()->setHomeBuilding(home, squad->getSquadType());
-            squad->getOwnerships()->setHomeTown(currentTown, squad->getSquadType());
-            if (activeSquad)
-            {
-                for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
-                {
-                    Character* obj = reinterpret_cast<Character*>(*it);
-                    StateBroadcastData* state = obj->getStateBroadcast();
-                    if (state) state->homeBuilding = home;
-                }
-            }
-            return;
         }
-        else
+        if (activeSquad)
         {
-            //DebugLog("no town");
-            squad->getOwnerships()->setHomeBuilding(nullptr, squad->getSquadType());
-            squad->getOwnerships()->setHomeTown(nullptr, squad->getSquadType());
-            if (activeSquad)
+            for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
             {
-                for (auto it = activeSquad->things.begin(); it != activeSquad->things.end(); ++it)
+                Character* obj = reinterpret_cast<Character*>(*it);
+                StateBroadcastData* state = obj->getStateBroadcast();
+                if (state) state->homeBuilding = home;
+                Ownerships* own = obj->getOwnerships();
+                if (own)
                 {
-                    Character* obj = reinterpret_cast<Character*>(*it);
-                    StateBroadcastData* state = obj->getStateBroadcast();
-                    if (state) state->homeBuilding = nullptr;
+                    own->_homeBuilding = home;
+                    own->_homeTown = currentTown;
                 }
             }
         }
+        squad->getOwnerships()->_homeBuilding = home;
+        squad->getOwnerships()->_homeTown = currentTown;
     }
 
     // finding "optimal" bed
@@ -842,6 +854,7 @@ namespace SquadAutonomy
         else return nullptr;
 
     }
+
     bool ImNearestFree(Character* character, UseableStuff* useable)
     {
         if (!character || !useable) return false;
@@ -1576,6 +1589,10 @@ namespace SquadAutonomy
                     }
                 }
             }
+            //if (platoon->getOwnerships()->_homeBuilding) Logger::logDebug(character->displayName + " home: " + platoon->getOwnerships()->_homeBuilding.getBuilding()->displayName);
+            //if (platoon->getOwnerships()->_homeTown) Logger::logDebug(character->displayName + " town: " + platoon->getOwnerships()->_homeTown->displayName);
+            //if (character->getStateBroadcast()->homeBuilding) Logger::logDebug(character->displayName + " state home: " + character->getStateBroadcast()->homeBuilding.getBuilding()->displayName);
+            //if (character->getStateBroadcast()->currentTownLocation) Logger::logDebug(character->displayName + " state current town: " + character->getStateBroadcast()->currentTownLocation->displayName);
 
             // the part that makes everything work
             // basically many of the task scoring/target finding functions have a faction->isPlayer check
@@ -2067,7 +2084,17 @@ namespace SquadAutonomy
         if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            if (settings->getCloseGate())
+            OrdersReceiver* order = character->getOrdersReciever();
+            if (order)
+            {
+                Tasker* currentGoal = order->tryToGetCurrentGoal();
+                if (!order->hasPlayerOrder(OPEN_DOOR))
+                {
+                    //DebugLog("Open Door");
+                    return;
+                }
+            }
+            /*if (settings->getCloseGate())
             {
                 OrdersReceiver* order = character->getOrdersReciever();
                 if (order)
@@ -2079,7 +2106,7 @@ namespace SquadAutonomy
                         return;
                     }
                 }
-            }
+            }*/
         }
         Task_OpenDoor_StartAction_orig(thisptr, body);
     }
@@ -2098,6 +2125,17 @@ namespace SquadAutonomy
         if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
+            OrdersReceiver* order = character->getOrdersReciever();
+            if (order)
+            {
+                Tasker* currentGoal = order->tryToGetCurrentGoal();
+                if (!order->hasPlayerOrder(OPEN_DOOR))
+                {
+                    //DebugLog("Open Door");
+                    return;
+                }
+            }
+            /*
             if (settings->getCloseGate())
             {
                 OrdersReceiver* order = character->getOrdersReciever();
@@ -2111,6 +2149,7 @@ namespace SquadAutonomy
                     }
                 }
             }
+            */
         }
         Task_OpenDoor_Update_orig(thisptr, body);
     }
@@ -2478,15 +2517,15 @@ namespace SquadAutonomy
                 }
                 return (medical->scoreFirstAidNeed(race->robot)) * 2.0;
             }
-            else if (type == PATROL_TOWN)
+            else if (type == PATROL_TOWN || type == PATROL)
             {
                 Tasker* currentTask = taskSystem->tryToGetCurrentGoal();
                 if (currentTask)
                 {
-                    if (currentTask->key() == PATROL_TOWN)
+                    if (currentTask->key() == type)
                     {
                         float score = taskSystem->currentGoalScore;
-                        score *= 0.95;
+                        score *= 0.99;
                         //DebugLog("Patrol score: " + sc::toString(score));
                         taskSystem->currentGoalScore = std::max(score, 0.0001f);
                         return taskSystem->currentGoalScore;
@@ -2721,7 +2760,290 @@ namespace SquadAutonomy
         return result;
     }
 
+    void UpdateTradeItemsCount(AI* ai, Character* character, Inventory* inventory)
+    {
+        for (int i = 0; i < ai->tradingInfo->tradeItems.size(); ++i)
+        {
+            auto tradeItem = &(ai->tradingInfo->tradeItems[i]);
+            int itemCount = 0;
+            if (inventory)
+            {
+                if (tradeItem->itemFunction == ITEM_FOOD || tradeItem->itemFunction == ITEM_FOOD_RESTRICTED)
+                {
+                    itemCount = inventory->getNumFoodItems(character);
+                }
+                else
+                {
+                    lektor<Item*> itemsOfType;
+                    inventory->getAllItemsWithFunction(itemsOfType, tradeItem->itemFunction);
+                    itemCount = itemsOfType.count;
+                    itemsOfType.clear();
+                    if (tradeItem->itemFunction == ITEM_WEAPON)
+                    {
+                        inventory->getEquippedWeapons(itemsOfType);
+                        itemCount += itemsOfType.count;
+                    }
+                    else if (tradeItem->itemFunction == ITEM_CLOTHING)
+                    {
+                        lektor<Item*> equippedArmour;
+                        inventory->getEquippedArmour(itemsOfType);
+                        itemCount += itemsOfType.count;
+                    }
+                }
+            }
+            tradeItem->count = itemCount;
+        }
+    }
 
+    int CanSellItemToCulture(Item* itemToSell, TradeCulture* shopCulture)
+    {
+        int price = itemToSell->getValueSingle(true);
+        if (!shopCulture) return price;
+
+        GameData* itemData = itemToSell->getGameData();
+        if (!itemData) return -1;
+        if (shopCulture)
+        {
+            // check if tradeculture allow it
+
+            if (shopCulture->isItemIllegal(itemData))
+            {
+                Logger::logDebug(itemToSell->displayName + " is illegal", SHOPPING);
+                return -1;
+            }
+            if (shopCulture->hasTradePriceMultiplier(itemData))
+            {
+                Logger::logDebug(itemToSell->displayName + ": " + sc::toString(price) + " x" + sc::toString(shopCulture->hasTradePriceMultiplier(itemData)), SHOPPING);
+                price *= shopCulture->getTradePriceMultiplier(itemData);
+            }
+        }
+        return price;
+    }
+
+    bool HasSellableItem(SquadSettingsInfo* settings, Inventory* inventory, Building* shop)
+    {
+        Logger::logDebug("Has sellable item check", SHOPPING);
+        auto sellItems = settings->getSellItems();
+        
+        if (!shop) return false;
+        bool hasValidSellItem = false;
+        TradeCulture* tradeCulture = nullptr;
+        Character* trader = shop->getResidentSquadLeader();
+        if (!trader && shop->furnitureParentBuilding()) trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
+        if (trader->getFaction()) tradeCulture = &trader->getFaction()->tradeCulture;
+        for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
+        {
+            lektor<Item*> items;
+            inventory->getAllItemsWithFunction(items, iter->first);
+            int amountToKeep = iter->second;
+            int amountOwned = items.size();
+            // has less or equal to keep amount
+            if (amountOwned <= amountToKeep) continue;
+
+            for (int i = 0; i < items.size(); ++i)
+            {
+                auto item = items[i];
+                int price = CanSellItemToCulture(item, tradeCulture);
+                if (price < 0) continue;
+                hasValidSellItem = true;
+                break;
+                
+                // check if can afford it
+                Logger::logDebug("Shop money: " + sc::toString(shop->getMoney()));
+                if (price <= shop->getMoney())
+                {
+                    hasValidSellItem = true;
+                    Logger::logDebug(item->displayName + " is sellable", SHOPPING);
+                    break;
+                }
+                
+            }
+
+            if (hasValidSellItem) break;
+
+        }
+        return hasValidSellItem;
+
+    }
+
+    int (*_NV_getMoney_orig)(Character* thisptr);
+    int _NV_getMoney_hook(Character* thisptr)
+    {
+        Platoon* squad = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        Faction* faction = thisptr->getFaction();
+        bool removePI = false;
+        if (thisptr && thisptr->getPlatoon()) squad = thisptr->getPlatoon()->me;
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (faction && !faction->isPlayer)
+            {
+                faction->isPlayer = settings->getPlayerInterface();
+                removePI = true;
+            }
+        }
+        int money = _NV_getMoney_orig(thisptr);
+        if (settings && settings->isEnabled() && faction && removePI)
+        {
+            faction->isPlayer = nullptr;
+        }
+        return money;
+    }
+
+    bool CheckValidBuyItem(Character* character, Item* itemToBuy)
+    {
+        if (character->getInventory())
+        {
+            Inventory* inventory = character->getInventory();
+            if (itemToBuy->getValueAll(true) > character->getMoney()) return false;
+            if (itemToBuy->itemFunction == ITEM_FOOD || itemToBuy->itemFunction == ITEM_FOOD_RESTRICTED)
+            {
+                if (!character->getRace()->canEat(itemToBuy, character->isAnimal())) return false;
+            }
+            else if (itemToBuy->itemFunction == ITEM_CLOTHING)
+            {
+                lektor<InventorySection*> sections = inventory->getAllSections();
+                bool allSlotsEquipped = true;
+                bool mySlotExist = false;
+                for (int i = 0; i < sections.size(); ++i)
+                {
+                    //DebugLog("Sections" + sc::toString(i) + " " + sections[i]->name);
+                    if (!sections[i]->isAnEquippedItemSection) continue;
+                    //DebugLog("Is an equipped item section");
+                    if (!sections[i]->getEnabled()) continue;
+                    //DebugLog("Is enabled");
+                    if (!sections[i]->isEmpty()) continue;
+                    //DebugLog("Is empty");
+                    allSlotsEquipped = false;
+                    //DebugLog("Found empty armor slot");
+                    if (sections[i]->isLimitedSlotCompatible(itemToBuy))
+                    {
+                        //DebugLog("Found valid slot");
+                        mySlotExist = true;
+                        break;
+                    }
+                }
+                if (!allSlotsEquipped && !mySlotExist)
+                {
+                    return false;
+                }
+            }
+            else if (itemToBuy->itemFunction == ITEM_AMMO)
+            {
+                lektor<Item*> equipped;
+                inventory->getEquippedWeapons(equipped);
+                bool validAmmoType = false;
+                for (int i = 0; i < equipped.size(); ++i)
+                {
+                    Crossbow* crossbow = equipped[i]->isCrossbow();
+                    GameData* ammoType = nullptr;
+
+                    if (crossbow && crossbow->gunClass) ammoType = crossbow->gunClass->ammoType;
+                    //DebugLog(crossbow->displayName + " ammo type: " + ammoType->name + " : " + itemToBuy->displayName);
+                    if (ammoType && ammoType == itemToBuy->getGameData())
+                    {
+                        //DebugLog("Valid ammo type!");
+                        validAmmoType = true;
+                        break;
+                    }
+                }
+                if (!validAmmoType)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    float (*scoreShopping_orig)(AI* thisptr, const hand& subject, const Ogre::Vector3& v);
+    float scoreShopping_hook(AI* thisptr, const hand& subject, const Ogre::Vector3& v)
+    {
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (!settings->getDoShopping()) return 0.0;
+        }
+        return scoreShopping_orig(thisptr, subject, v);
+    }
+
+    float (*findShop_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
+    float findShop_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
+    {
+        float score = findShop_orig(thisptr, in, out, justAsking);
+
+        Character* character = thisptr->getCharacter();
+        Platoon* squad = nullptr;
+        TradingInfo* tradingInfo = thisptr->tradingInfo;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (out && out.getBuilding())
+            {
+                Building* outBuilding = out.getBuilding();
+                Logger::logDebug(character->displayName + " Find shop: " + outBuilding->displayName, SHOPPING);
+                if (outBuilding->getSpecialFunction() != BF_SHOP || !outBuilding->getInventory())
+                {
+                    out = nullptr;
+                    score = 0.0;
+                }
+                else
+                {
+                    thisptr->tradingInfo->tradeItems.clear();
+                    thisptr->_createTradingInfo();
+                    Inventory* shopInventory = outBuilding->getInventory();
+                    
+                    if (HasSellableItem(settings, character->getInventory(), outBuilding))
+                    {
+                        Logger::logDebug("Has sellable item", SHOPPING);
+                    }
+                    else
+                    {
+                        Logger::logDebug("Find buyable item", SHOPPING);
+                        bool hasItemFunction = false;
+                        for (int i = 0; i < thisptr->tradingInfo->tradeItems.size(); ++i)
+                        {
+                            lektor<Item*> itemsWithFunction;
+                            auto tradeItem = thisptr->tradingInfo->tradeItems[i];
+                            if (tradeItem.count >= tradeItem.quantity) continue;
+                            if (shopInventory->hasItemFunction(tradeItem.itemFunction))
+                            {
+                                //DebugLog("Shop has itemfunction" + sc::toString(tradeItem.itemFunction));
+
+                                shopInventory->getAllItemsWithFunction(itemsWithFunction, tradeItem.itemFunction);
+                                for (int j = 0; j < itemsWithFunction.size(); ++j)
+                                {
+                                    if (CheckValidBuyItem(character, itemsWithFunction[j]))
+                                    {
+                                        hasItemFunction = true;
+                                        break;
+                                    }
+                                }
+
+                                if (hasItemFunction)
+                                {
+                                    Logger::logDebug("Has buyable item", SHOPPING);
+                                    break;
+                                }
+                            }
+                        }
+                        if (!hasItemFunction)
+                        {
+                            out = nullptr;
+                            score = 0.0;
+                        }
+                    }
+                }
+            }
+        }
+        return score;
+    }
 
     Item* (*buyItem_orig)(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo);
     Item* buyItem_hook(Inventory* thisptr, Item* itemToBuy, RootObject* sendingTo)
@@ -2729,6 +3051,7 @@ namespace SquadAutonomy
         Character* character = sendingTo->getHandle().getCharacter();
         Platoon* squad = nullptr;
         Faction* inventoryFaction = nullptr;
+        bool inventoryNotPlayer = false;
         AI* ai = character->getAI();
 
         if (character && character->getPlatoon())
@@ -2739,31 +3062,30 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            if (ai && ai->boughtShitComplete(nullptr, Ogre::Vector3::ZERO))
-            {
-                Logger::logDebug(sendingTo->displayName + " finished buying", Logger::SHOPPING);
-                return nullptr;
-            }
+            
+            if (!CheckValidBuyItem(character, itemToBuy)) return nullptr;
 
             if (thisptr->getOwner()) inventoryFaction = thisptr->getOwner()->getFaction();
-            if (inventoryFaction)
+            if (inventoryFaction && !inventoryFaction->isPlayer)
             {
-                // there's a random 20% chance to not get the item if the seller is not of player faction for some reason
+                // there's a random 20% chance to not get the item if the shop inventory is not of player faction
+                inventoryNotPlayer = true;
                 inventoryFaction->isPlayer = settings->getPlayerInterface();
             }
         }
 
         Item* item = buyItem_orig(thisptr, itemToBuy, sendingTo);
 
-        if (settings && settings->isEnabled() && inventoryFaction)
+        if (settings && settings->isEnabled() && inventoryFaction && inventoryNotPlayer)
         {
             inventoryFaction->isPlayer = nullptr;
+            if (item)
+            {
+                Logger::logDebug(sendingTo->displayName + " bought " + item->displayName, Logger::SHOPPING);
+            }
+            UpdateTradeItemsCount(ai, character, character->getInventory());
         }
 
-        if (item)
-        {
-            Logger::logDebug(sendingTo->displayName + " bought " + item->displayName, Logger::SHOPPING);
-        }
 
         return item;
     }
@@ -2778,31 +3100,57 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            Faction* faction = character->getFaction();
-            faction->isPlayer = settings->getPlayerInterface();
+            UpdateTradeItemsCount(thisptr, character, character->getInventory());
+            
+            auto sellItems = settings->getSellItems();
 
-            thisptr->tradingInfo->tradeItems.clear();
-            TradingInfo::TradeItem item;
-            item.itemFunction = ITEM_FOOD;
-            lektor<Item*> itemsOfType;
-            character->getInventory()->getAllItemsWithFunction(itemsOfType, ITEM_FOOD);
-            item.count = itemsOfType.count;
-            item.quantity = 4;
-            thisptr->tradingInfo->tradeItems.push_back(item);
+            Inventory* inventory = character->getInventory();
+            for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
+            {
+                lektor<Item*> items;
+                inventory->getAllItemsWithFunction(items, iter->first);
+                int amountToKeep = iter->second;
+                int amountOwned = items.size();
+                // has less or equal to keep amount
+                if (amountOwned > amountToKeep) return false;
+            }
+            /*
             for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
             {
                 TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
-                Logger::logDebug("bought shit " + thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                Logger::logDebug(thisptr->getCharacter()->displayName + ": " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
                     sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
             }
+            */
         }
         return boughtShitComplete_orig(thisptr, subject, _a2);
+    }
+
+    bool CanSellItemToShop(Item* item, int price, Character* trader, Building* shop)
+    {
+        if (price < 0) return false;
+
+        // do trading logic manually
+        // check if can fit
+        // check money
+        // give item
+        // take money
+        if (price > trader->getMoney())
+        {
+            Logger::logDebug("Shop money: " + sc::toString(trader->getMoney()), SHOPPING);
+            return false;
+        }
+        if (!shop->giveItem(item, false, false))
+        {
+            Logger::logDebug("Can't fit item", SHOPPING);
+            return false;
+        }
+        return true;
     }
 
     bool (*buySomething_orig)(AI* thisptr, Building* shop);
     bool buySomething_hook(AI* thisptr, Building* shop)
     {
-
         Character* character = thisptr->getCharacter();
         Platoon* squad = nullptr;
         TradingInfo* tradingInfo = thisptr->tradingInfo;
@@ -2810,46 +3158,111 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            Faction* faction = character->getFaction();
-            faction->isPlayer = settings->getPlayerInterface();
-
-            thisptr->tradingInfo->tradeItems.clear();
-            TradingInfo::TradeItem item;
-            item.itemFunction = ITEM_FOOD;
-            item.count = 0;
-            item.quantity = 4;
-            thisptr->tradingInfo->tradeItems.push_back(item);
-            for (int i = 0; i < tradingInfo->tradeItems.size(); ++i)
-            {
-                TradingInfo::TradeItem item = tradingInfo->tradeItems[i];
-                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
-                    sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
-            }
-        }
-
-        // have a bool to change Inventory::BuyItem behavior inside (restricted food for certain races, ammo of the equipped weapon type etc.)
-
-        bool result = buySomething_orig(thisptr, shop);
-
-
-        if (settings && settings->isEnabled())
-        {
-            Faction* faction = character->getFaction();
-            faction->isPlayer = nullptr;
-
             for (int i = 0; i < thisptr->tradingInfo->tradeItems.size(); ++i)
             {
                 TradingInfo::TradeItem item = thisptr->tradingInfo->tradeItems[i];
-                Logger::logDebug(thisptr->getCharacter()->displayName + " trading items: " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
+                Logger::logDebug(thisptr->getCharacter()->displayName + ": " + sc::toString(static_cast<int>(item.itemFunction)) + ", " +
                     sc::toString(item.count) + ", " + sc::toString(item.quantity), Logger::SHOPPING);
             }
+
+            auto sellItems = settings->getSellItems();
+            Inventory* inventory = character->getInventory();
+            DebugLog("Buysomething shop: " + shop->displayName);
+            Character* trader = shop->getResidentSquadLeader();
+            if (!trader && shop->furnitureParentBuilding()) trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
+            /*
+            InventoryGUI* inventoryGUI = inventory->getInventoryGUI();
+            if (!inventoryGUI)
+            {
+                inventoryGUI = new InventoryGUI(inventory, character->createInventoryLayout(), character);
+            }
+            InventoryGUI* shopInventoryGUI = shop->getInventory()->getInventoryGUI();
+            if (!shopInventoryGUI)
+            {
+                shopInventoryGUI = new InventoryGUI(shop->getInventory(), shop->createInventoryLayout(), shop);
+            }
+            */
+            for (auto iter = sellItems.begin(); iter != sellItems.end(); iter++)
+            {
+                lektor<Item*> itemsToSell;
+                inventory->getAllItemsWithFunction(itemsToSell, iter->first);
+                int amountToKeep = iter->second;
+                int amountOwned = itemsToSell.size();
+                // has less or equal to keep amount
+                if (amountOwned <= amountToKeep) continue;
+
+                for (int i = static_cast<int>(itemsToSell.size()) - 1; i >= 0; --i)
+                {
+                    // ignore equipped section
+                    Item* originalItem = itemsToSell[i];
+                    std::string sectionName = originalItem->inventorySection;
+                    InventorySection* section = inventory->getSection(sectionName);
+                    if (section)
+                    {
+                        if (section->isAnEquippedItemSection) continue;
+
+                        TradeCulture* tradeCulture = &trader->getFaction()->tradeCulture;
+                        Item* sellItem;
+                        if (originalItem->quantity < 2)
+                        {
+                            if (section->removeItem(originalItem))
+                            {
+                                sellItem = originalItem;
+                            }
+                            else continue;
+                        }
+                        else
+                        {
+                            sellItem = ou->theFactory->copyItem(originalItem);
+                            sellItem->quantity = 1;
+                            originalItem->quantity -= 1;
+                        }
+                        int price = CanSellItemToCulture(sellItem, tradeCulture);
+                        if (CanSellItemToShop(sellItem, price, trader, shop))
+                        {
+                            trader->takeMoney(price);
+                            character->takeMoney(-price);
+                            if (shop->getInventory()->getInventoryGUI()) shop->getInventory()->getInventoryGUI()->refreshSection();
+                            if (inventory->getInventoryGUI()) inventory->getInventoryGUI()->refreshSection();
+                            amountOwned -= 1;
+                            if (amountOwned <= amountToKeep) break;
+                        }
+                        else
+                        {
+                            if (!originalItem)
+                            {
+                                inventory->addItem(sellItem, 1, false, false);
+                            }
+                            else
+                            {
+                                ou->destroy(sellItem, false, "SquadAutonomy:SellItem");
+                                originalItem->quantity += 1;
+                            }
+                        }
+                    }
+                    /*
+                    InventoryGUI::TradeResult tradeResult = inventoryGUI->RClickAutoTrade(sectionName, inventoryPos.x, inventoryPos.y, shopInventoryGUI, true, true);
+                    if (tradeResult.value == InventoryGUI::TradeResult::OK)
+                    {
+                        Logger::logDebug("Sell item: " + item->displayName + " result: " + sc::toString(static_cast<int>(tradeResult.value)));
+                        amountOwned -= 1;
+                        if (amountOwned <= amountToKeep) break;
+                    }
+                    */
+                }
+
+            }
         }
+
+        bool result = buySomething_orig(thisptr, shop);
+
         return result;
     }
 
     void (*_createTradingInfo_orig)(AI* thisptr);
     void _createTradingInfo_hook(AI* thisptr)
     {
+        _createTradingInfo_orig(thisptr);
         Character* character = thisptr->getCharacter();
         Platoon* squad = nullptr;
         TradingInfo* tradingInfo = thisptr->tradingInfo;
@@ -2859,16 +3272,28 @@ namespace SquadAutonomy
         {
             if (settings->getDoShopping())
             {
-                auto tradeItemsTemplate = settings->getTradeItems();
                 thisptr->tradingInfo->tradeItems.clear();
-                for (int i = 0; i < tradeItemsTemplate.size(); ++i)
+                auto buyItems = settings->getBuyItems();
+                for (auto iter = buyItems.begin(); iter != buyItems.end(); iter++)
                 {
-                    thisptr->tradingInfo->tradeItems.push_back(tradeItemsTemplate[i]);
+                   
+                    TradingInfo::TradeItem tradeItem;
+                    
+                    tradeItem.itemFunction = iter->first;
+                    tradeItem.quantity = iter->second;
+                    tradeItem.count = 0; 
+                    thisptr->tradingInfo->tradeItems.push_back(tradeItem);
+                    if (iter->first == ITEM_FOOD)
+                    {
+                        tradeItem.itemFunction = ITEM_FOOD_RESTRICTED;
+                        thisptr->tradingInfo->tradeItems.push_back(tradeItem);
+                    }
                 }
+                UpdateTradeItemsCount(thisptr, character, character->getInventory());
+
                 return;
             }
         }
-        _createTradingInfo_orig(thisptr);
 
     }
 
@@ -2942,6 +3367,11 @@ __declspec(dllexport) void startPlugin()
             *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x3370b0;
             *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32eb90;
             *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E6A90;
+            //*(uintptr_t*)&SquadAutonomy::Task_Shopping_StartAction = baseAddr + 0x33a480;
+            //*(uintptr_t*)&SquadAutonomy::Task_Shopping_Update = baseAddr + 0x337cc0;
+            //*(uintptr_t*)&SquadAutonomy::BuildingFinderClass_getNearest = baseAddr + 0x9fa0b0;
+            //*(uintptr_t*)&SquadAutonomy::buildingFinderBuildings = baseAddr + 0x2037e58;
+            //*(uintptr_t*)&SquadAutonomy::buildingFinderBuildingsCount = baseAddr + 0x2037e50;
             //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519c10; //TaskRepertoire
             //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50ED70;
             //*(uintptr_t*)&TaskRepertoire_hasTask = baseAddr + 0x32dbb0;
@@ -3002,6 +3432,8 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add Character::_NV_threadedUpdate hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::wantsToEatNow), &SquadAutonomy::wantsToEatNow_hook, &SquadAutonomy::wantsToEatNow_orig))
         ErrorLog("Could not add Character::wantsToEatNow hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_getMoney), &SquadAutonomy::_NV_getMoney_hook, &SquadAutonomy::_NV_getMoney_orig))
+        ErrorLog("Could not add Character::_NV_getMoney hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<void (CharMovement::*)(const Ogre::Vector3&, UpdatePriority, bool)>(&CharMovement::_NV_setDestination)), 
         &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
         ErrorLog("Could not add Character::wantsToEatNow hook!");
@@ -3047,7 +3479,8 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add TaskData::_isRequirementsComplete hook!");
     /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &SquadAutonomy::runTargetFind_hook, &SquadAutonomy::runTargetFind_orig))
         ErrorLog("Could not add runTargetFind hook!");*/
-
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Ownerships::setHomeTown), &SquadAutonomy::setHomeTown_hook, &SquadAutonomy::setHomeTown_orig))
+        ErrorLog("Could not add AI::setHomeTown hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGetOutOfBed), &SquadAutonomy::_NV_scoreGetOutOfBed_hook, &SquadAutonomy::_NV_scoreGetOutOfBed_orig))
         ErrorLog("Could not add AI::_NV_scoreGetOutOfBed hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGoToBed), &SquadAutonomy::_NV_scoreGoToBed_hook, &SquadAutonomy::_NV_scoreGoToBed_orig))
@@ -3062,13 +3495,23 @@ __declspec(dllexport) void startPlugin()
         ErrorLog("Could not add AI::boughtShitComplete hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_createTradingInfo), &SquadAutonomy::_createTradingInfo_hook, &SquadAutonomy::_createTradingInfo_orig))
         ErrorLog("Could not add AI::_createTradingInfo hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findShop), &SquadAutonomy::findShop_hook, &SquadAutonomy::findShop_orig))
+        ErrorLog("Could not add AI::findShop hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::scoreShopping), &SquadAutonomy::scoreShopping_hook, &SquadAutonomy::scoreShopping_orig))
+        ErrorLog("Could not add AI::scoreShopping hook!");
 
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::buyItem), &SquadAutonomy::buyItem_hook, &SquadAutonomy::buyItem_orig))
         ErrorLog("Could not add Inventory::buyItem hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_giveItem), &SquadAutonomy::_NV_giveItem_hook, &SquadAutonomy::_NV_giveItem_orig))
         ErrorLog("Could not add RootObject::Character hook!");
-
-
+    /*
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_StartAction, &SquadAutonomy::Task_Shopping_StartAction_hook, &SquadAutonomy::Task_Shopping_StartAction_orig))
+        ErrorLog("Could not add Task_Shopping_StartAction hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_Update, &SquadAutonomy::Task_Shopping_Update_hook, &SquadAutonomy::Task_Shopping_Update_orig))
+        ErrorLog("Could not add Task_Shopping_StartAction hook!");
+    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::BuildingFinderClass_getNearest, &SquadAutonomy::BuildingFinderClass_getNearest_hook, &SquadAutonomy::BuildingFinderClass_getNearest_orig))
+        ErrorLog("Could not add BuildingFinderClass_getNearest hook!");
+    */
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
         ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
     if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OrdersReceiver::clearCurrentGoal), &SquadAutonomy::clearCurrentGoal_hook, &SquadAutonomy::clearCurrentGoal_orig))

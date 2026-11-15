@@ -72,13 +72,7 @@ void SquadAutonomyPanel::create()
     _panel->addTab(_mainTab->getCategory(), Localization::gettext("Main"), "");
     _panel->addTab(_optionsTab->getCategory(), Localization::gettext("Options"), "");
 
-    /*
-    _panel->tabEvent += new MyGUI::delegates::CMethodDelegate2<OptionsTab, DatapanelGUI*, int>(
-        MyGUI::delegates::GetDelegateUnlink(&_optionsTab),
-        _optionsTab.get(),
-        &OptionsTab::updateFloatingPanel
-    );
-    */
+
     _panel->changeCategory(_mainTab->getCategory());
     _panel->tabEvent += MyGUI::newDelegate(this, &SquadAutonomyPanel::onTabChanged);
 
@@ -91,6 +85,8 @@ void SquadAutonomyPanel::create()
 
 void SquadAutonomyPanel::onTabChanged(DatapanelGUI* panel, int category)
 {
+
+    refresh();
     if (_optionsTab)
     {
         _optionsTab->updateFloatingPanel(category);
@@ -99,13 +95,19 @@ void SquadAutonomyPanel::onTabChanged(DatapanelGUI* panel, int category)
 
 void SquadAutonomyPanel::OptionsTab::updateFloatingPanel(int category)
 {
-    refresh();
     if (!_floatingPanel) return;
     _floatingPanel->setVisible(category == 1);
 }
 
 void SquadAutonomyPanel::refresh()
 {
+    // TODO: make it so that
+    /*
+    for (int i = 0; i < _panel->tabs.size(); ++i)
+    {
+        _panel->clearPage(i);
+    }
+    */
     _mainTab->refresh();
     _optionsTab->refresh();
 }
@@ -118,6 +120,7 @@ void SquadAutonomyPanel::show()
     }
 
     _panel->changeCategory(_mainTab->getCategory());
+    if (_optionsTab) _optionsTab->updateFloatingPanel(_panel->getCurrentCategory());
     _panel->show(true);
     MyGUI::LayerManager::getInstancePtr()->upLayerItem(_panel->getWidget());
     refresh();
@@ -184,11 +187,12 @@ void SquadAutonomyPanel::MainTab::refresh()
     {
         return;
     }
+    _panel->clearPage(_category);
+    if (_panel->currentCategory != _category) return;
 
     auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
+
     _panel->setLineSpacing(32.0);
-    _panel->scrollView->setViewOffset(MyGUI::IntPoint(0, 0));
-    _panel->clearPage(_category);
 
     if (_selectedSquad->activePlatoon)
     {
@@ -608,6 +612,10 @@ void SquadAutonomyPanel::OptionsTab::refresh()
         return;
     }
 
+    _panel->clearPage(_category);
+
+    if (_panel->currentCategory != _category) return;
+
     auto settings = SquadAutonomySettings::getSingleton().getSquadSettings(_selectedSquad, true);
     if (!settings)
     {
@@ -616,15 +624,12 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     }
 
     _panel->setLineSpacing(24.0);
-    _panel->scrollView->setViewOffset(MyGUI::IntPoint(0, 0));
-    _panel->clearPage(_category);
+    
 
     if (_selectedSquad->activePlatoon)
     {
         _panel->setCaption(Localization::lineSquadAutonomyTitle + ' ' + _selectedSquad->activePlatoon->getName());
     }
-
-    // TODO: make this a floating panel so it'll always be showing even when scrolled down
 
     if (!_floatingPanel)
     {
@@ -1114,7 +1119,7 @@ const ItemFunction itemFunctions[] =
 
 SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
     OptionsBase(optionsTab, panel, category),
-    itemFunctionListIndex(0),
+    itemFunctionListIndex(ITEM_FIRSTAID),
     amount(0)
 {
 }
@@ -1124,9 +1129,11 @@ std::string getItemFunctionName(ItemFunction itemFunc)
     std::string name = "";
     switch (itemFunc)
     {
+    /*
     case ITEM_ANYTHING:
         name = Localization::gettext("Anything");
         break;
+    */
     case ITEM_FIRSTAID:
         name = Localization::gettext("First Aid");
         break;
@@ -1160,6 +1167,9 @@ std::string getItemFunctionName(ItemFunction itemFunc)
     case ITEM_BOOK:
         name = Localization::gettext("Book");
         break;
+    case ITEM_NO_FUNCTION:
+        name = Localization::gettext("Material");
+        break;
     }
     return name;
 }
@@ -1167,46 +1177,59 @@ std::string getItemFunctionName(ItemFunction itemFunc)
 bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo& settings)
 {
     bool hasTask = false;
-
     if (settings.hasTask(SHOPPING))
     {
+        auto shoppingButton = Utils::addCheckbox(*_panel, _category, Localization::gettext("Buy item"), doShopping);
+        Utils::setCallback(*shoppingButton, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
         auto dropBox = _panel->setLineDropBox(Localization::lineItemCategory, _category, &itemFunctionListIndex, false, 1.0f);
         updateItemFunctionList(dropBox);
-        Utils::addSlider(*_panel, _category, Localization::gettext("Min Amount"), true, amount, 0.0f, 100.0f, 0);
-        auto addTradeItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Buy Item"));
-        Utils::setCallback(*addTradeItemButton, this, &OptionsTab::ShoppingOptions::addTradeItem);
-
-        auto clearTradeItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buy Items"));
-        Utils::setCallback(*clearTradeItemButton, this, &OptionsTab::ShoppingOptions::clearTradeItem);
+        dropBox->setSelectedValue(itemFunctionListIndex);
+        Utils::addSlider(*_panel, _category, Localization::gettext("Min Amount"), true, amount, 0.0f, 50.0f, 0);
+        auto addBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Buy Item"));
+        Utils::setCallback(*addBuyItemButton, this, &OptionsTab::ShoppingOptions::addBuyItem);
+        auto addSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Sell Item"));
+        Utils::setCallback(*addSellItemButton, this, &OptionsTab::ShoppingOptions::addSellItem);
         hasTask = true;
 
-        auto tradeItems = settings.getTradeItems();
-        for (int i = 0; i < tradeItems.size(); ++i)
+        auto buyItems = settings.getBuyItems();
+        Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), false, false);
+        auto clearBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buy Items"));
+        Utils::setCallback(*clearBuyItemButton, this, &OptionsTab::ShoppingOptions::clearBuyItem);
+
+        for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
         {
-            Utils::addText(*_panel, _category, getItemFunctionName(tradeItems[i].itemFunction) + " " + Ogre::StringConverter::toString(tradeItems[i].quantity));
+            Utils::addText(*_panel, _category, getItemFunctionName(iter->first) + " " + Ogre::StringConverter::toString(iter->second));
+        }
+        auto sellItems = settings.getSellItems();
+        Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
+        auto clearSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Sell Item"));
+        Utils::setCallback(*clearSellItemButton, this, &OptionsTab::ShoppingOptions::clearSellItem);
+        for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
+        {
+            Utils::addText(*_panel, _category, getItemFunctionName(iter->first) + " " + Ogre::StringConverter::toString(iter->second));
         }
     }
     return hasTask;
-    
 }
 
 void SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateItemFunctionList(DataPanelLine_DropBox* dropbox)
 {
-    dropbox->addAValue(Localization::gettext("Anything"), ITEM_ANYTHING);
-    dropbox->addAValue(Localization::gettext("First Aid"), ITEM_FIRSTAID);
-    dropbox->addAValue(Localization::gettext("Skeleton Repair Kit"), ITEM_ROBOTREPAIR);
-    dropbox->addAValue(Localization::gettext("Med Rigging"), ITEM_MEDRIGGING);
-    dropbox->addAValue(Localization::gettext("Backpack"), ITEM_CONTAINER);
-    dropbox->addAValue(Localization::gettext("Food"), ITEM_FOOD);
-    dropbox->addAValue(Localization::gettext("Weapon"), ITEM_WEAPON);
-    dropbox->addAValue(Localization::gettext("Ammo"), ITEM_AMMO);
-    dropbox->addAValue(Localization::gettext("Clothing"), ITEM_CLOTHING);
-    dropbox->addAValue(Localization::gettext("Narcotic"), ITEM_NARCOTIC);
-    dropbox->addAValue(Localization::gettext("Blueprint"), ITEM_BLUEPRINT);
-    dropbox->addAValue(Localization::gettext("Book"), ITEM_BOOK);
+    //dropbox->addAValue(Localization::gettext("Anything"), ITEM_ANYTHING);
+    dropbox->addAValue(getItemFunctionName(ITEM_FIRSTAID), ITEM_FIRSTAID);
+    dropbox->addAValue(getItemFunctionName(ITEM_ROBOTREPAIR), ITEM_ROBOTREPAIR);
+    dropbox->addAValue(getItemFunctionName(ITEM_MEDRIGGING), ITEM_MEDRIGGING);
+    dropbox->addAValue(getItemFunctionName(ITEM_CONTAINER), ITEM_CONTAINER);
+    dropbox->addAValue(getItemFunctionName(ITEM_FOOD), ITEM_FOOD);
+    dropbox->addAValue(getItemFunctionName(ITEM_WEAPON), ITEM_WEAPON);
+    dropbox->addAValue(getItemFunctionName(ITEM_AMMO), ITEM_AMMO);
+    dropbox->addAValue(getItemFunctionName(ITEM_CLOTHING), ITEM_CLOTHING);
+    dropbox->addAValue(getItemFunctionName(ITEM_NARCOTIC), ITEM_NARCOTIC);
+    dropbox->addAValue(getItemFunctionName(ITEM_BLUEPRINT), ITEM_BLUEPRINT);
+    dropbox->addAValue(getItemFunctionName(ITEM_BOOK), ITEM_BOOK);
+    dropbox->addAValue(getItemFunctionName(ITEM_NO_FUNCTION), ITEM_NO_FUNCTION);
 }
 
-void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addTradeItem(DataPanelLine* line)
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
     {
@@ -1221,18 +1244,36 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addTradeItem(DataPanelLine
 
     if (squadSettings)
     {
-        auto tradeItems = squadSettings->getTradeItems();
-        TradingInfo::TradeItem tradeItem;
-        tradeItem.itemFunction = static_cast<ItemFunction>(dropbox->getSelectedValue());
-        tradeItem.quantity = amount;
-        tradeItems.push_back(tradeItem);
-        squadSettings->setTradeItems(tradeItems);
+        ItemFunction itemFunction = static_cast<ItemFunction>(dropbox->getSelectedValue());
+        squadSettings->addBuyItem(itemFunction, amount);
     }
     
     _optionsTab->refresh();
 }
 
-void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearTradeItem(DataPanelLine* line)
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::addSellItem(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+    auto dropbox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
+    if (!dropbox)
+    {
+        return;
+    }
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+
+    if (squadSettings)
+    {
+        ItemFunction itemFunction = static_cast<ItemFunction>(dropbox->getSelectedValue());
+        squadSettings->addSellItem(itemFunction, amount);
+    }
+
+    _optionsTab->refresh();
+}
+
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearBuyItem(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
     {
@@ -1243,9 +1284,26 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearTradeItem(DataPanelLi
 
     if (squadSettings)
     {
-        auto tradeItems = squadSettings->getTradeItems();
-        tradeItems.clear();
-        squadSettings->setTradeItems(tradeItems);
+        auto tradeItems = squadSettings->getBuyItemsPtr();
+        tradeItems->clear();
+    }
+
+    _optionsTab->refresh();
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearSellItem(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+
+    if (squadSettings)
+    {
+        auto tradeItems = squadSettings->getSellItemsPtr();
+        tradeItems->clear();
     }
 
     _optionsTab->refresh();
@@ -1253,8 +1311,10 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearTradeItem(DataPanelLi
 
 void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
+    doShopping = squadSettings.getDoShopping();
 }
 
 void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
 {
+    squadSettings.setDoShopping(doShopping);
 }

@@ -94,8 +94,14 @@ namespace SquadAutonomy
 
         bool getDoShopping() const;
         void setDoShopping(bool val);
-        std::vector<TradingInfo::TradeItem> getTradeItems() const;
-        void setTradeItems(std::vector<TradingInfo::TradeItem> val);
+        std::unordered_map<ItemFunction, int> getBuyItems() const;
+        std::unordered_map<ItemFunction, int>* getBuyItemsPtr();
+        void setBuyItems(std::unordered_map<ItemFunction, int> val);
+        void addBuyItem(ItemFunction itemFunction, int quantity);
+        std::unordered_map<ItemFunction, int> getSellItems() const;
+        std::unordered_map<ItemFunction, int>* getSellItemsPtr();
+        void setSellItems(std::unordered_map<ItemFunction, int> val);
+        void addSellItem(ItemFunction itemFunction, int quantity);
 
     private:
         static hand parseHandSetting(const std::string& dataLine);
@@ -151,7 +157,13 @@ namespace SquadAutonomy
         bool _closeGate;
         // Shopping
         bool _doShopping;
-        std::vector<TradingInfo::TradeItem> _tradeItems;
+        struct BuyItem
+        {
+            int quantity;
+            WeaponCategory weaponCat;
+        };
+        std::unordered_map<ItemFunction, int> _buyItems;
+        std::unordered_map<ItemFunction, int> _sellItems;
     };
 
     class SquadAutonomySettings

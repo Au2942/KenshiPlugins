@@ -219,12 +219,15 @@ namespace SquadAutonomy
         ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
         bool refresh(SquadSettingsInfo& squadSettings);
         void updateItemFunctionList(DataPanelLine_DropBox* dropbox);
-        void addTradeItem(DataPanelLine* line);
-        void clearTradeItem(DataPanelLine* line);
+        void addBuyItem(DataPanelLine* line);
+        void addSellItem(DataPanelLine* line);
+        void clearBuyItem(DataPanelLine* line);
+        void clearSellItem(DataPanelLine* line);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
     private:
+        bool doShopping;
         int itemFunctionListIndex;
         float amount;
     };

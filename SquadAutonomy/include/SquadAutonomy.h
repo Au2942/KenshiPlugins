@@ -26,6 +26,8 @@ namespace SquadAutonomy
     extern std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     bool SetAI(Platoon*, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction = true);
     bool ResetAI(Platoon*, bool endAction = true);
+    void SetNearestFriendlyTownAsHome(Platoon* squad);
+    void UpdateTradeItemsCount(AI* ai, Character* character, Inventory* inventory);
     void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);
     void OpenSquadAutonomyPanelMainBar();
@@ -34,6 +36,6 @@ namespace SquadAutonomy
     extern bool shouldSave;
     extern bool shouldLoad;
     extern bool loadNextCall;
-
+    
     extern MyGUI::Window* autBtnWindow;
 }

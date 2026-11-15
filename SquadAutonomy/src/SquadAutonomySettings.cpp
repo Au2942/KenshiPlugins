@@ -226,7 +226,8 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _stayInsideGate(false),
     _closeGate(false),
     _doShopping(false),
-    _tradeItems()
+    _buyItems(),
+    _sellItems()
 {
     Faction* faction = squad.getFaction();
     if (faction)
@@ -465,11 +466,21 @@ bool SquadSettingsInfo::enableAutonomy(bool enable, bool endAction)
     {
         if (enable)
         {
+
+            if (!assignSquadHome(false)) //try set home to work
+            {
+                if (!assignSquadHome(true)) //if fail set home to home
+                {
+                    SetNearestFriendlyTownAsHome(_squad);
+                }
+            }
+
             success = SetAI(_squad, _squadPackages, endAction);
         }
         else
         {
             success = ResetAI(_squad, endAction);
+            unassignSquadHome();
         }
 
         if (success)
@@ -479,6 +490,7 @@ bool SquadSettingsInfo::enableAutonomy(bool enable, bool endAction)
     }
     return success;
 }
+
 void SquadSettingsInfo::updateSquadPackages(bool endAction)
 {
     if (!_enabled) return;
@@ -491,20 +503,6 @@ void SquadSettingsInfo::updateSquadPackages(bool endAction)
     else
     {
         success = ResetAI(_squad, endAction);
-    }
-    if (success)
-    {
-        if (_enabled)
-        {
-            if (!assignSquadHome(false)) //try set home to work
-            {
-                assignSquadHome(true); //if fail set home to home
-            }
-        }
-        else
-        {
-            unassignSquadHome();
-        }
     }
 
 }
@@ -549,13 +547,16 @@ bool SquadSettingsInfo::assignSquadHome(bool home)
             Character* obj = reinterpret_cast<Character*>(*it);
             StateBroadcastData* state = obj->getStateBroadcast();
             if (state) state->homeBuilding = building;
-            /*Ownerships* own = obj->getOwnerships();
+            Ownerships* own = obj->getOwnerships();
             if (own)
             {
-                own->setHomeBuilding(building, _squad->getSquadType());
-            }*/
+                own->_homeBuilding = building;
+                own->_homeTown = building.getBuilding()->getTown();
+            }
         }
-        _squad->getOwnerships()->setHomeBuilding(building, _squad->getSquadType());
+        _squad->getOwnerships()->_homeBuilding = building;
+        _squad->getOwnerships()->_homeTown = building.getBuilding()->getTown();
+
         //DebugLog("Assign " + activeSquad->getName() + " -" + building.getBuilding()->displayName);
         success = true;
     }
@@ -575,12 +576,12 @@ void SquadSettingsInfo::unassignSquadHome()
             Ownerships* own = obj->getOwnerships();
             if (own)
             {
-                own->setHomeBuilding(nullptr, _squad->getSquadType());
-                own->setHomeTown(nullptr, _squad->getSquadType());
+                own->_homeBuilding = nullptr;
+                own->_homeTown = nullptr;
             }
         }
-        _squad->getOwnerships()->setHomeBuilding(nullptr, _squad->getSquadType());
-        _squad->getOwnerships()->setHomeTown(nullptr, _squad->getSquadType());
+        _squad->getOwnerships()->_homeBuilding = nullptr;
+        _squad->getOwnerships()->_homeTown = nullptr;
     }
 }
 bool SquadSettingsInfo::hasHome()
@@ -915,14 +916,44 @@ void SquadAutonomy::SquadSettingsInfo::setDoShopping(bool val)
     _doShopping = val;
 }
 
-std::vector<TradingInfo::TradeItem> SquadAutonomy::SquadSettingsInfo::getTradeItems() const
+std::unordered_map<ItemFunction, int> SquadAutonomy::SquadSettingsInfo::getBuyItems() const
 {
-    return _tradeItems;
+    return _buyItems;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setTradeItems(std::vector<TradingInfo::TradeItem> val)
+std::unordered_map<ItemFunction, int>* SquadAutonomy::SquadSettingsInfo::getBuyItemsPtr()
 {
-    _tradeItems = val;
+    return &_buyItems;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setBuyItems(std::unordered_map<ItemFunction, int> val)
+{
+    _buyItems = val;
+}
+
+void SquadAutonomy::SquadSettingsInfo::addBuyItem(ItemFunction itemFunction, int quantity)
+{
+    _buyItems[itemFunction] = quantity;
+}
+
+std::unordered_map<ItemFunction, int> SquadAutonomy::SquadSettingsInfo::getSellItems() const
+{
+    return _sellItems;
+}
+
+std::unordered_map<ItemFunction, int>* SquadAutonomy::SquadSettingsInfo::getSellItemsPtr()
+{
+    return &_sellItems;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setSellItems(std::unordered_map<ItemFunction, int> val)
+{
+    _sellItems = val;
+}
+
+void SquadAutonomy::SquadSettingsInfo::addSellItem(ItemFunction itemFunction, int quantity)
+{
+    _sellItems[itemFunction] = quantity;
 }
 
 hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)
