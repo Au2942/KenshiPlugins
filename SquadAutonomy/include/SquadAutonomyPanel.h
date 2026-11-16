@@ -195,6 +195,7 @@ namespace SquadAutonomy
         bool protectAllies;
         bool doMedic;
         bool doRescue;
+        bool rescueOwnSquadOnly;
     };
 
     class SquadAutonomyPanel::OptionsTab::GuardOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase

@@ -222,6 +222,7 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _protectAllies(true),
     _doMedic(true),
     _doRescue(true),
+    _rescueOwnSquadOnly(false),
     _manTurrets(false),
     _stayInsideGate(false),
     _closeGate(false),
@@ -448,6 +449,7 @@ bool SquadAutonomy::SquadSettingsInfo::hasTask(TaskType key)
     else return false;
 }
 
+// I forgot what I was trying to do here
 void getTasksFromData(GameData* data, std::unordered_set<TaskType>& type)
 {
     type.clear();
@@ -455,7 +457,7 @@ void getTasksFromData(GameData* data, std::unordered_set<TaskType>& type)
     data->getAllFromListAsDatas("Leader AI goal", aiTasks, data->getSourceContainer(), AI_TASK);
     for (int i = 0; i < aiTasks.size(); ++i)
     {
-        
+        // I forgot what I was trying to do here
     }
 }
 
@@ -879,6 +881,16 @@ void SquadAutonomy::SquadSettingsInfo::setDoRescue(bool val)
     _doRescue = val;
 }
 
+bool SquadAutonomy::SquadSettingsInfo::getRescueOwnSquadOnly() const
+{
+    return _rescueOwnSquadOnly;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setRescueOwnSquadOnly(bool val)
+{
+    _rescueOwnSquadOnly = val;
+}
+
 bool SquadSettingsInfo::getManTurrets() const
 {
     return _manTurrets;
@@ -992,6 +1004,20 @@ Building* SquadSettingsInfo::parseBuildingSetting(const std::string& dataLine)
     }
 
     return buildingHand.getBuilding();
+}
+
+std::unordered_map<ItemFunction, int> SquadAutonomy::SquadSettingsInfo::parseTradeItems(const std::string& dataLine)
+{
+    std::unordered_map<ItemFunction, int> tradeItems;
+
+    std::istringstream iss(dataLine);
+    int itemFunction = 0;
+    int quantity = 0;
+    while (iss >> itemFunction && iss >> quantity)
+    {
+        tradeItems[static_cast<ItemFunction>(itemFunction)] = quantity;
+    }
+    return tradeItems;
 }
 
 void SquadSettingsInfo::readSquadPackagesFromStream(std::istream& stream)
@@ -1175,6 +1201,11 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
             SettingsUtils::parseBoolSetting(dataLine, _doRescue);
             continue;
         }
+        if (type == "RescueOwnSquadOnly")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _rescueOwnSquadOnly);
+            continue;
+        }
         if (type == "ManTurrets")
         {
             SettingsUtils::parseBoolSetting(dataLine, _manTurrets);
@@ -1188,6 +1219,21 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
         if (type == "CloseGate")
         {
             SettingsUtils::parseBoolSetting(dataLine, _closeGate);
+            continue;
+        }
+        if (type == "DoShopping")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _doShopping);
+            continue;
+        }
+        if (type == "BuyItems")
+        {
+            _buyItems = parseTradeItems(dataLine);
+            continue;
+        }
+        if (type == "SellItems")
+        {
+            _sellItems = parseTradeItems(dataLine);
             continue;
         }
         if (type == "EndOptions")
@@ -1250,6 +1296,15 @@ void SquadSettingsInfo::writeSquadPackagesToStream(std::ostream &stream) const
     stream << "\tEndPackages:" << '\n';
 }
 
+void SquadSettingsInfo::writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, int> tradeItems)
+{
+    for (auto iter = tradeItems.begin(); iter != tradeItems.end(); ++iter)
+    {
+        stream << static_cast<int>(iter->first) << " " << iter->second << " ";
+    }
+    stream << '\n';
+}
+
 void SquadSettingsInfo::writeSquadOptionsToStream(std::ostream &stream) const
 {
     stream
@@ -1279,9 +1334,18 @@ void SquadSettingsInfo::writeSquadOptionsToStream(std::ostream &stream) const
         << "\t\tProtectAllies: " << _protectAllies << '\n'
         << "\t\tDoMedic: " << _doMedic << '\n'
         << "\t\tDoRescue: " << _doRescue << '\n'
+        << "\t\tRescueOwnSquadOnly: " << _rescueOwnSquadOnly << '\n'
 
         << "\t\tManTurrets: " << _manTurrets << '\n'
         << "\t\tStayInsideGate: " << _stayInsideGate << '\n'
         << "\t\tCloseGate: " << _closeGate << '\n'
-        << "\tEndOptions:" << '\n';
+
+        << "\t\tDoShopping: " << _doShopping << '\n';
+
+    stream << "\t\tBuyItems: ";
+    writeTradeItemsToStream(stream, _buyItems);
+    stream << "\t\tSellItems: ";
+    writeTradeItemsToStream(stream, _sellItems);
+
+    stream << "\tEndOptions:" << '\n';
 }

@@ -18,7 +18,6 @@ namespace SquadAutonomy
     extern bool (*Package_WanderingTrader_signalStart)(AIPackage*);
     extern std::string* _MainColorCode;
     extern std::string* _GreyedColorCode;
-    void Init();
     std::wstring GetCurrentDLLDirectory();
     extern std::wstring saveName;
     extern std::wstring modPath;
@@ -27,7 +26,8 @@ namespace SquadAutonomy
     bool SetAI(Platoon*, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction = true);
     bool ResetAI(Platoon*, bool endAction = true);
     void SetNearestFriendlyTownAsHome(Platoon* squad);
-    void UpdateTradeItemsCount(AI* ai, Character* character, Inventory* inventory);
+    int tradeItemsOfTypeInInventoryCount(ItemFunction itemFunction, Character* character, Inventory* inventory);
+    void UpdateTradeItemsCount(AI* ai, Character* character);
     void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);
     void OpenSquadAutonomyPanelMainBar();

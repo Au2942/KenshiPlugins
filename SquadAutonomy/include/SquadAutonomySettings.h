@@ -84,6 +84,8 @@ namespace SquadAutonomy
         void setDoMedic(bool val);
         bool getDoRescue() const;
         void setDoRescue(bool val);
+        bool getRescueOwnSquadOnly() const;
+        void setRescueOwnSquadOnly(bool val);
 
         bool getManTurrets() const;
         void setManTurrets(bool val);
@@ -106,12 +108,13 @@ namespace SquadAutonomy
     private:
         static hand parseHandSetting(const std::string& dataLine);
         static Building* parseBuildingSetting(const std::string& dataLine);
-
+        static std::unordered_map <ItemFunction,int> parseTradeItems(const std::string& dataLine);
         void readSquadPackagesFromStream(std::istream& stream);
         void readSquadOptionsFromStream(std::istream& stream);
 
         static bool writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name);
         static bool writeBuildingSettingToStream(std::ostream& stream, const Building* building, const std::string& tag);
+        static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, int>);
         void writeSquadPackagesToStream(std::ostream& stream) const;
         void writeSquadOptionsToStream(std::ostream& stream) const;
         void addTasksFromPackage(GameData* data);
@@ -151,17 +154,13 @@ namespace SquadAutonomy
         bool _protectAllies;
         bool _doMedic;
         bool _doRescue;
+        bool _rescueOwnSquadOnly;
         // Guard
         bool _manTurrets;
         bool _stayInsideGate;
         bool _closeGate;
         // Shopping
         bool _doShopping;
-        struct BuyItem
-        {
-            int quantity;
-            WeaponCategory weaponCat;
-        };
         std::unordered_map<ItemFunction, int> _buyItems;
         std::unordered_map<ItemFunction, int> _sellItems;
     };

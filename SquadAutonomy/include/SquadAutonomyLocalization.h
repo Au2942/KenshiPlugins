@@ -16,9 +16,13 @@ namespace SquadAutonomy
 	class Localization
 	{
 	public:
-		static void init();
+		static void init(unsigned int platform, const std::string& version, uintptr_t baseAddr);
+		static std::string gettextMain(const char* id);
+		static std::string gettextMain(const boost::locale::message& msg);
+		static std::string formatMain(const boost::locale::format& fmt);
 		static std::string gettext(const char* id);
 		static void initLine();
+
 
 		static std::string lineAIPackage;
 		static std::string lineItemCategory;

@@ -14,6 +14,7 @@
 
 #include <ogre/OgreStringConverter.h>
 #include <ogre/OgreUTFString.h>
+#include <ogre/OgreString.h>
 #include <boost/scoped_ptr.hpp>
 #include <ogre/OgrePrerequisites.h>
 #include <kenshi/util/OgreUnordered.h>
@@ -107,6 +108,7 @@ namespace SquadAutonomy
     std::string* _GreyedColorCode = nullptr;
     bool (*EscMenu_openedOtherWindows)(class EscMenu*) = nullptr;
     bool (*Package_WanderingTrader_signalStart)(AIPackage*) = nullptr;
+    void (*Package_WanderingTrader_activateAndSetup)(AIPackage*) = nullptr; //0x286700
     bool (*CharBody_NV_setCurrentAction)(CharBody*, Tasker*) = nullptr;
     Building* (*Task_ManTheGate_FindGate)(Tasker*, Character*, hand) = nullptr;
     void (*Task_ManTheGate_Update)(Tasker*, CharBody*) = nullptr;
@@ -641,19 +643,6 @@ namespace SquadAutonomy
         }
     }
 
-    void (*setHomeTown_orig)(Ownerships* thisptr, TownBase* t, SquadType squadtype);
-    void setHomeTown_hook(Ownerships* thisptr, TownBase* t, SquadType squadtype)
-    {
-        setHomeTown_orig(thisptr, t, squadtype);
-        Platoon* squad = thisptr->me;
-        SquadSettingsInfo* settings = nullptr;
-        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-        if (settings && settings->isEnabled())
-        {
-            if (t) DebugLog("set hometown to: " + t->displayName);
-            else DebugLog("set hometown to: null");
-        }
-    }
 
     // for assigning home to homeless squad (mostly the wandering squad)
     // used to do this by getting everything towns and compare the distance to each
@@ -1446,9 +1435,42 @@ namespace SquadAutonomy
         float score = findKOIntruder_town_orig(thisptr, _a1, out, justAsking);
         if (out && out.getCharacter() && out.getCharacter()->isBeingCarried())
         {
-            out = nullptr;
+            out.setNull();
             return 0.0;
         }
+        return score;
+    }
+
+    float (*findDisabledAlly_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
+    float findDisabledAlly_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
+    {
+        float score = findDisabledAlly_orig(thisptr, in, out, justAsking);
+
+        Character* character = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        if (thisptr)
+        {
+            character = thisptr->getCharacter();
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(thisptr->getPlatoon());
+        }
+        if (settings && settings->isEnabled())
+        {
+            if (settings->getRescueOwnSquadOnly())
+            {
+                if (out && out.getCharacter())
+                {
+                    Character* target = out.getCharacter();
+                    Platoon* targetPlatoon = nullptr;
+                    if (target->getPlatoon()) targetPlatoon = target->getPlatoon()->me;
+                    if (thisptr->getPlatoon() != targetPlatoon)
+                    {
+                        out.setNull();
+                        return 0.0;
+                    }
+                }
+            }
+        }
+
         return score;
     }
 
@@ -1466,7 +1488,7 @@ namespace SquadAutonomy
         {
             if (settings->isRestTime())
             {
-                out = nullptr;
+                out.setNull();
                 return 0.0;
             }
             if (character)
@@ -1526,7 +1548,7 @@ namespace SquadAutonomy
                             Character* target = out.getCharacter();
                             if (target && target->getPlatoon() && target->getPlatoon()->me != settings->getSquad())
                             {
-                                out = nullptr;
+                                out.setNull();
                                 return 0.0;
                             }
                         }
@@ -1570,22 +1592,37 @@ namespace SquadAutonomy
             data->setDurationBased(1.0, 4.0, false);
             data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
             data->setDurationBased(4.0, 4.0, false);
+            data = taskTypetaskData->find(PATROL_TOWN)->second;
+            data->setDurationBased(0.5, 2.0, true);
 
             // set work building as home outside of rest time, with normal home building as fallback
-            if (settings->isRestTime())
+            Blackboard* bb = platoon->getBlackboard();
+            BlackboardSignalFunctions sig = SIGNAL_NONE;
+            if (bb && bb->getCurrentPackage())
             {
-                if (!settings->assignSquadHome(true))
-                {
-                    SetNearestFriendlyTownAsHome(platoon);
-                }
+                sig = bb->getCurrentPackage()->key;
+            }
+            if (sig != SIGNAL_NONE && sig != SIG_AT_HOME_TOWN)
+            {
+                SetNearestFriendlyTownAsHome(platoon);
             }
             else
             {
-                if (!settings->assignSquadHome(false))
+                if (settings->isRestTime())
                 {
                     if (!settings->assignSquadHome(true))
                     {
                         SetNearestFriendlyTownAsHome(platoon);
+                    }
+                }
+                else
+                {
+                    if (!settings->assignSquadHome(false))
+                    {
+                        if (!settings->assignSquadHome(true))
+                        {
+                            SetNearestFriendlyTownAsHome(platoon);
+                        }
                     }
                 }
             }
@@ -1618,6 +1655,7 @@ namespace SquadAutonomy
         {
             RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
             RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
+            RevertTaskDuration(PATROL_TOWN);
             if (faction && !faction->isPlayer) faction->isPlayer = settings->getPlayerInterface();
             //Logger::log("End periodUpdate", Logger::Info, true);
         }
@@ -1834,6 +1872,8 @@ namespace SquadAutonomy
             data->setDurationBased(1.0, 4.0, false);
             data = taskTypetaskData->find(GO_HOME_AND_GO_TO_BED)->second;
             data->setDurationBased(4.0, 4.0, false);
+            data = taskTypetaskData->find(PATROL_TOWN)->second;
+            data->setDurationBased(0.5, 2.0, true);
 
             // TODO?: move to a more relevant time-related function
             if (settings->getCloseGate())
@@ -1853,6 +1893,7 @@ namespace SquadAutonomy
         {
             RevertTaskDuration(RELAX_IN_TOWN_PACKAGE);
             RevertTaskDuration(GO_HOME_AND_GO_TO_BED);
+            RevertTaskDuration(PATROL_TOWN);
         }
     }
 
@@ -2368,6 +2409,26 @@ namespace SquadAutonomy
         return _NV_addItem_orig(thisptr, itemToAdd, quantity);
     }
 
+    void (*Package_WanderingTrader_activateAndSetup_orig)(AIPackage* thisptr);
+    void Package_WanderingTrader_activateAndSetup_hook(AIPackage* thisptr)
+    {
+        // inside calls getNearishTown and assign that to missionTown
+        Package_WanderingTrader_activateAndSetup_orig(thisptr);
+        Platoon* squad = thisptr->squad;
+        SquadSettingsInfo* settings = nullptr;
+        ActivePlatoon* activePlatoon = nullptr;
+        if (squad)
+        {
+            activePlatoon = squad->activePlatoon;
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        }
+        if (settings && settings->isEnabled())
+        {
+            // set mission town here!
+            //thisptr->missionTown;
+        }
+    }
+
     // preventing the package with wanderingTrader blackboard signal from starting until all members are ready
     bool (*Package_WanderingTrader_signalStart_orig)(AIPackage* thisptr);
     bool Package_WanderingTrader_signalStart_hook(AIPackage* thisptr)
@@ -2381,7 +2442,7 @@ namespace SquadAutonomy
             activePlatoon = squad->activePlatoon;
             settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         }
-        if (settings && settings->isEnabled() && squad)
+        if (settings && settings->isEnabled())
         {
             //DebugLog("periodicUpdate: Wandering");
             //check if all squads members are awake/active
@@ -2519,18 +2580,22 @@ namespace SquadAutonomy
             }
             else if (type == PATROL_TOWN || type == PATROL)
             {
+                /*
                 Tasker* currentTask = taskSystem->tryToGetCurrentGoal();
                 if (currentTask)
                 {
                     if (currentTask->key() == type)
                     {
                         float score = taskSystem->currentGoalScore;
-                        score *= 0.99;
+                        int startTime = currentTask->startTime;
+                        int currentTime = static_cast<int>(ou->getTimeStamp_inGameHours().getTotalHours()) % 24;
+                        if (abs(currentTime - startTime) > 2) score *= 0.99;
                         //DebugLog("Patrol score: " + sc::toString(score));
                         taskSystem->currentGoalScore = std::max(score, 0.0001f);
                         return taskSystem->currentGoalScore;
                     }
                 }
+                */
                 if (settings->isRestTime())
                 {
                     if (character->isInsideBuilding)
@@ -2562,6 +2627,13 @@ namespace SquadAutonomy
                 {
                     return 0.0;
                 }
+            }
+            else if (type == AQUIRE_FOOD_AT_HOMEBASE || type == GRAB_ONE_FOOD)
+            {
+                // AQUIRE_FOOD_AT_HOMEBASE scoring use scoreFindFoodOnGround and 
+                // should returns 1.0 if medicalSystem->hunger is < 2.4 and 0.1 if < 1.2
+                // x10 it becomes 10.0 and 1.0
+                return score * 10.0;
             }
             //Logger::log("End score", Logger::Info, true);
         }
@@ -2760,52 +2832,91 @@ namespace SquadAutonomy
         return result;
     }
 
-    void UpdateTradeItemsCount(AI* ai, Character* character, Inventory* inventory)
+    int tradeItemsOfTypeInInventoryCount(ItemFunction itemFunction, Character* character, Inventory* inventory)
+    {
+        int itemCount = 0;
+        if (inventory)
+        {
+            if (itemFunction == ITEM_FOOD || itemFunction == ITEM_FOOD_RESTRICTED)
+            {
+                itemCount = inventory->getNumFoodItems(character);
+            }
+            else
+            {
+                lektor<Item*> itemsOfType;
+                inventory->getAllItemsWithFunction(itemsOfType, itemFunction);
+                for (int j = 0; j < itemsOfType.size(); ++j)
+                {
+                    itemCount += itemsOfType[j]->quantity;
+                }
+                itemsOfType.clear();
+                if (itemFunction == ITEM_WEAPON)
+                {
+                    inventory->getEquippedWeapons(itemsOfType);
+                    for (int j = 0; j < itemsOfType.size(); ++j)
+                    {
+                        itemCount += itemsOfType[j]->quantity;
+                    }
+                }
+                else if (itemFunction == ITEM_CLOTHING)
+                {
+                    lektor<Item*> equippedArmour;
+                    inventory->getEquippedArmour(itemsOfType);
+                    for (int j = 0; j < itemsOfType.size(); ++j)
+                    {
+                        itemCount += itemsOfType[j]->quantity;
+                    }
+                }
+            }
+        }
+        return itemCount;
+    }
+
+    void UpdateTradeItemsCount(AI* ai, Character* character)
     {
         for (int i = 0; i < ai->tradingInfo->tradeItems.size(); ++i)
         {
             auto tradeItem = &(ai->tradingInfo->tradeItems[i]);
             int itemCount = 0;
+            Inventory* inventory = character->getInventory();
             if (inventory)
             {
-                if (tradeItem->itemFunction == ITEM_FOOD || tradeItem->itemFunction == ITEM_FOOD_RESTRICTED)
-                {
-                    itemCount = inventory->getNumFoodItems(character);
-                }
-                else
-                {
-                    lektor<Item*> itemsOfType;
-                    inventory->getAllItemsWithFunction(itemsOfType, tradeItem->itemFunction);
-                    itemCount = itemsOfType.count;
-                    itemsOfType.clear();
-                    if (tradeItem->itemFunction == ITEM_WEAPON)
-                    {
-                        inventory->getEquippedWeapons(itemsOfType);
-                        itemCount += itemsOfType.count;
-                    }
-                    else if (tradeItem->itemFunction == ITEM_CLOTHING)
-                    {
-                        lektor<Item*> equippedArmour;
-                        inventory->getEquippedArmour(itemsOfType);
-                        itemCount += itemsOfType.count;
-                    }
-                }
+                itemCount += tradeItemsOfTypeInInventoryCount(tradeItem->itemFunction, character, inventory);
+            }
+            ContainerItem* backpack = character->hasABackpackOn();
+            if (backpack)
+            {
+                itemCount += tradeItemsOfTypeInInventoryCount(tradeItem->itemFunction, character, backpack->getInventory());
             }
             tradeItem->count = itemCount;
         }
     }
+    
 
-    int CanSellItemToCulture(Item* itemToSell, TradeCulture* shopCulture)
+    int GetSellItemPrice(Item* itemToSell, Town* tradeTown, Platoon* traderSquad, TradeCulture* shopCulture)
     {
         int price = itemToSell->getValueSingle(true);
-        if (!shopCulture) return price;
+        if (traderSquad) price *= traderSquad->priceMultWhenITrade;
 
         GameData* itemData = itemToSell->getGameData();
         if (!itemData) return -1;
-        if (shopCulture)
-        {
-            // check if tradeculture allow it
 
+        // check if tradeculture allow it
+        if (tradeTown)
+        {
+            if (tradeTown->isIllegal(itemToSell))
+            {
+                Logger::logDebug(itemToSell->displayName + " is illegal", SHOPPING);
+                return -1;
+            }
+            Logger::logDebug(itemToSell->displayName + ": " + sc::toString(price) + 
+                " local mult x" + sc::toString(tradeTown->getLocalTradePriceMult(itemData)) + 
+                " culture mult x" + sc::toString(tradeTown->getFactionTradeCultureMult(itemData)), SHOPPING);
+            price *= tradeTown->getLocalTradePriceMult(itemData);
+            price *= tradeTown->getFactionTradeCultureMult(itemData);
+        }
+        else if (shopCulture)
+        {
             if (shopCulture->isItemIllegal(itemData))
             {
                 Logger::logDebug(itemToSell->displayName + " is illegal", SHOPPING);
@@ -2814,36 +2925,52 @@ namespace SquadAutonomy
             if (shopCulture->hasTradePriceMultiplier(itemData))
             {
                 Logger::logDebug(itemToSell->displayName + ": " + sc::toString(price) + " x" + sc::toString(shopCulture->hasTradePriceMultiplier(itemData)), SHOPPING);
-                price *= shopCulture->getTradePriceMultiplier(itemData);
+                price *= price * shopCulture->getTradePriceMultiplier(itemData);
             }
         }
+
         return price;
     }
 
-    bool HasSellableItem(SquadSettingsInfo* settings, Inventory* inventory, Building* shop)
+    bool HasSellableItem(SquadSettingsInfo* settings, Character* character, Building* shop)
     {
-        Logger::logDebug("Has sellable item check", SHOPPING);
-        auto sellItems = settings->getSellItems();
-        
         if (!shop) return false;
+        Logger::logDebug(character->displayName + " has sellable item check: " + shop->displayName , SHOPPING);
+        auto sellItems = settings->getSellItems();
         bool hasValidSellItem = false;
+        Town* tradingTown = shop->getRealTown();
         TradeCulture* tradeCulture = nullptr;
+        Inventory* inventory = character->getInventory();
+        if (!inventory) return false;
         Character* trader = shop->getResidentSquadLeader();
+        Platoon* traderPlatoon = nullptr;
         if (!trader && shop->furnitureParentBuilding()) trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
-        if (trader->getFaction()) tradeCulture = &trader->getFaction()->tradeCulture;
+        if (trader && trader->getPlatoon()) traderPlatoon = trader->getPlatoon()->me;
+        /*if (trader && trader->getFaction()) tradeCulture = &trader->getFaction()->tradeCulture;*/
+        if (traderPlatoon && traderPlatoon->getFaction()) tradeCulture = &traderPlatoon->getFaction()->tradeCulture;
         for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
         {
             lektor<Item*> items;
             inventory->getAllItemsWithFunction(items, iter->first);
+            ContainerItem* backpack = character->hasABackpackOn();
+            if (backpack)
+            {
+                backpack->getInventory()->getAllItemsWithFunction(items, iter->first);
+            }
             int amountToKeep = iter->second;
-            int amountOwned = items.size();
+            int amountOwned = 0;
+            for (int i = 0; i < items.size(); ++i)
+            {
+                amountOwned += items[i]->quantity;
+            }
             // has less or equal to keep amount
+            DebugLog("Amount Owned");
             if (amountOwned <= amountToKeep) continue;
 
             for (int i = 0; i < items.size(); ++i)
             {
                 auto item = items[i];
-                int price = CanSellItemToCulture(item, tradeCulture);
+                int price = GetSellItemPrice(item, tradingTown, traderPlatoon, tradeCulture);
                 if (price < 0) continue;
                 hasValidSellItem = true;
                 break;
@@ -2982,15 +3109,14 @@ namespace SquadAutonomy
         TradingInfo* tradingInfo = thisptr->tradingInfo;
         if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
         SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-        if (settings && settings->isEnabled())
+        if (settings && settings->isEnabled() && settings->getDoShopping())
         {
             if (out && out.getBuilding())
             {
                 Building* outBuilding = out.getBuilding();
-                Logger::logDebug(character->displayName + " Find shop: " + outBuilding->displayName, SHOPPING);
-                if (outBuilding->getSpecialFunction() != BF_SHOP || !outBuilding->getInventory())
+                if (outBuilding->getSpecialFunction() != BF_SHOP || !outBuilding->getInventory() || (outBuilding->getFaction() == squad->getFaction()))
                 {
-                    out = nullptr;
+                    out.setNull();
                     score = 0.0;
                 }
                 else
@@ -2999,13 +3125,12 @@ namespace SquadAutonomy
                     thisptr->_createTradingInfo();
                     Inventory* shopInventory = outBuilding->getInventory();
                     
-                    if (HasSellableItem(settings, character->getInventory(), outBuilding))
+                    if (HasSellableItem(settings, character, outBuilding))
                     {
-                        Logger::logDebug("Has sellable item", SHOPPING);
+                        Logger::logDebug(character->displayName + ": found sellable item", SHOPPING);
                     }
                     else
                     {
-                        Logger::logDebug("Find buyable item", SHOPPING);
                         bool hasItemFunction = false;
                         for (int i = 0; i < thisptr->tradingInfo->tradeItems.size(); ++i)
                         {
@@ -3035,7 +3160,7 @@ namespace SquadAutonomy
                         }
                         if (!hasItemFunction)
                         {
-                            out = nullptr;
+                            out.setNull();
                             score = 0.0;
                         }
                     }
@@ -3081,9 +3206,9 @@ namespace SquadAutonomy
             inventoryFaction->isPlayer = nullptr;
             if (item)
             {
-                Logger::logDebug(sendingTo->displayName + " bought " + item->displayName, Logger::SHOPPING);
+                Logger::log(sendingTo->displayName + " bought " + item->displayName, Logger::Info);
             }
-            UpdateTradeItemsCount(ai, character, character->getInventory());
+            UpdateTradeItemsCount(ai, character);
         }
 
 
@@ -3100,7 +3225,7 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled())
         {
-            UpdateTradeItemsCount(thisptr, character, character->getInventory());
+            UpdateTradeItemsCount(thisptr, character);
             
             auto sellItems = settings->getSellItems();
 
@@ -3109,8 +3234,17 @@ namespace SquadAutonomy
             {
                 lektor<Item*> items;
                 inventory->getAllItemsWithFunction(items, iter->first);
+                ContainerItem* backpack = character->hasABackpackOn();
+                if (backpack)
+                {
+                    backpack->getInventory()->getAllItemsWithFunction(items, iter->first);
+                }
                 int amountToKeep = iter->second;
-                int amountOwned = items.size();
+                int amountOwned = 0;
+                for (int i = 0; i < items.size(); ++i)
+                {
+                    amountOwned += items[i]->quantity;
+                }
                 // has less or equal to keep amount
                 if (amountOwned > amountToKeep) return false;
             }
@@ -3130,19 +3264,14 @@ namespace SquadAutonomy
     {
         if (price < 0) return false;
 
-        // do trading logic manually
-        // check if can fit
-        // check money
-        // give item
-        // take money
         if (price > trader->getMoney())
         {
-            Logger::logDebug("Shop money: " + sc::toString(trader->getMoney()), SHOPPING);
+            Logger::logDebug(trader->displayName + ": shop money - " + sc::toString(trader->getMoney()), SHOPPING);
             return false;
         }
         if (!shop->giveItem(item, false, false))
         {
-            Logger::logDebug("Can't fit item", SHOPPING);
+            Logger::logDebug(trader->displayName + ": no room for - " + item->displayName, SHOPPING);
             return false;
         }
         return true;
@@ -3167,41 +3296,44 @@ namespace SquadAutonomy
 
             auto sellItems = settings->getSellItems();
             Inventory* inventory = character->getInventory();
-            DebugLog("Buysomething shop: " + shop->displayName);
             Character* trader = shop->getResidentSquadLeader();
+            Platoon* traderPlatoon = nullptr;
             if (!trader && shop->furnitureParentBuilding()) trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
-            /*
-            InventoryGUI* inventoryGUI = inventory->getInventoryGUI();
-            if (!inventoryGUI)
-            {
-                inventoryGUI = new InventoryGUI(inventory, character->createInventoryLayout(), character);
-            }
-            InventoryGUI* shopInventoryGUI = shop->getInventory()->getInventoryGUI();
-            if (!shopInventoryGUI)
-            {
-                shopInventoryGUI = new InventoryGUI(shop->getInventory(), shop->createInventoryLayout(), shop);
-            }
-            */
+            if (trader && trader->getPlatoon()) traderPlatoon = trader->getPlatoon()->me;
+            Town* tradingTown = shop->getRealTown();
+            TradeCulture* tradeCulture = nullptr;
+            if (traderPlatoon && traderPlatoon->getFaction()) tradeCulture = &traderPlatoon->getFaction()->tradeCulture;
+
             for (auto iter = sellItems.begin(); iter != sellItems.end(); iter++)
             {
                 lektor<Item*> itemsToSell;
                 inventory->getAllItemsWithFunction(itemsToSell, iter->first);
+                ContainerItem* backpack = character->hasABackpackOn();
+                if (backpack)
+                {
+                    backpack->getInventory()->getAllItemsWithFunction(itemsToSell, iter->first);
+                }
                 int amountToKeep = iter->second;
-                int amountOwned = itemsToSell.size();
+                int amountOwned = 0;
+                for (int i = 0; i < itemsToSell.size(); ++i)
+                {
+                    amountOwned += itemsToSell[i]->quantity;
+                }
                 // has less or equal to keep amount
                 if (amountOwned <= amountToKeep) continue;
 
+                // tried using inventoryGUI::RClickAutoTrade but that requires the inventoryGUI to be created which can only be done safely on UI thread
+                // based the following code from buySomething and buyItem code for buying stuffs
                 for (int i = static_cast<int>(itemsToSell.size()) - 1; i >= 0; --i)
                 {
                     // ignore equipped section
                     Item* originalItem = itemsToSell[i];
                     std::string sectionName = originalItem->inventorySection;
-                    InventorySection* section = inventory->getSection(sectionName);
+                    Inventory* itemInventory = originalItem->getInventoryWeAreIn().getRootObject()->getInventory();
+                    InventorySection* section = itemInventory->getSection(sectionName);
                     if (section)
                     {
                         if (section->isAnEquippedItemSection) continue;
-
-                        TradeCulture* tradeCulture = &trader->getFaction()->tradeCulture;
                         Item* sellItem;
                         if (originalItem->quantity < 2)
                         {
@@ -3217,21 +3349,26 @@ namespace SquadAutonomy
                             sellItem->quantity = 1;
                             originalItem->quantity -= 1;
                         }
-                        int price = CanSellItemToCulture(sellItem, tradeCulture);
-                        if (CanSellItemToShop(sellItem, price, trader, shop))
+                        int price = GetSellItemPrice(sellItem, tradingTown, traderPlatoon, tradeCulture);
+                        if (price >= 0 && CanSellItemToShop(sellItem, price, trader, shop))
                         {
                             trader->takeMoney(price);
                             character->takeMoney(-price);
                             if (shop->getInventory()->getInventoryGUI()) shop->getInventory()->getInventoryGUI()->refreshSection();
-                            if (inventory->getInventoryGUI()) inventory->getInventoryGUI()->refreshSection();
-                            amountOwned -= 1;
-                            if (amountOwned <= amountToKeep) break;
+                            if (itemInventory->getInventoryGUI()) itemInventory->getInventoryGUI()->refreshSection();
+
+                            std::string priceText = Localization::formatMain(boost::locale::format("{1,num}") % price);
+                            ScreenLabel* priceLabel = gui->createScreenLabel("+c." + priceText, MyGUI::Colour::Colour(0.6, 1.0, 0.6, 0.9), ScreenLabel::LS_LARGE, ScreenLabel::RS_SLOW);
+                            priceLabel->setTracking(character, Ogre::Vector3(0.0, 15.0, 0.0));
+                            character->audioEvent("Sell_Item", static_cast<SoundRange>(40000));
+                            Logger::log(character->displayName + " sold " + sellItem->displayName + " for " + priceText, Logger::Info);
+                            return true;
                         }
                         else
                         {
                             if (!originalItem)
                             {
-                                inventory->addItem(sellItem, 1, false, false);
+                                itemInventory->addItem(sellItem, 1, false, false);
                             }
                             else
                             {
@@ -3240,17 +3377,7 @@ namespace SquadAutonomy
                             }
                         }
                     }
-                    /*
-                    InventoryGUI::TradeResult tradeResult = inventoryGUI->RClickAutoTrade(sectionName, inventoryPos.x, inventoryPos.y, shopInventoryGUI, true, true);
-                    if (tradeResult.value == InventoryGUI::TradeResult::OK)
-                    {
-                        Logger::logDebug("Sell item: " + item->displayName + " result: " + sc::toString(static_cast<int>(tradeResult.value)));
-                        amountOwned -= 1;
-                        if (amountOwned <= amountToKeep) break;
-                    }
-                    */
                 }
-
             }
         }
 
@@ -3289,7 +3416,7 @@ namespace SquadAutonomy
                         thisptr->tradingInfo->tradeItems.push_back(tradeItem);
                     }
                 }
-                UpdateTradeItemsCount(thisptr, character, character->getInventory());
+                UpdateTradeItemsCount(thisptr, character);
 
                 return;
             }
@@ -3315,6 +3442,9 @@ namespace SquadAutonomy
             taskTypeOrigDataDuration[GO_HOME_AND_GO_TO_BED] = goHomeToBedOrig;
             /*DebugLog("go bed Task : " + sc::toString(goHomeToBedData->durationMin) + ", " + sc::toString(goHomeToBedData->durationFuzz)
                 + ", " + sc::toString(goHomeToBedData->isDurationBased) + ", " + sc::toString(goHomeToBedData->endsAfterTime));*/
+            auto patrolTownData = getTaskDataConst(PATROL_TOWN);
+            OriginalTaskDataDuration* patrolTownOrig = new OriginalTaskDataDuration(patrolTownData->durationMin, patrolTownData->durationFuzz, patrolTownData->isDurationBased, patrolTownData->endsAfterTime);
+            taskTypeOrigDataDuration[PATROL_TOWN] = patrolTownOrig;
         }
         return result;
     }
@@ -3327,12 +3457,233 @@ namespace SquadAutonomy
         return getVisible_orig(thisptr);
     }
 
-    void Init()
+    void init(unsigned int platform, const std::string& version, uintptr_t baseAddr)
     {
         modPath = GetCurrentDLLDirectory();
-        Localization::init();
+
+        if (version == "1.0.65")
+        {
+            if (platform == 1) //Steam
+            {
+                *(uintptr_t*)&SquadAutonomy::EscMenu_openedOtherWindows = baseAddr + 0x916250;
+                *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr + 0x212db18;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x286960;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_activateAndSetup = baseAddr + 0x286700;
+                *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f48238;
+                *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f48350;
+                *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce80f0;
+                *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283F40;
+                //*(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6430;
+                //*(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x6607E0;
+                *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_Update = baseAddr + 0x342bf0;
+                *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_FindGate = baseAddr + 0x338650;
+                *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332ef0;
+                *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336fc0;
+                *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x3370b0;
+                *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32eb90;
+                *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E6A90;
+                //*(uintptr_t*)&SquadAutonomy::Task_Shopping_StartAction = baseAddr + 0x33a480;
+                //*(uintptr_t*)&SquadAutonomy::Task_Shopping_Update = baseAddr + 0x337cc0;
+                //*(uintptr_t*)&SquadAutonomy::BuildingFinderClass_getNearest = baseAddr + 0x9fa0b0;
+                //*(uintptr_t*)&SquadAutonomy::buildingFinderBuildings = baseAddr + 0x2037e58;
+                //*(uintptr_t*)&SquadAutonomy::buildingFinderBuildingsCount = baseAddr + 0x2037e50;
+                //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519c10; //TaskRepertoire
+                //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50ED70;
+                //*(uintptr_t*)&TaskRepertoire_hasTask = baseAddr + 0x32dbb0;
+                //*(uintptr_t*)&load = baseAddr + 0x47AC10;
+            }
+            else if (platform == 0) //GOG
+            {
+                *(uintptr_t*)&SquadAutonomy::EscMenu_openedOtherWindows = baseAddr + 0x915970;
+                *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr + 0x212BA58;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x2864F0;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_activateAndSetup = baseAddr + 0x286290;
+                *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f46248;
+                *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f46360;
+                *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce60F0;
+                *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283AD0;
+                //*(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6740;
+                //*(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x660AF0;
+                *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_Update = baseAddr + 0x3427a0;
+                *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_FindGate = baseAddr + 0x3381e0;
+                *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332a80;
+                *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336b50;
+                *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x336c40;
+                *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32E720;
+                *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E63A0;
+                //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519F20;
+                //*(uintptr_t*)&load = baseAddr + 0x47AD00;
+                //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50F080;
+                //*(uintptr_t*)&TaskRepertoire_hasTask = baseAddr + 0x32D740;
+
+            }
+        }
+
+        Localization::init(platform, version, baseAddr);
         ModSettings::getSingleton().loadFromFile();
         SquadAutonomySettings::getSingleton(); 
+    }
+
+    void hook()
+    {
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&ForgottenGUI::changeFontSize), &SquadAutonomy::ForgottenGUI_changeFontSize_hook, &SquadAutonomy::ForgottenGUI_changeFontSize_orig))
+            ErrorLog("Could not add ForgottenGUI::changeFontSize hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_update), &SquadAutonomy::_NV_update_hook, &SquadAutonomy::_NV_update_orig))
+            ErrorLog("Could not add MainBarGUI::_NV_update hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
+            ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_DESTRUCTOR), &SquadAutonomy::MainbarGUIDESTRUCTOR_hook, &SquadAutonomy::MainbarGUIDESTRUCTOR_orig))
+            ErrorLog("Could not add &MainBarGUI::_DESTRUCTOR hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_autoChangeSelectedObject), &SquadAutonomy::_NV_autoChangeSelectedObject_hook, &SquadAutonomy::_NV_autoChangeSelectedObject_orig))
+            ErrorLog("Could not add MainBarGUI::_NV_autoChangeSelectedObject hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::tabPlatoonChange), &SquadAutonomy::tabPlatoonChange_hook, &SquadAutonomy::tabPlatoonChange_orig))
+            ErrorLog("Could not add MainBarGUI::tabPlatoonChange hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&PlayerInterface::cycleSquad), &SquadAutonomy::cycleSquad_hook, &SquadAutonomy::cycleSquad_orig))
+            ErrorLog("Could not add PlayerInterface::cycleSquad hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&DialogueWindow::getVisible), &SquadAutonomy::getVisible_hook, &SquadAutonomy::getVisible_orig))
+            ErrorLog("Could not add DialogueWindow::getVisible hook!");
+
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::create), &SquadAutonomy::OptionsWindow_create_hook, &SquadAutonomy::OptionsWindow_create_orig))
+            ErrorLog("Could not add OptionsWindow::create hook!");
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
+            ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");*/
+            /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
+                ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");*/
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&GameWorld::initialisation), &SquadAutonomy::initialisation_hook, &SquadAutonomy::initialisation_orig))
+            ErrorLog("Could not add GameWorld::initialisation hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_threadedUpdate), &SquadAutonomy::_NV_threadedUpdate_hook, &SquadAutonomy::_NV_threadedUpdate_orig))
+            ErrorLog("Could not add Character::_NV_threadedUpdate hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::wantsToEatNow), &SquadAutonomy::wantsToEatNow_hook, &SquadAutonomy::wantsToEatNow_orig))
+            ErrorLog("Could not add Character::wantsToEatNow hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_getMoney), &SquadAutonomy::_NV_getMoney_hook, &SquadAutonomy::_NV_getMoney_orig))
+            ErrorLog("Could not add Character::_NV_getMoney hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<void (CharMovement::*)(const Ogre::Vector3&, UpdatePriority, bool)>(&CharMovement::_NV_setDestination)),
+            &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
+            ErrorLog("Could not add Character::wantsToEatNow hook!");
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
+            ErrorLog("Could not add CharMovement::_NV_setDestination hook!");*/
+
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::takeOneItemOnly), &SquadAutonomy::takeOneItemOnly_hook, &SquadAutonomy::takeOneItemOnly_orig))
+            ErrorLog("Could not add Inventory::takeOneItemOnly hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<bool (Inventory::*)(Item*)>(&Inventory::takeItem_EntireStack)), &SquadAutonomy::takeItem_EntireStack_hook, &SquadAutonomy::takeItem_EntireStack_orig))
+            ErrorLog("Could not add Inventory::takeItem_EntireStack hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::canItemGoHere), &SquadAutonomy::canItemGoHere_hook, &SquadAutonomy::canItemGoHere_orig))
+            ErrorLog("Could not add InventorySection::canItemGoHere hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_hasRoomForItem), &SquadAutonomy::_NV_hasRoomForItem_hook, &SquadAutonomy::_NV_hasRoomForItem_orig))
+            ErrorLog("Could not add InventorySection::_NV_hasRoomForItem hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::getValidInventoryPosition), &SquadAutonomy::getValidInventoryPosition_hook, &SquadAutonomy::getValidInventoryPosition_orig))
+            ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_addItem), &SquadAutonomy::_NV_addItem_hook, &SquadAutonomy::_NV_addItem_orig))
+            ErrorLog("Could not add InventorySection::_NV_addItem hook!");
+
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllItemsOfType), &SquadAutonomy::getAllItemsOfType_hook, &SquadAutonomy::getAllItemsOfType_orig))
+            ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::hasItemType), &SquadAutonomy::hasItemType_hook, &SquadAutonomy::hasItemType_orig))
+            ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");*/
+
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::saveGame), &SquadAutonomy::saveGame_hook, &SquadAutonomy::saveGame_orig))
+            ErrorLog("Could not add SaveManager::saveGame hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::loadGame), &SquadAutonomy::loadGame_hook, &SquadAutonomy::loadGame_orig))
+            ErrorLog("Could not add SaveManager::loadGame hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::execute), &SquadAutonomy::execute_hook, &SquadAutonomy::execute_orig))
+            ErrorLog("Could not add SaveManager::execute hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SquadManagementScreen::SquadCellView::update), &SquadAutonomy::SquadCellView_update_hook, &SquadAutonomy::SquadCellView_update_orig))
+            ErrorLog("Could not add SquadManagementScreen::SquadCellView::update hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SquadManagementScreen::removeSquad), &SquadAutonomy::removeSquad_hook, &SquadAutonomy::removeSquad_orig))
+            ErrorLog("Could not add SquadManagementScreen::removeSquad hook!");
+
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Ownerships::setHomeBuilding), &SquadAutonomy::setHomeBuilding_hook, &SquadAutonomy::setHomeBuilding_orig))
+            ErrorLog("Could not add Tasker::score hook!");*/
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&UseableStuff::_NV_couldIOperate), &SquadAutonomy::_NV_couldIOperate_hook, &SquadAutonomy::_NV_couldIOperate_orig))
+            ErrorLog("Could not add UseableStuff::_NV_couldIOperate hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Tasker::score), &SquadAutonomy::score_hook, &SquadAutonomy::score_orig))
+            ErrorLog("Could not add Tasker::score hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::_isRequirementsComplete), &SquadAutonomy::_isRequirementsComplete_hook, &SquadAutonomy::_isRequirementsComplete_orig))
+            ErrorLog("Could not add TaskData::_isRequirementsComplete hook!");
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &SquadAutonomy::runTargetFind_hook, &SquadAutonomy::runTargetFind_orig))
+            ErrorLog("Could not add runTargetFind hook!");*/
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Ownerships::setHomeTown), &SquadAutonomy::setHomeTown_hook, &SquadAutonomy::setHomeTown_orig))
+            ErrorLog("Could not add AI::setHomeTown hook!");*/
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGetOutOfBed), &SquadAutonomy::_NV_scoreGetOutOfBed_hook, &SquadAutonomy::_NV_scoreGetOutOfBed_orig))
+            ErrorLog("Could not add AI::_NV_scoreGetOutOfBed hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGoToBed), &SquadAutonomy::_NV_scoreGoToBed_hook, &SquadAutonomy::_NV_scoreGoToBed_orig))
+            ErrorLog("Could not add AI::_NV_scoreGoToBed hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findMineToWorkAt), &SquadAutonomy::findMineToWorkAt_hook, &SquadAutonomy::findMineToWorkAt_orig))
+            ErrorLog("Could not add AI::findMineToWorkAt hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findKOIntruder_town), &SquadAutonomy::findKOIntruder_town_hook, &SquadAutonomy::findKOIntruder_town_orig))
+            ErrorLog("Could not add AI::findKOIntruder_town hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findDisabledAlly), &SquadAutonomy::findDisabledAlly_hook, &SquadAutonomy::findDisabledAlly_orig))
+            ErrorLog("Could not add AI::findDisabledAlly hook!");
+
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::buySomething), &SquadAutonomy::buySomething_hook, &SquadAutonomy::buySomething_orig))
+            ErrorLog("Could not add AI::buySomething hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::boughtShitComplete), &SquadAutonomy::boughtShitComplete_hook, &SquadAutonomy::boughtShitComplete_orig))
+            ErrorLog("Could not add AI::boughtShitComplete hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_createTradingInfo), &SquadAutonomy::_createTradingInfo_hook, &SquadAutonomy::_createTradingInfo_orig))
+            ErrorLog("Could not add AI::_createTradingInfo hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findShop), &SquadAutonomy::findShop_hook, &SquadAutonomy::findShop_orig))
+            ErrorLog("Could not add AI::findShop hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::scoreShopping), &SquadAutonomy::scoreShopping_hook, &SquadAutonomy::scoreShopping_orig))
+            ErrorLog("Could not add AI::scoreShopping hook!");
+
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::buyItem), &SquadAutonomy::buyItem_hook, &SquadAutonomy::buyItem_orig))
+            ErrorLog("Could not add Inventory::buyItem hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_giveItem), &SquadAutonomy::_NV_giveItem_hook, &SquadAutonomy::_NV_giveItem_orig))
+            ErrorLog("Could not add RootObject::Character hook!");
+        /*
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_StartAction, &SquadAutonomy::Task_Shopping_StartAction_hook, &SquadAutonomy::Task_Shopping_StartAction_orig))
+            ErrorLog("Could not add Task_Shopping_StartAction hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_Update, &SquadAutonomy::Task_Shopping_Update_hook, &SquadAutonomy::Task_Shopping_Update_orig))
+            ErrorLog("Could not add Task_Shopping_StartAction hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::BuildingFinderClass_getNearest, &SquadAutonomy::BuildingFinderClass_getNearest_hook, &SquadAutonomy::BuildingFinderClass_getNearest_orig))
+            ErrorLog("Could not add BuildingFinderClass_getNearest hook!");
+        */
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
+            ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OrdersReceiver::clearCurrentGoal), &SquadAutonomy::clearCurrentGoal_hook, &SquadAutonomy::clearCurrentGoal_orig))
+            ErrorLog("Could not add OrdersReceiver::clearCurrentGoal hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::periodicUpdate), &SquadAutonomy::periodicUpdate_hook, &SquadAutonomy::periodicUpdate_orig))
+            ErrorLog("Could not add AITaskSytem::periodicUpdate hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::choosePermaJob), &SquadAutonomy::choosePermaJob_hook, &SquadAutonomy::choosePermaJob_orig))
+            ErrorLog("Could not add AITaskSytem::choosePermaJob hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::currentActionChecks), &SquadAutonomy::currentActionChecks_hook, &SquadAutonomy::currentActionChecks_orig))
+            ErrorLog("Could not add AITaskSytem::currentActionChecks hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::update4Frame), &SquadAutonomy::update4Frame_hook, &SquadAutonomy::update4Frame_orig))
+            ErrorLog("Could not add AITaskSytem::update4Frame hook!");
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGoals), &SquadAutonomy::runGoals_hook, &SquadAutonomy::runGoals_orig))
+        ErrorLog("Could not add runGoals hook!");*/
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoalFrom), &SquadAutonomy::chooseGoalFrom_hook, &SquadAutonomy::chooseGoalFrom_orig))
+        ErrorLog("Could not add chooseGoalFrom hook!");*/
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoal), &SquadAutonomy::chooseGoal_hook, &SquadAutonomy::chooseGoal_orig))
+        ErrorLog("Could not add AITaskSytem::chooseGoal hook!");*/
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGOAP) , &SquadAutonomy::runGOAP_hook, &SquadAutonomy::runGOAP_orig))
+        ErrorLog("Could not add AITaskSytem::runGOAP hook!");*/
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &SquadAutonomy::_NV_setCurrentGoal_hook, &SquadAutonomy::_NV_setCurrentGoal_orig))
+        ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");*/
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &SquadAutonomy::setTaskExpiryTimer_hook, &SquadAutonomy::setTaskExpiryTimer_orig))
+        ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");*/
+
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalStart, &SquadAutonomy::Package_WanderingTrader_signalStart_hook, &SquadAutonomy::Package_WanderingTrader_signalStart_orig))
+            ErrorLog("Could not add Package_WanderingTrader::signal_start hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_activateAndSetup, &SquadAutonomy::Package_WanderingTrader_activateAndSetup_hook, &SquadAutonomy::Package_WanderingTrader_activateAndSetup_orig))
+            ErrorLog("Could not add Package_WanderingTrader::activateAndSetup hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig))
+            ErrorLog("Could not add Task_MoveToDoor_Gate_ChooseSide_gatePosition hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_ManTheGate_Update, &SquadAutonomy::Task_ManTheGate_Update_hook, &SquadAutonomy::Task_ManTheGate_Update_orig))
+            ErrorLog("Could not add Task_ManTheGate_Update hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_ManTheGate_FindGate, &SquadAutonomy::Task_ManTheGate_FindGate_hook, &SquadAutonomy::Task_ManTheGate_FindGate_orig))
+            ErrorLog("Could not add Task_ManTheGate_FindGate hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_OpenDoor_StartAction, &SquadAutonomy::Task_OpenDoor_StartAction_hook, &SquadAutonomy::Task_OpenDoor_StartAction_orig))
+            ErrorLog("Could not add Task_OpenDoor_StartAction hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_OpenDoor_Update, &SquadAutonomy::Task_OpenDoor_Update_hook, &SquadAutonomy::Task_OpenDoor_Update_orig))
+            ErrorLog("Could not add Task_OpenDoor_Update hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::EscMenu_openedOtherWindows, &SquadAutonomy::EscMenu_openedOtherWindows_hook, &SquadAutonomy::EscMenu_openedOtherWindows_orig))
+            ErrorLog("Could not add EscMenu hook!");
+        /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(TaskPathfinder_Node_solve, &SquadAutonomy::TaskPathfinder_Node_solve_hook, &SquadAutonomy::TaskPathfinder_Node_solve_orig))
+            ErrorLog("Could not add TaskPathfinder_Node_solve hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(TaskRepertoire_hasTask, &SquadAutonomy::TaskRepertoire_hasTask_hook, &SquadAutonomy::TaskRepertoire_hasTask_orig))
+            ErrorLog("Could not add TaskRepertoire_hasTask hook!");*/
+        KenshiLib::ApplyQueuedHooks();
     }
 
 }
@@ -3347,215 +3698,10 @@ __declspec(dllexport) void startPlugin()
     auto version = versionInfo.GetVersion();
     auto baseAddr = reinterpret_cast<uintptr_t>(GetModuleHandleA(nullptr));
 
-    if (version == "1.0.65")
-    {
-        if (platform == 1)
-        {
-            *(uintptr_t*)&SquadAutonomy::EscMenu_openedOtherWindows = baseAddr + 0x916250;
-            *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr+0x212db18;
-            *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x286960;
-            *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f48238;
-            *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f48350;
-            *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce80f0;
-            *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283F40;
-            //*(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6430;
-            //*(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x6607E0;
-            *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_Update = baseAddr + 0x342bf0;
-            *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_FindGate = baseAddr + 0x338650;
-            *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332ef0;
-            *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336fc0;
-            *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x3370b0;
-            *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32eb90;
-            *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E6A90;
-            //*(uintptr_t*)&SquadAutonomy::Task_Shopping_StartAction = baseAddr + 0x33a480;
-            //*(uintptr_t*)&SquadAutonomy::Task_Shopping_Update = baseAddr + 0x337cc0;
-            //*(uintptr_t*)&SquadAutonomy::BuildingFinderClass_getNearest = baseAddr + 0x9fa0b0;
-            //*(uintptr_t*)&SquadAutonomy::buildingFinderBuildings = baseAddr + 0x2037e58;
-            //*(uintptr_t*)&SquadAutonomy::buildingFinderBuildingsCount = baseAddr + 0x2037e50;
-            //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519c10; //TaskRepertoire
-            //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50ED70;
-            //*(uintptr_t*)&TaskRepertoire_hasTask = baseAddr + 0x32dbb0;
-            //*(uintptr_t*)&load = baseAddr + 0x47AC10;
-        }
-        else if (platform == 0)
-        {
-            *(uintptr_t*)&SquadAutonomy::EscMenu_openedOtherWindows = baseAddr + 0x915970;
-            *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr + 0x212BA58;
-            *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x2864F0;
-            *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f46248;
-            *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f46360;
-            *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce60F0;
-            *(uintptr_t*)&SquadAutonomy::getTaskDataConst = baseAddr + 0x283AD0;
-            //*(uintptr_t*)&SquadAutonomy::CharBody_NV_setCurrentAction = baseAddr + 0x5C6740;
-            //*(uintptr_t*)&SquadAutonomy::CharMovement_NV_setDestination = baseAddr + 0x660AF0;
-            *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_Update = baseAddr + 0x3427a0;
-            *(uintptr_t*)&SquadAutonomy::Task_ManTheGate_FindGate = baseAddr + 0x3381e0;
-            *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332a80;
-            *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336b50;
-            *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x336c40;
-            *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32E720;
-            *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E63A0;
-            //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519F20;
-            //*(uintptr_t*)&load = baseAddr + 0x47AD00;
-            //*(uintptr_t*)&TaskPathfinder_Node_solve = baseAddr + 0x50F080;
-            //*(uintptr_t*)&TaskRepertoire_hasTask = baseAddr + 0x32D740;
-
-        }
-    }
-    SquadAutonomy::Init();
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&ForgottenGUI::changeFontSize), &SquadAutonomy::ForgottenGUI_changeFontSize_hook, &SquadAutonomy::ForgottenGUI_changeFontSize_orig))
-        ErrorLog("Could not add ForgottenGUI::changeFontSize hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_update), &SquadAutonomy::_NV_update_hook, &SquadAutonomy::_NV_update_orig))
-        ErrorLog("Could not add MainBarGUI::_NV_update hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_CONSTRUCTOR), &SquadAutonomy::MainbarGUICONSTRUCTOR_hook, &SquadAutonomy::MainbarGUICONSTRUCTOR_orig))
-        ErrorLog("Could not add &MainBarGUI::_CONSTRUCTOR hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_DESTRUCTOR), &SquadAutonomy::MainbarGUIDESTRUCTOR_hook, &SquadAutonomy::MainbarGUIDESTRUCTOR_orig))
-        ErrorLog("Could not add &MainBarGUI::_DESTRUCTOR hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::_NV_autoChangeSelectedObject), &SquadAutonomy::_NV_autoChangeSelectedObject_hook, &SquadAutonomy::_NV_autoChangeSelectedObject_orig))
-        ErrorLog("Could not add MainBarGUI::_NV_autoChangeSelectedObject hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&MainBarGUI::tabPlatoonChange), &SquadAutonomy::tabPlatoonChange_hook, &SquadAutonomy::tabPlatoonChange_orig))
-        ErrorLog("Could not add MainBarGUI::tabPlatoonChange hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&PlayerInterface::cycleSquad), &SquadAutonomy::cycleSquad_hook, &SquadAutonomy::cycleSquad_orig))
-        ErrorLog("Could not add PlayerInterface::cycleSquad hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&DialogueWindow::getVisible), &SquadAutonomy::getVisible_hook, &SquadAutonomy::getVisible_orig))
-        ErrorLog("Could not add DialogueWindow::getVisible hook!");
-
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::create), &SquadAutonomy::OptionsWindow_create_hook, &SquadAutonomy::OptionsWindow_create_orig))
-        ErrorLog("Could not add OptionsWindow::create hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::saveOptions), &SquadAutonomy::saveOptions_hook, &SquadAutonomy::saveOptions_orig))
-        ErrorLog("Could not add OptionsWindow::saveOptions constructor hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OptionsWindow::closeButton), &SquadAutonomy::closeButton_hook, &SquadAutonomy::closeButton_orig))
-        ErrorLog("Could not add OptionsWindow::closeButton constructor hook!");*/
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&GameWorld::initialisation), &SquadAutonomy::initialisation_hook, &SquadAutonomy::initialisation_orig))
-        ErrorLog("Could not add GameWorld::initialisation hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_threadedUpdate), &SquadAutonomy::_NV_threadedUpdate_hook, &SquadAutonomy::_NV_threadedUpdate_orig))
-        ErrorLog("Could not add Character::_NV_threadedUpdate hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::wantsToEatNow), &SquadAutonomy::wantsToEatNow_hook, &SquadAutonomy::wantsToEatNow_orig))
-        ErrorLog("Could not add Character::wantsToEatNow hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_getMoney), &SquadAutonomy::_NV_getMoney_hook, &SquadAutonomy::_NV_getMoney_orig))
-        ErrorLog("Could not add Character::_NV_getMoney hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<void (CharMovement::*)(const Ogre::Vector3&, UpdatePriority, bool)>(&CharMovement::_NV_setDestination)), 
-        &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
-        ErrorLog("Could not add Character::wantsToEatNow hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::CharMovement_NV_setDestination, &SquadAutonomy::_NV_setDestination_hook, &SquadAutonomy::_NV_setDestination_orig))
-        ErrorLog("Could not add CharMovement::_NV_setDestination hook!");*/
-
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::takeOneItemOnly), &SquadAutonomy::takeOneItemOnly_hook, &SquadAutonomy::takeOneItemOnly_orig))
-        ErrorLog("Could not add Inventory::takeOneItemOnly hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(static_cast<bool (Inventory::*)(Item*)>(&Inventory::takeItem_EntireStack)), &SquadAutonomy::takeItem_EntireStack_hook, &SquadAutonomy::takeItem_EntireStack_orig))
-        ErrorLog("Could not add Inventory::takeItem_EntireStack hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::canItemGoHere), &SquadAutonomy::canItemGoHere_hook, &SquadAutonomy::canItemGoHere_orig))
-        ErrorLog("Could not add InventorySection::canItemGoHere hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_hasRoomForItem), &SquadAutonomy::_NV_hasRoomForItem_hook, &SquadAutonomy::_NV_hasRoomForItem_orig))
-        ErrorLog("Could not add InventorySection::_NV_hasRoomForItem hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::getValidInventoryPosition), &SquadAutonomy::getValidInventoryPosition_hook, &SquadAutonomy::getValidInventoryPosition_orig))
-        ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_addItem), &SquadAutonomy::_NV_addItem_hook, &SquadAutonomy::_NV_addItem_orig))
-        ErrorLog("Could not add InventorySection::_NV_addItem hook!");
-
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllItemsOfType), &SquadAutonomy::getAllItemsOfType_hook, &SquadAutonomy::getAllItemsOfType_orig))
-        ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::hasItemType), &SquadAutonomy::hasItemType_hook, &SquadAutonomy::hasItemType_orig))
-        ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");*/
-
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::saveGame), &SquadAutonomy::saveGame_hook, &SquadAutonomy::saveGame_orig))
-		ErrorLog("Could not add SaveManager::saveGame hook!");
-	if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::loadGame), &SquadAutonomy::loadGame_hook, &SquadAutonomy::loadGame_orig))
-		ErrorLog("Could not add SaveManager::loadGame hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SaveManager::execute), &SquadAutonomy::execute_hook, &SquadAutonomy::execute_orig))
-        ErrorLog("Could not add SaveManager::execute hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SquadManagementScreen::SquadCellView::update), &SquadAutonomy::SquadCellView_update_hook, &SquadAutonomy::SquadCellView_update_orig))
-        ErrorLog("Could not add SquadManagementScreen::SquadCellView::update hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&SquadManagementScreen::removeSquad), &SquadAutonomy::removeSquad_hook, &SquadAutonomy::removeSquad_orig))
-        ErrorLog("Could not add SquadManagementScreen::removeSquad hook!");
-
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Ownerships::setHomeBuilding), &SquadAutonomy::setHomeBuilding_hook, &SquadAutonomy::setHomeBuilding_orig))
-        ErrorLog("Could not add Tasker::score hook!");*/
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&UseableStuff::_NV_couldIOperate), &SquadAutonomy::_NV_couldIOperate_hook, &SquadAutonomy::_NV_couldIOperate_orig))
-        ErrorLog("Could not add UseableStuff::_NV_couldIOperate hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Tasker::score), &SquadAutonomy::score_hook, &SquadAutonomy::score_orig))
-        ErrorLog("Could not add Tasker::score hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::_isRequirementsComplete), &SquadAutonomy::_isRequirementsComplete_hook, &SquadAutonomy::_isRequirementsComplete_orig))
-        ErrorLog("Could not add TaskData::_isRequirementsComplete hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&TaskData::runTargetFind), &SquadAutonomy::runTargetFind_hook, &SquadAutonomy::runTargetFind_orig))
-        ErrorLog("Could not add runTargetFind hook!");*/
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Ownerships::setHomeTown), &SquadAutonomy::setHomeTown_hook, &SquadAutonomy::setHomeTown_orig))
-        ErrorLog("Could not add AI::setHomeTown hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGetOutOfBed), &SquadAutonomy::_NV_scoreGetOutOfBed_hook, &SquadAutonomy::_NV_scoreGetOutOfBed_orig))
-        ErrorLog("Could not add AI::_NV_scoreGetOutOfBed hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_NV_scoreGoToBed), &SquadAutonomy::_NV_scoreGoToBed_hook, &SquadAutonomy::_NV_scoreGoToBed_orig))
-        ErrorLog("Could not add AI::_NV_scoreGoToBed hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findMineToWorkAt), &SquadAutonomy::findMineToWorkAt_hook, &SquadAutonomy::findMineToWorkAt_orig))
-        ErrorLog("Could not add AI::findMineToWorkAt hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findKOIntruder_town), &SquadAutonomy::findKOIntruder_town_hook, &SquadAutonomy::findKOIntruder_town_orig))
-        ErrorLog("Could not add AI::findKOIntruder_town hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::buySomething), &SquadAutonomy::buySomething_hook, &SquadAutonomy::buySomething_orig))
-        ErrorLog("Could not add AI::buySomething hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::boughtShitComplete), &SquadAutonomy::boughtShitComplete_hook, &SquadAutonomy::boughtShitComplete_orig))
-        ErrorLog("Could not add AI::boughtShitComplete hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::_createTradingInfo), &SquadAutonomy::_createTradingInfo_hook, &SquadAutonomy::_createTradingInfo_orig))
-        ErrorLog("Could not add AI::_createTradingInfo hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findShop), &SquadAutonomy::findShop_hook, &SquadAutonomy::findShop_orig))
-        ErrorLog("Could not add AI::findShop hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::scoreShopping), &SquadAutonomy::scoreShopping_hook, &SquadAutonomy::scoreShopping_orig))
-        ErrorLog("Could not add AI::scoreShopping hook!");
-
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::buyItem), &SquadAutonomy::buyItem_hook, &SquadAutonomy::buyItem_orig))
-        ErrorLog("Could not add Inventory::buyItem hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Character::_NV_giveItem), &SquadAutonomy::_NV_giveItem_hook, &SquadAutonomy::_NV_giveItem_orig))
-        ErrorLog("Could not add RootObject::Character hook!");
-    /*
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_StartAction, &SquadAutonomy::Task_Shopping_StartAction_hook, &SquadAutonomy::Task_Shopping_StartAction_orig))
-        ErrorLog("Could not add Task_Shopping_StartAction hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_Update, &SquadAutonomy::Task_Shopping_Update_hook, &SquadAutonomy::Task_Shopping_Update_orig))
-        ErrorLog("Could not add Task_Shopping_StartAction hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::BuildingFinderClass_getNearest, &SquadAutonomy::BuildingFinderClass_getNearest_hook, &SquadAutonomy::BuildingFinderClass_getNearest_orig))
-        ErrorLog("Could not add BuildingFinderClass_getNearest hook!");
-    */
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::AIResultsCacher::runTargetFinder), &SquadAutonomy::runTargetFinder_hook, &SquadAutonomy::runTargetFinder_orig))
-        ErrorLog("Could not add AI::AIResultsCacher::runTargetFinder hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&OrdersReceiver::clearCurrentGoal), &SquadAutonomy::clearCurrentGoal_hook, &SquadAutonomy::clearCurrentGoal_orig))
-        ErrorLog("Could not add OrdersReceiver::clearCurrentGoal hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::periodicUpdate), &SquadAutonomy::periodicUpdate_hook, &SquadAutonomy::periodicUpdate_orig))
-        ErrorLog("Could not add AITaskSytem::periodicUpdate hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::choosePermaJob), &SquadAutonomy::choosePermaJob_hook, &SquadAutonomy::choosePermaJob_orig))
-        ErrorLog("Could not add AITaskSytem::choosePermaJob hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::currentActionChecks), &SquadAutonomy::currentActionChecks_hook, &SquadAutonomy::currentActionChecks_orig))
-        ErrorLog("Could not add AITaskSytem::currentActionChecks hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::update4Frame), &SquadAutonomy::update4Frame_hook, &SquadAutonomy::update4Frame_orig))
-        ErrorLog("Could not add AITaskSytem::update4Frame hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGoals), &SquadAutonomy::runGoals_hook, &SquadAutonomy::runGoals_orig))
-        ErrorLog("Could not add runGoals hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoalFrom), &SquadAutonomy::chooseGoalFrom_hook, &SquadAutonomy::chooseGoalFrom_orig))
-        ErrorLog("Could not add chooseGoalFrom hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::chooseGoal), &SquadAutonomy::chooseGoal_hook, &SquadAutonomy::chooseGoal_orig))
-        ErrorLog("Could not add AITaskSytem::chooseGoal hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::runGOAP) , &SquadAutonomy::runGOAP_hook, &SquadAutonomy::runGOAP_orig))
-        ErrorLog("Could not add AITaskSytem::runGOAP hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::_NV_setCurrentGoal), &SquadAutonomy::_NV_setCurrentGoal_hook, &SquadAutonomy::_NV_setCurrentGoal_orig))
-        ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");*/
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &SquadAutonomy::setTaskExpiryTimer_hook, &SquadAutonomy::setTaskExpiryTimer_orig))
-        ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");*/
-
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalStart, &SquadAutonomy::Package_WanderingTrader_signalStart_hook, &SquadAutonomy::Package_WanderingTrader_signalStart_orig))
-        ErrorLog("Could not add Wandering::signal_start hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig))
-        ErrorLog("Could not add Task_MoveToDoor_Gate_ChooseSide_gatePosition hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_ManTheGate_Update, &SquadAutonomy::Task_ManTheGate_Update_hook, &SquadAutonomy::Task_ManTheGate_Update_orig))
-        ErrorLog("Could not add Task_ManTheGate_Update hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_ManTheGate_FindGate, &SquadAutonomy::Task_ManTheGate_FindGate_hook, &SquadAutonomy::Task_ManTheGate_FindGate_orig))
-        ErrorLog("Could not add Task_ManTheGate_FindGate hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_OpenDoor_StartAction, &SquadAutonomy::Task_OpenDoor_StartAction_hook, &SquadAutonomy::Task_OpenDoor_StartAction_orig))
-        ErrorLog("Could not add Task_OpenDoor_StartAction hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_OpenDoor_Update, &SquadAutonomy::Task_OpenDoor_Update_hook, &SquadAutonomy::Task_OpenDoor_Update_orig))
-        ErrorLog("Could not add Task_OpenDoor_Update hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::EscMenu_openedOtherWindows, &SquadAutonomy::EscMenu_openedOtherWindows_hook, &SquadAutonomy::EscMenu_openedOtherWindows_orig))
-        ErrorLog("Could not add EscMenu hook!");
-    /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(TaskPathfinder_Node_solve, &SquadAutonomy::TaskPathfinder_Node_solve_hook, &SquadAutonomy::TaskPathfinder_Node_solve_orig))
-        ErrorLog("Could not add TaskPathfinder_Node_solve hook!");
-    if (KenshiLib::SUCCESS != KenshiLib::QueueHook(TaskRepertoire_hasTask, &SquadAutonomy::TaskRepertoire_hasTask_hook, &SquadAutonomy::TaskRepertoire_hasTask_orig))
-        ErrorLog("Could not add TaskRepertoire_hasTask hook!");*/
-    KenshiLib::ApplyQueuedHooks();
+    
+    SquadAutonomy::init(platform, version, baseAddr);
+    SquadAutonomy::hook();
+    
     DebugLog("Mod started");
 }
 
