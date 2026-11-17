@@ -1,4 +1,5 @@
 #pragma once
+#include <ogre/OgreStringConverter.h>
 #include <kenshi/GameData.h>
 #include <kenshi/AI/AIPackage.h>
 #include <kenshi/Platoon.h>
@@ -27,7 +28,7 @@ namespace SquadAutonomy
     bool ResetAI(Platoon*, bool endAction = true);
     void SetNearestFriendlyTownAsHome(Platoon* squad);
     int tradeItemsOfTypeInInventoryCount(ItemFunction itemFunction, Character* character, Inventory* inventory);
-    void UpdateTradeItemsCount(AI* ai, Character* character);
+    void updateTradeItemsCount(AI* ai, Character* character);
     void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);
     void OpenSquadAutonomyPanelMainBar();
@@ -38,4 +39,5 @@ namespace SquadAutonomy
     extern bool loadNextCall;
     
     extern MyGUI::Window* autBtnWindow;
+    typedef Ogre::StringConverter sc;
 }
