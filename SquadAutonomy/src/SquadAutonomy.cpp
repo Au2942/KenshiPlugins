@@ -9,7 +9,7 @@
 #include "SquadAutonomyMainBarButton.h"
 #include "SquadAutonomyLog.h"
 
-#include "extern/TradingInfo.h"
+#include "util/lektorExtension.h"
 
 #include <Debug.h>
 
@@ -116,9 +116,11 @@ namespace SquadAutonomy
     void (*Task_OpenDoor_Update)(Tasker*, CharBody*) = nullptr;
     void (*Task_Shopping_StartAction)(Tasker*, CharBody*) = nullptr; //0x33a480
     void (*Task_Shopping_Update)(Tasker*, CharBody*) = nullptr; //0x33a480
+    void (*Task_FillMachine_putStolenItemsInStorage)(Tasker*, Inventory*, Building*) = nullptr; //0x340d40
     Building* (*BuildingFinderClass_getNearest)(BuildingFinderClass*) = nullptr;//0x9fa0b0
     std::vector<Building*>* buildingFinderBuildings = nullptr;//0x2037e58
     int* buildingFinderBuildingsCount = nullptr;//0x2037e50
+    float (*SpeedSelector_getMoveSpeed)(class SpeedSelector*, Character*, MoveSpeed) = nullptr;//0x3429d0
     Tasker* (*GOAPTaskMgr_createNewTask)(TaskRepertoire*, TaskType key, const hand& subject, taskPriority priority, float weight, Ogre::Vector3 location, int startTime, int endTime) = nullptr;
     static MyGUI::Window* (*MessageBoxManager_createMessageBox)
     (
@@ -1599,6 +1601,19 @@ namespace SquadAutonomy
             if (bb && bb->getCurrentPackage())
             {
                 sig = bb->getCurrentPackage()->key;
+                // from testing seems like a package only use its own signal and ignore inherit ones
+                /*
+                auto packages = bb->packagesMain;
+                for (auto iter = packages.begin(); iter != packages.end(); ++iter)
+                {
+                    auto packages = iter->second;
+                    DebugLog("packages count: " + sc::toString(packages.size()));
+                    for (int i = 0; i < packages.size(); ++i)
+                    {
+                        DebugLog("signal: " + sc::toString(static_cast<int>(packages[i]->key)));
+                    }
+                }
+                */
             }
             if (sig != SIGNAL_NONE && sig != SIG_AT_HOME_TOWN)
             {
@@ -2407,6 +2422,141 @@ namespace SquadAutonomy
         return _NV_addItem_orig(thisptr, itemToAdd, quantity);
     }
 
+    bool checkInventorySettings = false;
+    float (*findResourceDestinationForMyLoot_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
+    float findResourceDestinationForMyLoot_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
+    {
+        Character* character = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        if (thisptr)
+        {
+            character = thisptr->getCharacter();
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(thisptr->getPlatoon());
+        }
+        if (settings && settings->isEnabled())
+        {
+            if (settings->getPutLootsInStorage())
+            {
+                checkInventorySettings = true;
+            }
+        }
+        // this calls getExcessLoot inside which then calls getAllStolenItem
+        float score = findResourceDestinationForMyLoot_orig(thisptr, in, out, justAsking);
+        // this only stop the game from ditching resource when all loot items are equipped
+        // it'll still ditch all loots
+        // need to find somewhere else that does the actual ditching items logic
+        // should look into all the ones that call getAllStolenItem
+        // 340d40 is called by task_fillmachine (likely this one)
+
+        checkInventorySettings = false;
+
+        return score;
+    }
+
+    void (*Task_FillMachine_putStolenItemsInStorage_orig)(Tasker* thisptr, Inventory* inv, Building* build);
+    void Task_FillMachine_putStolenItemsInStorage_hook(Tasker* thisptr, Inventory* inv, Building* build)
+    {
+        Character* character = inv->getCallbackCharacter();
+        Platoon* squad = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled() && settings->getPutLootsInStorage())
+        {
+            checkInventorySettings = true;
+        }
+        Task_FillMachine_putStolenItemsInStorage_orig(thisptr, inv, build);
+
+        checkInventorySettings = false;
+    }
+
+    // Hook the method (call interception) — the primary mod mechanism
+    void (*getAllStolenItems_orig)(Inventory* thisptr, lektor<Item*>& all, bool includeUnknown);
+    void getAllStolenItems_hook(Inventory* thisptr, lektor<Item*>& all, bool includeUnknown)
+    {
+        // your code before/instead of the original
+        getAllStolenItems_orig(thisptr, all, includeUnknown);
+        if (checkInventorySettings)
+        {
+            Character* character = thisptr->getCallbackCharacter();
+            SquadSettingsInfo* settings = nullptr;
+            if (character && character->getPlatoon())
+            {
+                settings = SquadAutonomySettings::getSingleton().getSquadSettings(character->getPlatoon()->me);
+            }
+            if (settings && settings->isEnabled() && settings->getPutLootsInStorage())
+            {
+                lektor<Item*> outItems;
+                for (int i = 0; i < all.size(); ++i)
+                {
+                    auto item = all[i];
+                    if (!item) continue;
+                    if (settings->getIgnoreEquipped() && item->isEquipped) continue;
+                    if (settings->hasForbidItem(item->itemFunction)) continue;
+                    lektorEx::push_back(outItems, item);
+                    //Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
+                }
+                all = outItems;
+                for (int i = 0; i < all.size(); ++i)
+                {
+                    auto item = all[i];
+                    Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
+                }
+            }
+        }
+    }
+
+    bool (*getExcessLoot_orig)(Inventory* thisptr, const hand& me, lektor<Item*>& out, bool justAsking);
+    bool getExcessLoot_hook(Inventory* thisptr, const hand& me, lektor<Item*>& out, bool justAsking)
+    {
+        bool result = getExcessLoot_orig(thisptr, me, out, justAsking);
+        if (checkInventorySettings)
+        { 
+            Character* character = me.getCharacter();
+            SquadSettingsInfo* settings = nullptr;
+            if (character && character->getPlatoon())
+            {
+                settings = SquadAutonomySettings::getSingleton().getSquadSettings(character->getPlatoon()->me);
+            }
+            if (settings && settings->isEnabled() && settings->getPutLootsInStorage())
+            {
+                lektor<Item*> outItems;
+                for (int i = 0; i < out.size(); ++i)
+                {
+                    auto item = out[i];
+                    if (!item) continue;
+                    if (settings->getIgnoreEquipped() && item->isEquipped) continue;
+                    if (settings->hasForbidItem(item->itemFunction)) continue;
+                    lektorEx::push_back(outItems, item);
+                    //Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
+                }
+                out = outItems;
+                for (int i = 0; i < out.size(); ++i)
+                {
+                    auto item = out[i];
+                    Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+
+    float (*SpeedSelector_getMoveSpeed_orig)(SpeedSelector* thisptr, Character* character, MoveSpeed speed);
+    float SpeedSelector_getMoveSpeed_hook(SpeedSelector* thisptr, Character* character, MoveSpeed speed)
+    {
+        Platoon* squad = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        if (character && character->getPlatoon()) squad = character->getPlatoon()->me;
+        if (squad) settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        if (settings && settings->isEnabled())
+        {
+            if (!settings->getAutoMovementSpeed()) speed = character->getMovementSpeedOrders();
+        }
+        return SpeedSelector_getMoveSpeed_orig(thisptr, character, speed);
+    }
+
     void (*Package_WanderingTrader_activateAndSetup_orig)(AIPackage* thisptr);
     void Package_WanderingTrader_activateAndSetup_hook(AIPackage* thisptr)
     {
@@ -2422,7 +2572,7 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            // set mission town here!
+            // overwrite mission town here!
             //thisptr->missionTown;
         }
     }
@@ -2632,6 +2782,20 @@ namespace SquadAutonomy
                 // should returns 1.0 if medicalSystem->hunger is < 2.4 and 0.1 if < 1.2
                 // x10 it becomes 10.0 and 1.0
                 return score * 10.0;
+            }
+            else if (type == LOOT_THE_DEAD)
+            {
+                if (!settings->getDoLooting())
+                {
+                    return 0.0;
+                }
+            }
+            else if (type == PUT_LOOT_IN_STORAGE)
+            {
+                if (!settings->getPutLootsInStorage())
+                {
+                    return 0.0;
+                }
             }
             //Logger::log("End score", Logger::Info, true);
         }
@@ -2896,7 +3060,10 @@ namespace SquadAutonomy
                 *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332ef0;
                 *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336fc0;
                 *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x3370b0;
+                *(uintptr_t*)&SquadAutonomy::Task_FillMachine_putStolenItemsInStorage = baseAddr + 0x340d40;
+
                 *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32eb90;
+                *(uintptr_t*)&SquadAutonomy::SpeedSelector_getMoveSpeed = baseAddr + 0x3429d0;
                 *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E6A90;
                 //*(uintptr_t*)&SquadAutonomy::Task_Shopping_StartAction = baseAddr + 0x33a480;
                 //*(uintptr_t*)&SquadAutonomy::Task_Shopping_Update = baseAddr + 0x337cc0;
@@ -2925,7 +3092,10 @@ namespace SquadAutonomy
                 *(uintptr_t*)&SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition = baseAddr + 0x332a80;
                 *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_StartAction = baseAddr + 0x336b50;
                 *(uintptr_t*)&SquadAutonomy::Task_OpenDoor_Update = baseAddr + 0x336c40;
+                *(uintptr_t*)&SquadAutonomy::Task_FillMachine_putStolenItemsInStorage = baseAddr + 0x3408f0;
+
                 *(uintptr_t*)&SquadAutonomy::GOAPTaskMgr_createNewTask = baseAddr + 0x32E720;
+                *(uintptr_t*)&SquadAutonomy::SpeedSelector_getMoveSpeed = baseAddr + 0x342580;
                 *(uintptr_t*)&SquadAutonomy::MessageBoxManager_createMessageBox = baseAddr + 0x6E63A0;
                 //*(uintptr_t*)&SquadAutonomy::getTaskData = baseAddr + 0x519F20;
                 //*(uintptr_t*)&load = baseAddr + 0x47AD00;
@@ -2992,6 +3162,9 @@ namespace SquadAutonomy
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_addItem), &SquadAutonomy::_NV_addItem_hook, &SquadAutonomy::_NV_addItem_orig))
             ErrorLog("Could not add InventorySection::_NV_addItem hook!");
 
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllStolenItems), &SquadAutonomy::getAllStolenItems_hook, &SquadAutonomy::getAllStolenItems_orig))
+            ErrorLog("Could not add Inventory::getAllStolenItems hook!");
+
         /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllItemsOfType), &SquadAutonomy::getAllItemsOfType_hook, &SquadAutonomy::getAllItemsOfType_orig))
             ErrorLog("Could not add Inventory::getAllItemsOfType constructor hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::hasItemType), &SquadAutonomy::hasItemType_hook, &SquadAutonomy::hasItemType_orig))
@@ -3030,6 +3203,11 @@ namespace SquadAutonomy
             ErrorLog("Could not add AI::findKOIntruder_town hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findDisabledAlly), &SquadAutonomy::findDisabledAlly_hook, &SquadAutonomy::findDisabledAlly_orig))
             ErrorLog("Could not add AI::findDisabledAlly hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findResourceDestinationForMyLoot), &SquadAutonomy::findResourceDestinationForMyLoot_hook, &SquadAutonomy::findResourceDestinationForMyLoot_orig))
+            ErrorLog("Could not add AI::findResourceDestinationForMyLoot hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_FillMachine_putStolenItemsInStorage, &SquadAutonomy::Task_FillMachine_putStolenItemsInStorage_hook, &SquadAutonomy::Task_FillMachine_putStolenItemsInStorage_orig))
+            ErrorLog("Could not add Task_FillMachine_putStolenItemsInStorage hook!");
+
 
         /*
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_Shopping_StartAction, &SquadAutonomy::Task_Shopping_StartAction_hook, &SquadAutonomy::Task_Shopping_StartAction_orig))
@@ -3078,6 +3256,8 @@ namespace SquadAutonomy
             ErrorLog("Could not add Task_OpenDoor_StartAction hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_OpenDoor_Update, &SquadAutonomy::Task_OpenDoor_Update_hook, &SquadAutonomy::Task_OpenDoor_Update_orig))
             ErrorLog("Could not add Task_OpenDoor_Update hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::SpeedSelector_getMoveSpeed, &SquadAutonomy::SpeedSelector_getMoveSpeed_hook, &SquadAutonomy::SpeedSelector_getMoveSpeed_orig))
+            ErrorLog("Could not add SpeedSelector_getMoveSpeed hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::EscMenu_openedOtherWindows, &SquadAutonomy::EscMenu_openedOtherWindows_hook, &SquadAutonomy::EscMenu_openedOtherWindows_orig))
             ErrorLog("Could not add EscMenu hook!");
         /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(TaskPathfinder_Node_solve, &SquadAutonomy::TaskPathfinder_Node_solve_hook, &SquadAutonomy::TaskPathfinder_Node_solve_orig))

@@ -90,6 +90,8 @@ namespace SquadAutonomy
         class CombatOptions;
         class GuardOptions;
         class ShoppingOptions;
+        class InventoryOptions;
+        class TravelOptions;
 
         // Disable copy and move operations by declaring them private.
         // Reason: sub-options (_basic etc) store `this` pointer, executing copy/move will leave them with the wrong pointer.
@@ -105,8 +107,6 @@ namespace SquadAutonomy
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
 
-        DataPanelLine_SliderEditable* createOptionsSlider(std::string, float*, int, float, float, bool = false);
-
         DatapanelGUI* _panel;
         MyGUI::Widget* _floatingPanel;
         Platoon* _selectedSquad;
@@ -118,6 +118,8 @@ namespace SquadAutonomy
         std::unique_ptr<CombatOptions> _combat;
         std::unique_ptr<GuardOptions> _guard;
         std::unique_ptr<ShoppingOptions> _shopping;
+        std::unique_ptr<InventoryOptions> _inventory;
+        std::unique_ptr<TravelOptions> _travel;
 
     };
 
@@ -137,7 +139,7 @@ namespace SquadAutonomy
     public:
         BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        bool refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& settings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -150,6 +152,7 @@ namespace SquadAutonomy
         float healedThreshold;
         bool usePaidBeds;
         bool doSleep;
+        bool autoMovementSpeed;
     };
 
     class SquadAutonomyPanel::OptionsTab::LabourOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
@@ -157,7 +160,7 @@ namespace SquadAutonomy
     public:
         LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        bool refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& settings);
 
         void setAllTo(MyGUI::Widget*);
 
@@ -185,7 +188,7 @@ namespace SquadAutonomy
     public:
         CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        bool refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& settings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -203,7 +206,7 @@ namespace SquadAutonomy
     public:
         GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
 
-        bool refresh(SquadSettingsInfo& squadSettings);
+        bool refresh(SquadSettingsInfo& settings);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -218,8 +221,8 @@ namespace SquadAutonomy
     {
     public:
         ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
-        bool refresh(SquadSettingsInfo& squadSettings);
-        void updateItemFunctionList(DataPanelLine_DropBox* dropbox);
+        bool refresh(SquadSettingsInfo& settings);
+        //void updateItemFunctionList(DataPanelLine_DropBox* dropbox);
         void addBuyItem(DataPanelLine* line);
         void addSellItem(DataPanelLine* line);
         void clearBuyItem(DataPanelLine* line);
@@ -231,6 +234,39 @@ namespace SquadAutonomy
         bool doShopping;
         int itemFunctionListIndex;
         float amount;
+    };
+
+    class SquadAutonomyPanel::OptionsTab::InventoryOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
+    {
+    public:
+        InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+        bool refresh(SquadSettingsInfo& settings);
+        void addForbidItem(DataPanelLine* line);
+        void clearForbidItems(DataPanelLine* line);
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+
+    private:
+        bool doLooting;
+        bool putLootsInStorage;
+        bool ignoreEquipped;
+        int itemFunctionListIndex;
+    };
+
+    class SquadAutonomyPanel::OptionsTab::TravelOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
+    {
+    public:
+        TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+
+        bool refresh(SquadSettingsInfo& settings);
+        void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
+        void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+
+        void changeTownSearchText(DataPanelLine* line);
+        void updateTownList(const std::string& keyword = std::string());
+    private:
+        int townListIndex;
     };
 
 

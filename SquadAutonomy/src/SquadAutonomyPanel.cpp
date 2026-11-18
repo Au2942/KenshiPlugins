@@ -11,6 +11,7 @@
 #include <kenshi/util/OgreUnordered.h>
 
 #include <kenshi/Globals.h>
+#include <kenshi/SharedKing.h>
 #include <kenshi/gui/ForgottenGUI.h>
 #include <kenshi/gui/DatapanelGUI.h>
 #include <kenshi/gui/DataPanelLine.h>
@@ -20,6 +21,7 @@
 #include <kenshi/Town.h>
 #include <kenshi/Building/Building.h>
 #include <kenshi/GameWorld.h>
+#include <kenshi/ZoneManager.h>
 
 using namespace SquadAutonomy;
 
@@ -101,7 +103,6 @@ void SquadAutonomyPanel::OptionsTab::updateFloatingPanel(int category)
 
 void SquadAutonomyPanel::refresh()
 {
-    // TODO: make it so that
     /*
     for (int i = 0; i < _panel->tabs.size(); ++i)
     {
@@ -219,14 +220,17 @@ void SquadAutonomyPanel::MainTab::refresh()
     _panel->addSpace(_category, 0.25f);
     _panel->setLineSpacing(24.0);
 
-    auto editbox = _panel->setLineTextEditable(Localization::gettext("Search"), "", _category, true, false, MyGUI::Align::Left, 0.95f);
-    Utils::setCallback(*editbox, this, &MainTab::changeAIPackageSearchText);
+    auto textBox = Utils::addText(*_panel, _category, Localization::gettext("AI Package"), true, true, MyGUI::Align::Center);
 
-    auto dropbox = _panel->setLineDropBox(Localization::lineAIPackage, _category, &_selectedAIPackageIndex, false, 1.0f);
-    dropbox->w1->setSize(dropbox->w1->getWidth(), editbox->editBox->getHeight());
+    auto editBox = _panel->setLineTextEditable(Localization::gettext("Search"), "", _category, true, false, MyGUI::Align::Left, 0.95f);
+    Utils::setCallback(*editBox, this, &MainTab::changeAIPackageSearchText);
+
+    auto dropBox = Utils::addDropBox(*_panel, _category, Localization::lineAIPackageList, _selectedAIPackageIndex, false, 1.0f, false, false);
+    //auto dropBox = _panel->setLineDropBox(Localization::lineAIPackageList, _category, &_selectedAIPackageIndex, false, 1.0f);
+    //dropBox->w1->setSize(dropBox->w1->getWidth(), editBox->editBox->getHeight());
 
     updateAIPackageList();
-    editbox->getEditBox()->setSize(dropbox->listBox->getSize());
+    //editBox->getEditBox()->setSize(dropBox->listBox->getSize());
 
     _panel->addSpace(_category, 0.25f);
 
@@ -523,8 +527,8 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
         return;
     }
 
-    auto dropbox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineAIPackage, _category));
-    if (!dropbox)
+    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineAIPackageList, _category));
+    if (!dropBox)
     {
         return;
     }
@@ -536,7 +540,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
     }
 
     int selectVal = -1;
-    dropbox->clearValues();
+    dropBox->clearValues();
 
     SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
 
@@ -545,7 +549,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
         selectVal = currentSelected;
         for (uint32_t i = 0; i < settings.getAIPackageList()->size(); ++i)
         {
-            dropbox->addAValue(settings.getAIPackageList()->at(i)->name, i);
+            dropBox->addAValue(settings.getAIPackageList()->at(i)->name, i);
         }
     }
     else
@@ -563,7 +567,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
 
             if (nameUpper.find(keywordUpper) != std::string::npos)
             {
-                dropbox->addAValue(name, i);
+                dropBox->addAValue(name, i);
                 if (selectVal == -1 || i == currentSelected)
                 {
                     selectVal = i;
@@ -572,7 +576,7 @@ void SquadAutonomyPanel::MainTab::updateAIPackageList(const std::string& keyword
         }
     }
 
-    dropbox->setSelectedValue(selectVal);
+    dropBox->setSelectedValue(selectVal);
 }
 
 std::string SquadAutonomyPanel::MainTab::getBuildingName(const Building& building)
@@ -599,7 +603,9 @@ SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, int category) :
     _labour(new LabourOptions(*this, panel, category)),
     _combat(new CombatOptions(*this, panel, category)),
     _guard(new GuardOptions(*this, panel, category)),
-    _shopping(new ShoppingOptions(*this, panel, category))
+    _shopping(new ShoppingOptions(*this, panel, category)),
+    _inventory(new InventoryOptions(*this, panel, category)),
+    _travel(new TravelOptions(*this, panel, category))
 {
 }
 
@@ -656,9 +662,9 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     {
         _subCategory = 0;
     }
-    else if (_subCategory > 4)
+    else if (_subCategory > 6)
     {
-        _subCategory = 4;
+        _subCategory = 6;
     }
 
     dropBox->addAValue(Localization::gettext("Basic"), 0);
@@ -666,6 +672,8 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     dropBox->addAValue(Localization::gettext("Combat"), 2);
     dropBox->addAValue(Localization::gettext("Guard"), 3);
     dropBox->addAValue(Localization::gettext("Shopping"), 4);
+    dropBox->addAValue(Localization::gettext("Inventory"), 5);
+    dropBox->addAValue(Localization::gettext("Travel"), 6);
     dropBox->setSelectedValue(_subCategory);
 
     dropBox->getComboBox()->eventComboAccept += MyGUI::newDelegate(this, &SquadAutonomyPanel::OptionsTab::refreshCallback);
@@ -685,6 +693,12 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     case 4:
         hasSettings = _shopping->refresh(*settings);
         break;
+    case 5:
+        hasSettings = _inventory->refresh(*settings);
+        break;
+    case 6:
+        hasSettings = _travel->refresh(*settings);
+        break;
     default:
         hasSettings = _basic->refresh(*settings);
         break;
@@ -695,17 +709,17 @@ void SquadAutonomyPanel::OptionsTab::refresh()
     }
 }
 
-int SquadAutonomy::SquadAutonomyPanel::OptionsTab::getCategory() const
+int SquadAutonomyPanel::OptionsTab::getCategory() const
 {
     return _category;
 }
 
-MyGUI::Widget* SquadAutonomy::SquadAutonomyPanel::OptionsTab::getFloatingPanelPtr()
+MyGUI::Widget* SquadAutonomyPanel::OptionsTab::getFloatingPanelPtr()
 {
     return _floatingPanel;
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::setFloatingPanelPtr(MyGUI::Widget* ptr)
+void SquadAutonomyPanel::OptionsTab::setFloatingPanelPtr(MyGUI::Widget* ptr)
 {
     _floatingPanel = ptr;
 }
@@ -739,6 +753,8 @@ void SquadAutonomyPanel::OptionsTab::writeToSelectedSquadSettings(DataPanelLine*
     _combat->writeToSquadSettings(*squadSettings);
     _guard->writeToSquadSettings(*squadSettings);
     _shopping->writeToSquadSettings(*squadSettings);
+    _inventory->writeToSquadSettings(*squadSettings);
+    _travel->writeToSquadSettings(*squadSettings);
 }
 
 void SquadAutonomyPanel::OptionsTab::writeToSelectedSquadSettingsAndRefresh(DataPanelLine* line)
@@ -752,43 +768,15 @@ void SquadAutonomyPanel::OptionsTab::writeToSelectedSquadSettingsAndRefresh(Data
     refresh();
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
+void SquadAutonomyPanel::OptionsTab::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
     _basic->readFromSquadSettings(squadSettings);
     _labour->readFromSquadSettings(squadSettings);
     _combat->readFromSquadSettings(squadSettings);
     _guard->readFromSquadSettings(squadSettings);
     _shopping->readFromSquadSettings(squadSettings);
-}
-
-DataPanelLine_SliderEditable* SquadAutonomyPanel::OptionsTab::createOptionsSlider(std::string key, float* var, int precision, float min, float max, bool seperateTextLine)
-{
-    if (seperateTextLine)
-    {
-        Utils::addText(*_panel, _category, key);
-    }
-    auto slider = _panel->setLineSliderEditable(key, _category, !seperateTextLine, min, max, var);
-    slider->setPrecision(precision);
-    int wrapCount = slider->nameText->getTextSize().width / slider->nameText->getTextRegion().width;
-    int margin = slider->nameText->getHeight() - slider->nameText->getTextRegion().height;
-    /*DebugLog(slider->nameText->getCaption().asUTF8() + " textbox size : " + Ogre::StringConverter::toString(slider->nameText->getTextRegion().width) + " text size: " + Ogre::StringConverter::toString(slider->nameText->getTextSize().width)
-    + " wrapCount: " + Ogre::StringConverter::toString(wrapCount));*/
-    slider->nameText->setSize(slider->nameText->getWidth(), margin + slider->nameText->getTextRegion().height*(wrapCount+1));
-    slider->nameText->setEditWordWrap(true);
-    int nameTextMid = slider->nameText->getTop() + slider->nameText->getHeight() * 0.5;
-    slider->sliderBar->setPosition(slider->sliderBar->getLeft(), nameTextMid - slider->sliderBar->getHeight() * 0.5);
-    slider->valueEditBox->setPosition(slider->valueEditBox->getLeft(), nameTextMid - slider->valueEditBox->getHeight() * 0.5);
-    Utils::setCallback(*slider, this, &OptionsTab::writeToSelectedSquadSettings);
-    //slider->callback = MyGUI::newDelegate(this, &OptionsTab::writeToSelectedSquadSettings);
-    /*
-    slider->callback = new MyGUI::delegates::CMethodDelegate1<OptionsTab, DataPanelLine*>(
-        MyGUI::delegates::GetDelegateUnlink(this),
-        this,
-        &OptionsTab::writeToSelectedSquadSettings
-    );
-    */
-
-    return slider;
+    _inventory->readFromSquadSettings(squadSettings);
+    _travel->readFromSquadSettings(squadSettings);
 }
 
 
@@ -804,6 +792,7 @@ SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTa
     OptionsBase(optionsTab, panel, category),
     startWorkTime(0.0f),
     endWorkTime(24.0f),
+    autoMovementSpeed(false),
     doSleep(false),
     restUntilHealed(true),
     restThreshold(50.0),
@@ -820,10 +809,12 @@ bool SquadAutonomyPanel::OptionsTab::BasicOptions::refresh(SquadSettingsInfo& se
     auto endSlider = Utils::addSlider(*_panel, _category, Localization::gettext("End Work Time"), true, endWorkTime, 0.0f, 24.0f, 0);
     Utils::setCallback(*endSlider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
+    auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Auto Movement Speed"), autoMovementSpeed);
+    Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
     if (settings.hasTask(GO_HOME_AND_GO_TO_BED) || settings.hasTask(GO_HOME_AND_GO_TO_BED_SECURE))
     {
-        auto checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rest Until Healed When Wounded"), restUntilHealed);
+        checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rest Until Healed When Wounded"), restUntilHealed);
         Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
 
         if (restUntilHealed)
@@ -852,6 +843,7 @@ void SquadAutonomyPanel::OptionsTab::BasicOptions::readFromSquadSettings(const S
 {
     startWorkTime = squadSettings.getStartWorkTime();
     endWorkTime = squadSettings.getEndWorkTime();
+    autoMovementSpeed = squadSettings.getAutoMovementSpeed();
     doSleep = squadSettings.getDoSleep();
     restUntilHealed = squadSettings.getRestUntilHealed();
     restThreshold = squadSettings.getRestThreshold();
@@ -863,6 +855,7 @@ void SquadAutonomyPanel::OptionsTab::BasicOptions::writeToSquadSettings(SquadSet
 {
     squadSettings.setStartWorkTime(startWorkTime);
     squadSettings.setEndWorkTime(endWorkTime);
+    squadSettings.setAutoMovementSpeed(autoMovementSpeed);
     squadSettings.setDoSleep(doSleep);
     squadSettings.setRestUntilHealed(restUntilHealed);
     squadSettings.setRestThreshold(restThreshold);
@@ -902,23 +895,35 @@ bool SquadAutonomyPanel::OptionsTab::LabourOptions::refresh(SquadSettingsInfo& s
         Utils::addText(*_panel, _category, statsUsedLabel, false, false);
 
         const float maxPriority = 10.0;
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Science"), &science, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Labouring")+ " " + Localization::gettextMain("Mining"), &labouring, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Farming"), &farming, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Cooking"), &cooking, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Medic"), &medic, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Engineer"), &engineer, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Robotics"), &robotics, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Weapon Smithing"), &weaponSmith, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Armour Smithing"), &armourSmith, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettextMain("Crossbow Smithing"), &crossbowSmith, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettext("Automatic Machine"), &automaticMachine, 0, 0.0, maxPriority, false);
-        _optionsTab->createOptionsSlider(Localization::gettext("Other"), &other, 0, 0.0, maxPriority, false);
+        auto slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Science"), true, science, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Labouring")+ " " + Localization::gettextMain("Mining"), true, labouring, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Farming"), true, farming, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Cooking"), true, cooking, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Medic"), true, medic, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Engineer"), true, engineer, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Robotics"), true, robotics, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Weapon Smithing"), true, weaponSmith, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Armour Smithing"), true, armourSmith, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettextMain("Crossbow Smithing"), true, crossbowSmith, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettext("Automatic Machine"), true, automaticMachine, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        slider = Utils::addSlider(*_panel, _category, Localization::gettext("Other"), true, other, 0.0, maxPriority, 0, true);
+        Utils::setCallback(*slider, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
         _panel->addSpace(_category, 0.25);
 
         // set all button
-        auto slider = _panel->setLineSliderEditable(Localization::gettext("Set All"), _category, true, 0.0, maxPriority, &setAll); 
+        slider = _panel->setLineSliderEditable(Localization::gettext("Set All"), _category, true, 0.0, maxPriority, &setAll); 
         slider->setPrecision(0);
         auto editBox = slider->valueEditBox;
         auto valueEditPos = editBox->getPosition();
@@ -1025,10 +1030,10 @@ bool SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& s
     if (settings.hasTask(FIND_AND_RESCUE) || settings.hasTask(FIND_AND_RESCUE_LEADER) || settings.hasTask(FIND_AND_RESCUE_IF_THERES_BEDS))
     {
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rescue Downed Allies"), doRescue);
-        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
         if (doRescue)
         {
-            checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("\tOwn Squad Only"), rescueOwnSquadOnly);
+            checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Rescue Own Squad Only"), rescueOwnSquadOnly);
             Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
         }
         hasTask = true;
@@ -1182,60 +1187,65 @@ std::string getItemFunctionName(ItemFunction itemFunc)
     return name;
 }
 
+void updateItemFunctionList(DataPanelLine_DropBox* dropBox)
+{
+    //dropBox->addAValue(Localization::gettext("Anything"), ITEM_ANYTHING);
+    dropBox->addAValue(getItemFunctionName(ITEM_FIRSTAID), ITEM_FIRSTAID);
+    dropBox->addAValue(getItemFunctionName(ITEM_ROBOTREPAIR), ITEM_ROBOTREPAIR);
+    dropBox->addAValue(getItemFunctionName(ITEM_MEDRIGGING), ITEM_MEDRIGGING);
+    dropBox->addAValue(getItemFunctionName(ITEM_CONTAINER), ITEM_CONTAINER);
+    dropBox->addAValue(getItemFunctionName(ITEM_FOOD), ITEM_FOOD);
+    dropBox->addAValue(getItemFunctionName(ITEM_WEAPON), ITEM_WEAPON);
+    dropBox->addAValue(getItemFunctionName(ITEM_AMMO), ITEM_AMMO);
+    dropBox->addAValue(getItemFunctionName(ITEM_CLOTHING), ITEM_CLOTHING);
+    dropBox->addAValue(getItemFunctionName(ITEM_NARCOTIC), ITEM_NARCOTIC);
+    dropBox->addAValue(getItemFunctionName(ITEM_BLUEPRINT), ITEM_BLUEPRINT);
+    dropBox->addAValue(getItemFunctionName(ITEM_BOOK), ITEM_BOOK);
+    dropBox->addAValue(getItemFunctionName(ITEM_NO_FUNCTION), ITEM_NO_FUNCTION);
+}
+
 bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo& settings)
 {
     bool hasTask = false;
     if (settings.hasTask(SHOPPING))
     {
-        auto shoppingButton = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Shopping"), doShopping);
-        Utils::setCallback(*shoppingButton, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
-        auto dropBox = _panel->setLineDropBox(Localization::lineItemCategory, _category, &itemFunctionListIndex, false, 1.0f);
-        updateItemFunctionList(dropBox);
-        dropBox->setSelectedValue(itemFunctionListIndex);
-        Utils::addSlider(*_panel, _category, Localization::gettext("Min Amount"), true, amount, 0.0f, 50.0f, 0);
-        auto addBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Buy Item"));
-        Utils::setCallback(*addBuyItemButton, this, &OptionsTab::ShoppingOptions::addBuyItem);
-        auto addSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Sell Item"));
-        Utils::setCallback(*addSellItemButton, this, &OptionsTab::ShoppingOptions::addSellItem);
         hasTask = true;
-
-        auto buyItems = settings.getBuyItems();
-        Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), false, false);
-        auto clearBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buy Items"));
-        Utils::setCallback(*clearBuyItemButton, this, &OptionsTab::ShoppingOptions::clearBuyItem);
-
-        for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
+        auto shoppingBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Shopping"), doShopping);
+        Utils::setCallback(*shoppingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
+        if (doShopping)
         {
-            Utils::addText(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
-        }
-        auto sellItems = settings.getSellItems();
-        Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
-        auto clearSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Sell Item"));
-        Utils::setCallback(*clearSellItemButton, this, &OptionsTab::ShoppingOptions::clearSellItem);
-        for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
-        {
-            Utils::addText(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
+            auto dropBox = Utils::addDropBox(*_panel, _category, Localization::lineItemCategory, itemFunctionListIndex, false, 1.0f, false, true);
+            updateItemFunctionList(dropBox);
+            dropBox->setSelectedValue(itemFunctionListIndex);
+            Utils::addSlider(*_panel, _category, Localization::gettext("Min Amount"), true, amount, 0.0f, 50.0f, 0);
+            auto addBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Buy Item"));
+            Utils::setCallback(*addBuyItemButton, this, &OptionsTab::ShoppingOptions::addBuyItem);
+            auto addSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Sell Item"));
+            Utils::setCallback(*addSellItemButton, this, &OptionsTab::ShoppingOptions::addSellItem);
+
+            auto buyItems = settings.getBuyItems();
+            Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), false, false);
+            auto clearBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buy Items"));
+            Utils::setCallback(*clearBuyItemButton, this, &OptionsTab::ShoppingOptions::clearBuyItem);
+
+            for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
+            {
+                Utils::addText(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
+            }
+            auto sellItems = settings.getSellItems();
+            Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
+            auto clearSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Sell Item"));
+            Utils::setCallback(*clearSellItemButton, this, &OptionsTab::ShoppingOptions::clearSellItem);
+            for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
+            {
+                Utils::addText(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
+            }
         }
     }
     return hasTask;
 }
 
-void SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateItemFunctionList(DataPanelLine_DropBox* dropbox)
-{
-    //dropbox->addAValue(Localization::gettext("Anything"), ITEM_ANYTHING);
-    dropbox->addAValue(getItemFunctionName(ITEM_FIRSTAID), ITEM_FIRSTAID);
-    dropbox->addAValue(getItemFunctionName(ITEM_ROBOTREPAIR), ITEM_ROBOTREPAIR);
-    dropbox->addAValue(getItemFunctionName(ITEM_MEDRIGGING), ITEM_MEDRIGGING);
-    dropbox->addAValue(getItemFunctionName(ITEM_CONTAINER), ITEM_CONTAINER);
-    dropbox->addAValue(getItemFunctionName(ITEM_FOOD), ITEM_FOOD);
-    dropbox->addAValue(getItemFunctionName(ITEM_WEAPON), ITEM_WEAPON);
-    dropbox->addAValue(getItemFunctionName(ITEM_AMMO), ITEM_AMMO);
-    dropbox->addAValue(getItemFunctionName(ITEM_CLOTHING), ITEM_CLOTHING);
-    dropbox->addAValue(getItemFunctionName(ITEM_NARCOTIC), ITEM_NARCOTIC);
-    dropbox->addAValue(getItemFunctionName(ITEM_BLUEPRINT), ITEM_BLUEPRINT);
-    dropbox->addAValue(getItemFunctionName(ITEM_BOOK), ITEM_BOOK);
-    dropbox->addAValue(getItemFunctionName(ITEM_NO_FUNCTION), ITEM_NO_FUNCTION);
-}
+
 
 void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* line)
 {
@@ -1243,8 +1253,8 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* 
     {
         return;
     }
-    auto dropbox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
-    if (!dropbox)
+    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
+    if (!dropBox)
     {
         return;
     }
@@ -1257,7 +1267,7 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* 
             ou->showPlayerAMessage(Localization::gettext("Buy amount must be higher than 0"), false);
             return;
         }
-        ItemFunction itemFunction = static_cast<ItemFunction>(dropbox->getSelectedValue());
+        ItemFunction itemFunction = static_cast<ItemFunction>(dropBox->getSelectedValue());
         auto sellItems = squadSettings->getSellItems();
         int buyAmount = (int)amount;
         if (sellItems.find(itemFunction) != sellItems.end())
@@ -1271,14 +1281,14 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* 
     _optionsTab->refresh();
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::addSellItem(DataPanelLine* line)
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addSellItem(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
     {
         return;
     }
-    auto dropbox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
-    if (!dropbox)
+    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
+    if (!dropBox)
     {
         return;
     }
@@ -1286,7 +1296,7 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::addSellItem
 
     if (squadSettings)
     {
-        ItemFunction itemFunction = static_cast<ItemFunction>(dropbox->getSelectedValue());
+        ItemFunction itemFunction = static_cast<ItemFunction>(dropBox->getSelectedValue());
         auto buyItems = squadSettings->getBuyItems();
         int sellAmount = (int)amount;
         if (buyItems.find(itemFunction) != buyItems.end())
@@ -1317,7 +1327,7 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearBuyItem(DataPanelLine
     _optionsTab->refresh();
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearSellItem(DataPanelLine* line)
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearSellItem(DataPanelLine* line)
 {
     if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
     {
@@ -1335,12 +1345,232 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearSellIt
     _optionsTab->refresh();
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
     doShopping = squadSettings.getDoShopping();
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
 {
     squadSettings.setDoShopping(doShopping);
+}
+
+SquadAutonomyPanel::OptionsTab::InventoryOptions::InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category) :
+    OptionsBase(optionsTab, panel, category),
+    doLooting(true),
+    putLootsInStorage(true),
+    ignoreEquipped(true),
+    itemFunctionListIndex(ITEM_NO_FUNCTION)
+{
+}
+
+bool SquadAutonomyPanel::OptionsTab::InventoryOptions::refresh(SquadSettingsInfo& settings)
+{
+    bool hasTask = false;
+    if (settings.hasTask(LOOT_THE_DEAD))
+    {
+        hasTask = true;
+        auto lootingBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Looting"), doLooting);
+        Utils::setCallback(*lootingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+    }
+    if (settings.hasTask(PUT_LOOT_IN_STORAGE))
+    {
+        hasTask = true;
+        auto putLootsInStorageBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Put loots in storage"), putLootsInStorage);
+        Utils::setCallback(*putLootsInStorageBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
+        if (putLootsInStorage)
+        {
+            auto ignoreEquippedBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Ignore equipped"), ignoreEquipped);
+            Utils::setCallback(*ignoreEquippedBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+
+            //auto dropBox = _panel->setLineDropBox(Localization::lineItemCategory, _category, &itemFunctionListIndex, false, 1.0f);
+            auto dropBox = Utils::addDropBox(*_panel, _category, Localization::lineItemCategory, itemFunctionListIndex, false, 1.0f, false, true);
+            updateItemFunctionList(dropBox);
+            dropBox->setSelectedValue(itemFunctionListIndex);
+            auto addForbidItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Forbid Item"));
+            Utils::setCallback(*addForbidItemButton, this, &OptionsTab::InventoryOptions::addForbidItem);
+            auto clearForbidItemsButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Forbid Items"));
+            Utils::setCallback(*clearForbidItemsButton, this, &OptionsTab::InventoryOptions::clearForbidItems);
+            auto forbidItems = settings.getForbidItems();
+            for (auto iter = forbidItems.begin(); iter != forbidItems.end(); ++iter)
+            {
+                Utils::addText(*_panel, _category, getItemFunctionName(*iter), true, true, MyGUI::Align::Center);
+            }
+        }
+    }
+    return hasTask;
+}
+
+void SquadAutonomyPanel::OptionsTab::InventoryOptions::addForbidItem(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineItemCategory, _category));
+    if (!dropBox)
+    {
+        return;
+    }
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+
+    if (squadSettings)
+    {
+        ItemFunction itemFunction = static_cast<ItemFunction>(dropBox->getSelectedValue());
+        squadSettings->addForbidItem(itemFunction);
+    }
+
+    _optionsTab->refresh();
+}
+
+void SquadAutonomyPanel::OptionsTab::InventoryOptions::clearForbidItems(DataPanelLine* line)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+
+    if (squadSettings)
+    {
+        squadSettings->clearForbidItems();
+    }
+
+    _optionsTab->refresh();
+}
+
+void SquadAutonomyPanel::OptionsTab::InventoryOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
+{
+    doLooting = squadSettings.getDoLooting();
+    putLootsInStorage = squadSettings.getPutLootsInStorage();
+    ignoreEquipped = squadSettings.getIgnoreEquipped();
+}
+
+void SquadAutonomyPanel::OptionsTab::InventoryOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
+{
+    squadSettings.setDoLooting(doLooting);
+    squadSettings.setPutLootsInStorage(putLootsInStorage);
+    squadSettings.setIgnoreEquipped(ignoreEquipped);
+}
+
+SquadAutonomyPanel::OptionsTab::TravelOptions::TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
+    OptionsBase(optionsTab, panel, category),
+    townListIndex(0)
+{
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::changeTownSearchText(DataPanelLine* line)
+{
+    if (!line || line->classType != DataPanelLine::DPL_TEXT_EDIT)
+    {
+        return;
+    }
+
+    std::string keyword = dynamic_cast<DataPanelLine_TextEditable*>(line)->editBox->getOnlyText();
+
+    updateTownList(keyword);
+}
+
+void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::string& keyword)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized)
+    {
+        return;
+    }
+    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineTownList, _category));
+    if (!dropBox)
+    {
+        return;
+    }
+    // sync townlist in settings
+    SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
+
+    int currentSelected = townListIndex;
+    if (currentSelected < 0)
+    {
+        currentSelected = 0;
+    }
+
+    int selectVal = -1;
+    dropBox->clearValues();
+
+    auto settingsTowns = settings.getTownBaseList();
+    settingsTowns->clear();
+    lektor<RootObject*> townObjects = shou->townList->getAllTowns();
+
+    std::vector<TownBase*> towns;
+    for (auto iter = townObjects.begin(); iter != townObjects.end(); ++iter)
+    {
+        TownBase* town = dynamic_cast<TownBase*>(*iter);
+        if (!town) continue;
+        if (!town->isDiscovered()) continue;
+        towns.push_back(town);
+    }
+    //sort alphabetically
+    std::sort(towns.begin(), towns.end(), [](TownBase* a, TownBase* b)
+    {
+        return a->getKnownName() < b->getKnownName();
+    });
+
+    townObjects.clear();
+
+    int count = 0;
+
+    if (keyword.empty())
+    {
+        selectVal = currentSelected;
+        for (auto iter = towns.begin(); iter != towns.end(); ++iter)
+        {
+            TownBase* town = dynamic_cast<TownBase*>(*iter);
+            dropBox->addAValue(town->getKnownName(), count);
+            settingsTowns->push_back(town);
+            count++;
+        }
+    }
+    else
+    {
+        std::string keywordUpper = keyword;
+        std::transform(keywordUpper.begin(), keywordUpper.end(), keywordUpper.begin(), [](char c) { return std::toupper(c); });
+        for (auto iter = towns.begin(); iter != towns.end(); ++iter)
+        {
+            TownBase* town = dynamic_cast<TownBase*>(*iter);
+            const std::string& name = town->getKnownName();
+            std::string nameUpper = name;
+            std::transform(nameUpper.begin(), nameUpper.end(), nameUpper.begin(), [](char c) { return std::toupper(c); });
+            if (nameUpper.find(keywordUpper) != std::string::npos)
+            {
+                dropBox->addAValue(name, count);
+                settingsTowns->push_back(town);
+                if (selectVal == -1 || count == currentSelected)
+                {
+                    selectVal = count;
+                }
+                count++;
+            }
+        }
+    }
+
+    dropBox->setSelectedValue(selectVal);
+}
+
+bool SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(SquadSettingsInfo& settings)
+{
+    bool hasSignal = false;
+    if (settings.hasSignal(SIG_WANDERING_TOWN_TO_TOWN))
+    {
+        hasSignal = true;
+        auto editBox = _panel->setLineTextEditable(Localization::gettext("Search"), "", _category, true, false, MyGUI::Align::Left, 0.95f);
+        Utils::setCallback(*editBox, this, &TravelOptions::changeTownSearchText);
+        auto dropBox = _panel->setLineDropBox(Localization::lineTownList, _category, &townListIndex, false, 1.0f);
+        updateTownList();
+    }
+    return hasSignal;
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
+{
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
+{
 }

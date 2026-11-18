@@ -7,7 +7,8 @@ namespace SquadAutonomy
 	std::string(boost::locale::message::* messageStr)() const = nullptr;
 	std::string(boost::locale::format::* formatStr)(const std::locale&) const = nullptr;
 
-	std::string Localization::lineAIPackage = "";
+	std::string Localization::lineAIPackageList = "";
+	std::string Localization::lineTownList = "";
 	std::string Localization::lineItemCategory = "";
 	std::string Localization::lineInvalidSquad = "";
 	std::string Localization::lineSquadAutonomy = "";
@@ -35,7 +36,8 @@ namespace SquadAutonomy
 
 	void Localization::initLine()
 	{
-		lineAIPackage = Localization::gettext("AI package");
+		lineAIPackageList = Localization::gettext("AI Package List");
+		lineTownList = Localization::gettext("Town");
 		lineItemCategory = Localization::gettext("Item Category");
 		lineInvalidSquad = Localization::gettext("No squad selected/invalid squad");
 		lineSquadAutonomy = Localization::gettext("Squad Autonomy");

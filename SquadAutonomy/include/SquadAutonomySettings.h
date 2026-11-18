@@ -24,6 +24,7 @@ namespace SquadAutonomy
         void clearPackages();
         const std::map<int, std::vector<GameData*>>& getSquadPackages();
         bool hasTask(TaskType);
+        bool hasSignal(BlackboardSignalFunctions key);
         bool enableAutonomy(bool enable, bool endAction = true);
         void updateSquadPackages(bool endAction = true);
         Building* getBuilding(bool home);
@@ -33,20 +34,22 @@ namespace SquadAutonomy
         bool hasHome();
 
         float getStartWorkTime() const;
-        float getEndWorkTime() const;
-        bool getDoSleep() const;
-        bool getRestUntilHealed() const;
-        float getRestThreshold() const;
-        float getHealedThreshold() const;
-        float getRestThresholdP() const;
-        float getHealedThresholdP() const;
-        bool getUsePaidBeds() const;
         void setStartWorkTime(float time);
+        float getEndWorkTime() const;
         void setEndWorkTime(float time);
+        bool getAutoMovementSpeed() const;
+        void setAutoMovementSpeed(bool val);
+        bool getDoSleep() const;
         void setDoSleep(bool val);
+        bool getRestUntilHealed() const;
         void setRestUntilHealed(bool val);
+        float getRestThreshold() const;
         void setRestThreshold(float val);
+        float getRestThresholdP() const;
+        float getHealedThreshold() const;
+        float getHealedThresholdP() const;
         void setHealedThreshold(float val);
+        bool getUsePaidBeds() const;
         void setUsePaidBeds(bool val);
         bool isRestTime();
         
@@ -105,6 +108,25 @@ namespace SquadAutonomy
         void setSellItems(std::unordered_map<ItemFunction, int> val);
         void addSellItem(ItemFunction itemFunction, int quantity);
 
+        bool getDoLooting() const;
+        void setDoLooting(bool val);
+        bool getPutLootsInStorage() const;
+        void setPutLootsInStorage(bool val);
+        bool getIgnoreEquipped() const;
+        void setIgnoreEquipped(bool val);
+        std::unordered_set<ItemFunction> getForbidItems() const;
+        bool hasForbidItem(ItemFunction itemFunction);
+        void addForbidItem(ItemFunction itemFunction);
+        void clearForbidItems();
+
+        void addTargetTown(TownBase* town);
+        void clearTargetTown();
+        TownBase* getCurrentTargetTown(bool moveToNext = true);
+        void setTargetTownIndex(int val);
+        int getTargetTownIndex() const;
+        std::vector<TownBase*> getTargetTowns() const;
+        std::vector<TownBase*>* getTargetTownsPtr();
+
     private:
         static hand parseHandSetting(const std::string& dataLine);
         static Building* parseBuildingSetting(const std::string& dataLine);
@@ -115,15 +137,18 @@ namespace SquadAutonomy
         static bool writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name);
         static bool writeBuildingSettingToStream(std::ostream& stream, const Building* building, const std::string& tag);
         static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, int>);
+        static void writeForbidItemsToStream(std::ostream& stream, const std::unordered_set<ItemFunction> forbidItems);
         void writeSquadPackagesToStream(std::ostream& stream) const;
         void writeSquadOptionsToStream(std::ostream& stream) const;
         void addTasksFromPackage(GameData* data);
         void addTasksFromGoals(GameData* data, lektor<GameData*>& goalDatas);
+        void addSignalFromPackage(GameData* data);
         Platoon* _squad;
         PlayerInterface* _pi;
         bool _enabled;
         std::map<int, std::vector<GameData*>> _squadPackages;
         std::unordered_set<TaskType> _squadTasks;
+        std::unordered_set<BlackboardSignalFunctions> _squadSignals;
         //TownBase* _homeTown;
         Building* _homeBuilding;
         //TownBase* _workTown;
@@ -131,6 +156,7 @@ namespace SquadAutonomy
         // Basic
         float _startWorkTime;
         float _endWorkTime;
+        bool _autoMovementSpeed;
         bool _restUntilHealed;
         float _restThreshold;
         float _healedThreshold;
@@ -161,8 +187,22 @@ namespace SquadAutonomy
         bool _closeGate;
         // Shopping
         bool _doShopping;
+        struct ShoppingItem
+        {
+            ItemFunction _itemFunction;
+            int _amount;
+            std::vector<TownBase*> _townToTrade;
+        };
         std::unordered_map<ItemFunction, int> _buyItems;
         std::unordered_map<ItemFunction, int> _sellItems;
+        // Inventory
+        bool _doLooting;
+        bool _putLootsInStorage;
+        bool _ignoreEquipped;
+        std::unordered_set<ItemFunction> _forbidItems;
+        // Travel
+        std::vector<TownBase*> _targetTowns;
+        int _targetTownIndex;
     };
 
     class SquadAutonomySettings
@@ -176,6 +216,7 @@ namespace SquadAutonomy
         SquadSettingsInfo* getSquadSettings(Platoon*, bool createNew = false);
         std::vector<GameData*>* getAIPackageList();
         std::vector<GameData*>* getSquadTemplate();
+        std::vector<TownBase*>* getTownBaseList();
         void removeSquadSettings(Platoon*);
 
     private:
@@ -190,6 +231,7 @@ namespace SquadAutonomy
 
         std::vector<GameData*> _AIPackageList;
         std::vector<GameData*> _squadTemplateList;
+        std::vector<TownBase*> _townBaseList;
         void _initGameData();
     };
 

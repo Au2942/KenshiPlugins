@@ -175,6 +175,10 @@ std::vector<GameData*>* SquadAutonomySettings::getSquadTemplate()
 {
     return &_squadTemplateList;
 }
+std::vector<TownBase*>* SquadAutonomy::SquadAutonomySettings::getTownBaseList()
+{
+    return &_townBaseList;
+}
 void SquadAutonomySettings::removeSquadSettings(Platoon* squad)
 {
     int index = -1;
@@ -201,6 +205,7 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _workBuilding(nullptr),
     _startWorkTime(0.0),
     _endWorkTime(24.0),
+    _autoMovementSpeed(false),
     _doSleep(false),
     _usePaidBeds(false),
     _restUntilHealed(true),
@@ -227,8 +232,9 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _stayInsideGate(false),
     _closeGate(false),
     _doShopping(false),
-    _buyItems(),
-    _sellItems()
+    _doLooting(false),
+    _putLootsInStorage(false),
+    _ignoreEquipped(true)
 {
     Faction* faction = squad.getFaction();
     if (faction)
@@ -396,6 +402,7 @@ void SquadSettingsInfo::addPackage(int priority, GameData* data)
     }
 
     addTasksFromPackage(data);
+    addSignalFromPackage(data);
 }
 
 void SquadSettingsInfo::addTasksFromPackage(GameData* data)
@@ -428,6 +435,12 @@ void SquadSettingsInfo::addTasksFromGoals(GameData* data, lektor<GameData*> &goa
     }
 }
 
+void SquadSettingsInfo::addSignalFromPackage(GameData* data)
+{
+    _squadSignals.insert(static_cast<BlackboardSignalFunctions>(data->idata["signal func"]));
+    Logger::log("Add signal: " + sc::toString(data->idata["signal func"]));
+}
+
 void SquadSettingsInfo::setPackages(const std::map<int, std::vector<GameData*>>& packages)
 {
     _squadPackages = packages;
@@ -436,6 +449,7 @@ void SquadSettingsInfo::clearPackages()
 {
     _squadPackages.clear();
     _squadTasks.clear();
+    _squadSignals.clear();
 }
 const std::map<int, std::vector<GameData*>>& SquadSettingsInfo::getSquadPackages()
 {
@@ -446,6 +460,13 @@ bool SquadAutonomy::SquadSettingsInfo::hasTask(TaskType key)
 {
     auto it = _squadTasks.find(key);
     if (it != _squadTasks.end()) return true;
+    else return false;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::hasSignal(BlackboardSignalFunctions key)
+{
+    auto it = _squadSignals.find(key);
+    if (it != _squadSignals.end()) return true;
     else return false;
 }
 
@@ -598,62 +619,71 @@ void SquadSettingsInfo::setDoSleep(bool val)
 {
     _doSleep = val;
 }
-bool SquadSettingsInfo::getRestUntilHealed() const
-{
-    return _restUntilHealed;
-}
-float SquadAutonomy::SquadSettingsInfo::getRestThreshold() const
-{
-    return _restThreshold;
-}
-float SquadSettingsInfo::getHealedThreshold() const
-{
-    return _healedThreshold;
-}
-float SquadAutonomy::SquadSettingsInfo::getRestThresholdP() const
-{
-    return _restThreshold/100.0;
-}
-float SquadSettingsInfo::getHealedThresholdP() const
-{
-    return _healedThreshold/100.0;
-}
-bool SquadSettingsInfo::getUsePaidBeds() const
-{
-    return _usePaidBeds;
-}
 float SquadSettingsInfo::getStartWorkTime() const
 {
     return _startWorkTime;
-}
-float SquadSettingsInfo::getEndWorkTime() const
-{
-    return _endWorkTime;
 }
 void SquadSettingsInfo::setStartWorkTime(float time)
 {
     _startWorkTime = time;
 }
+float SquadSettingsInfo::getEndWorkTime() const
+{
+    return _endWorkTime;
+}
 void SquadSettingsInfo::setEndWorkTime(float time)
 {
     _endWorkTime = time;
+}
+bool SquadAutonomy::SquadSettingsInfo::getAutoMovementSpeed() const
+{
+    return _autoMovementSpeed;
+}
+void SquadAutonomy::SquadSettingsInfo::setAutoMovementSpeed(bool val)
+{
+    _autoMovementSpeed = val;
+}
+bool SquadSettingsInfo::getRestUntilHealed() const
+{
+    return _restUntilHealed;
 }
 void SquadSettingsInfo::setRestUntilHealed(bool val)
 {
     _restUntilHealed = val;
 }
+float SquadAutonomy::SquadSettingsInfo::getRestThreshold() const
+{
+    return _restThreshold;
+}
+float SquadAutonomy::SquadSettingsInfo::getRestThresholdP() const
+{
+    return _restThreshold/100.0;
+}
 void SquadAutonomy::SquadSettingsInfo::setRestThreshold(float val)
 {
     _restThreshold = val;
+}
+float SquadSettingsInfo::getHealedThreshold() const
+{
+    return _healedThreshold;
+}
+float SquadSettingsInfo::getHealedThresholdP() const
+{
+    return _healedThreshold/100.0;
 }
 void SquadSettingsInfo::setHealedThreshold(float val)
 {
     _healedThreshold = val;
 }
+bool SquadSettingsInfo::getUsePaidBeds() const
+{
+    return _usePaidBeds;
+}
 void SquadSettingsInfo::setUsePaidBeds(bool val)
 {
     _usePaidBeds = val;
 }
+
 bool SquadSettingsInfo::isRestTime()
 {
     //if (!_doSleep) return false;
@@ -968,6 +998,95 @@ void SquadAutonomy::SquadSettingsInfo::addSellItem(ItemFunction itemFunction, in
     _sellItems[itemFunction] = quantity;
 }
 
+bool SquadAutonomy::SquadSettingsInfo::getDoLooting() const
+{
+    return _doLooting;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setDoLooting(bool val)
+{
+    _doLooting = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getPutLootsInStorage() const
+{
+    return _putLootsInStorage;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setPutLootsInStorage(bool val)
+{
+    _putLootsInStorage = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getIgnoreEquipped() const
+{
+    return _ignoreEquipped;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setIgnoreEquipped(bool val)
+{
+    _ignoreEquipped = val;
+}
+
+std::unordered_set<ItemFunction> SquadAutonomy::SquadSettingsInfo::getForbidItems() const
+{
+    return _forbidItems;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::hasForbidItem(ItemFunction itemFunction)
+{
+    if (_forbidItems.find(itemFunction) != _forbidItems.end())
+    {
+        return true;
+    }
+    return false;
+}
+
+void SquadAutonomy::SquadSettingsInfo::addForbidItem(ItemFunction itemFunction)
+{
+    _forbidItems.insert(itemFunction);
+}
+
+void SquadAutonomy::SquadSettingsInfo::clearForbidItems()
+{
+    _forbidItems.clear();
+}
+
+void SquadAutonomy::SquadSettingsInfo::addTargetTown(TownBase* town)
+{
+    _targetTowns.push_back(town);
+}
+
+void SquadAutonomy::SquadSettingsInfo::clearTargetTown()
+{
+    _targetTowns.clear();
+}
+
+TownBase* SquadAutonomy::SquadSettingsInfo::getCurrentTargetTown(bool moveToNext)
+{
+    return _targetTowns[_targetTownIndex];
+}
+
+void SquadAutonomy::SquadSettingsInfo::setTargetTownIndex(int val)
+{
+    _targetTownIndex = val;
+}
+
+int SquadAutonomy::SquadSettingsInfo::getTargetTownIndex() const
+{
+    return _targetTownIndex;
+}
+
+std::vector<TownBase*> SquadAutonomy::SquadSettingsInfo::getTargetTowns() const
+{
+    return _targetTowns;
+}
+
+std::vector<TownBase*>* SquadAutonomy::SquadSettingsInfo::getTargetTownsPtr()
+{
+    return &_targetTowns;
+}
+
 hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)
 {
     size_t start = dataLine.rfind('>');
@@ -1064,7 +1183,7 @@ void SquadSettingsInfo::readSquadPackagesFromStream(std::istream& stream)
             [&packageName](GameData* packageData){ return packageName == packageData->name; }
         );
 
-        addPackage(priority, *packageInListIt);
+        if (*packageInListIt) addPackage(priority, *packageInListIt);
 
     }
 }
@@ -1094,6 +1213,11 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
         if (type == "EndWorkTime")
         {
             SettingsUtils::parseFloatSetting(dataLine, _endWorkTime);
+            continue;
+        }
+        if (type == "OverwriteSpeed")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _autoMovementSpeed);
             continue;
         }
         if (type == "RestUntilHealed")
@@ -1236,6 +1360,25 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
             _sellItems = parseTradeItems(dataLine);
             continue;
         }
+        if (type == "DoLooting")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _doLooting);
+            continue;
+        }
+        if (type == "PutLootsInStorage")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _putLootsInStorage);
+            continue;
+        }
+        if (type == "IgnoreEquipped")
+        {
+            SettingsUtils::parseBoolSetting(dataLine, _ignoreEquipped);
+            continue;
+        }
+        if (type == "ForbidItems")
+        {
+            continue;
+        }
         if (type == "EndOptions")
         {
             break;
@@ -1305,12 +1448,22 @@ void SquadSettingsInfo::writeTradeItemsToStream(std::ostream& stream, const std:
     stream << '\n';
 }
 
+void SquadSettingsInfo::writeForbidItemsToStream(std::ostream& stream, const std::unordered_set<ItemFunction> forbidItems)
+{
+    for (auto iter = forbidItems.begin(); iter != forbidItems.end(); ++iter)
+    {
+        stream << static_cast<int>(*iter) << " ";
+    }
+    stream << '\n';
+}
+
 void SquadSettingsInfo::writeSquadOptionsToStream(std::ostream &stream) const
 {
     stream
         << "\tOptions:" << '\n'
         << "\t\tStartWorkTime: " << _startWorkTime << '\n'
         << "\t\tEndWorkTime: " << _endWorkTime << '\n'
+        << "\t\tOverwriteSpeed: " << _autoMovementSpeed << '\n'
         << "\t\tRestUntilHealed: " << _restUntilHealed << '\n'
         << "\t\t\tRestThreshold: " << _restThreshold << '\n'
         << "\t\t\tHealedThreshold: " << _healedThreshold << '\n'
@@ -1341,11 +1494,17 @@ void SquadSettingsInfo::writeSquadOptionsToStream(std::ostream &stream) const
         << "\t\tCloseGate: " << _closeGate << '\n'
 
         << "\t\tDoShopping: " << _doShopping << '\n';
-
     stream << "\t\tBuyItems: ";
     writeTradeItemsToStream(stream, _buyItems);
     stream << "\t\tSellItems: ";
     writeTradeItemsToStream(stream, _sellItems);
+
+    stream
+        << "\t\tDoLooting: " << _doLooting << '\n'
+        << "\t\tPutLootsInStorage: " << _putLootsInStorage << '\n'
+        << "\t\tIgnoreEquipped: " << _ignoreEquipped << '\n';
+    stream << "\t\tForbidItems: ";
+    writeForbidItemsToStream(stream, _forbidItems);
 
     stream << "\tEndOptions:" << '\n';
 }
