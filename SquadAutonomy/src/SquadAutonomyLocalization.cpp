@@ -13,6 +13,7 @@ namespace SquadAutonomy
 	std::string Localization::lineInvalidSquad = "";
 	std::string Localization::lineSquadAutonomy = "";
 	std::string Localization::lineSquadAutonomyTitle = "";
+	std::string Localization::lineSquadAutonomyPopup = "";
 	void Localization::init(unsigned int platform, const std::string& version, uintptr_t baseAddr)
 	{
 		if (version == "1.0.65")
@@ -42,6 +43,7 @@ namespace SquadAutonomy
 		lineInvalidSquad = Localization::gettext("No squad selected/invalid squad");
 		lineSquadAutonomy = Localization::gettext("Squad Autonomy");
 		lineSquadAutonomyTitle = Localization::gettext("Squad Autonomy:");
+		lineSquadAutonomyPopup = Localization::gettext("Squad Autonomy Popup");
 	}
 
 	std::string Localization::gettextMain(const char* id)

@@ -97,6 +97,13 @@ namespace SquadAutonomy
         bool getCloseGate() const;
         void setCloseGate(bool val);
 
+        struct ShoppingItem
+        {
+            ItemFunction _itemFunction;
+            int _amount;
+            bool _onlyGoodDeal;
+            std::vector<TownBase*> _townToTrade;
+        };
         bool getDoShopping() const;
         void setDoShopping(bool val);
         std::unordered_map<ItemFunction, int> getBuyItems() const;
@@ -137,6 +144,7 @@ namespace SquadAutonomy
         static bool writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name);
         static bool writeBuildingSettingToStream(std::ostream& stream, const Building* building, const std::string& tag);
         static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, int>);
+        static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_set<ShoppingItem>);
         static void writeForbidItemsToStream(std::ostream& stream, const std::unordered_set<ItemFunction> forbidItems);
         void writeSquadPackagesToStream(std::ostream& stream) const;
         void writeSquadOptionsToStream(std::ostream& stream) const;
@@ -187,14 +195,11 @@ namespace SquadAutonomy
         bool _closeGate;
         // Shopping
         bool _doShopping;
-        struct ShoppingItem
-        {
-            ItemFunction _itemFunction;
-            int _amount;
-            std::vector<TownBase*> _townToTrade;
-        };
-        std::unordered_map<ItemFunction, int> _buyItems;
-        std::unordered_map<ItemFunction, int> _sellItems;
+        
+        std::unordered_set<ShoppingItem> _buyItems;
+        std::unordered_set<ShoppingItem> _sellItems;
+        //std::unordered_map<ItemFunction, int> _buyItems;
+        //std::unordered_map<ItemFunction, int> _sellItems;
         // Inventory
         bool _doLooting;
         bool _putLootsInStorage;

@@ -14,14 +14,17 @@ namespace SquadAutonomy
         ~SquadAutonomyPanel();
 
         void create();
+        void createPopup();
         void refresh();
         void onTabChanged(DatapanelGUI* panel, int category);
+        void onPanelClosed(MyGUI::Widget* sender, const std::string& name);
 
         void show();
         void hide();
         bool isVisible();
 
         void selectSquad(Platoon& selectedSquad);
+        DatapanelGUI* getPopupPanel();
 
     private:
         class MainTab;
@@ -31,6 +34,7 @@ namespace SquadAutonomy
 
         Platoon* _selectedSquad;
         DatapanelGUI* _panel;
+        DatapanelGUI* _popupPanel;
 
         std::unique_ptr<MainTab> _mainTab;
         std::unique_ptr<OptionsTab> _optionsTab;
@@ -73,7 +77,7 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab
     {
     public:
-        OptionsTab(DatapanelGUI& panel, int category);
+        OptionsTab(DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         void refresh();
 
@@ -108,6 +112,7 @@ namespace SquadAutonomy
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
 
         DatapanelGUI* _panel;
+        DatapanelGUI* _popupPanel;
         MyGUI::Widget* _floatingPanel;
         Platoon* _selectedSquad;
         int _category;
@@ -126,18 +131,19 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        OptionsBase(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        OptionsBase(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
     protected:
         OptionsTab* _optionsTab;
         DatapanelGUI* _panel;
+        DatapanelGUI* _popupPanel;
         int _category;
     };
 
     class SquadAutonomyPanel::OptionsTab::BasicOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         bool refresh(SquadSettingsInfo& settings);
 
@@ -158,7 +164,7 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::LabourOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         bool refresh(SquadSettingsInfo& settings);
 
@@ -186,7 +192,7 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::CombatOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         bool refresh(SquadSettingsInfo& settings);
 
@@ -204,7 +210,7 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::GuardOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         bool refresh(SquadSettingsInfo& settings);
 
@@ -220,13 +226,15 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::ShoppingOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
         bool refresh(SquadSettingsInfo& settings);
         //void updateItemFunctionList(DataPanelLine_DropBox* dropbox);
         void addBuyItem(DataPanelLine* line);
         void addSellItem(DataPanelLine* line);
         void clearBuyItem(DataPanelLine* line);
         void clearSellItem(DataPanelLine* line);
+
+        void openShopItemDetail(MyGUI::Widget* sender);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -239,7 +247,7 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::InventoryOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         bool refresh(SquadSettingsInfo& settings);
         void addForbidItem(DataPanelLine* line);
@@ -257,7 +265,7 @@ namespace SquadAutonomy
     class SquadAutonomyPanel::OptionsTab::TravelOptions : public SquadAutonomyPanel::OptionsTab::OptionsBase
     {
     public:
-        TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category);
+        TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category);
 
         bool refresh(SquadSettingsInfo& settings);
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);

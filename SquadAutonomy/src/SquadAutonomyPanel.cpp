@@ -21,7 +21,7 @@
 #include <kenshi/Town.h>
 #include <kenshi/Building/Building.h>
 #include <kenshi/GameWorld.h>
-#include <kenshi/ZoneManager.h>
+//#include <kenshi/ZoneManager.h>
 
 using namespace SquadAutonomy;
 
@@ -40,7 +40,8 @@ SquadAutonomyPanel& SquadAutonomyPanel::getSingleton()
 
 SquadAutonomyPanel::SquadAutonomyPanel() :
     _selectedSquad(nullptr),
-    _panel(nullptr)
+    _panel(nullptr),
+    _popupPanel(nullptr)
 {
     create();
 }
@@ -60,9 +61,11 @@ void SquadAutonomyPanel::create()
     _panel = gui->createDatapanel(0.25f, 0.375f, 0.25f, 0.5f, true, "Window", true);
     _panel->setCaption(Localization::lineSquadAutonomy);
     _panel->setPanelName("SquadAutonomy");
+    
+    createPopup();
 
     _mainTab.reset(new MainTab(*_panel, 0));
-    _optionsTab.reset(new OptionsTab(*_panel, 1));
+    _optionsTab.reset(new OptionsTab(*_panel, *_popupPanel, 1));
 
     if (_selectedSquad)
     {
@@ -77,22 +80,47 @@ void SquadAutonomyPanel::create()
 
     _panel->changeCategory(_mainTab->getCategory());
     _panel->tabEvent += MyGUI::newDelegate(this, &SquadAutonomyPanel::onTabChanged);
+    MyGUI::Window* panelWindow = _panel->win->castType<MyGUI::Window>();
+    panelWindow->eventWindowButtonPressed += MyGUI::newDelegate(this, &SquadAutonomyPanel::onPanelClosed);
 
     refresh();
 
     createModSettingsButton();
 
     _panel->show(false);
+
+    
+}
+
+void SquadAutonomyPanel::createPopup()
+{
+    // create popup panel
+    if (_popupPanel != nullptr)
+    {
+        _popupPanel->show(false);
+        gui->destroy(_popupPanel);
+    }
+
+    _popupPanel = gui->createDatapanel(0.25f, 0.125f, 0.25f, 0.3f, true, "Window", true);
+    //_popupPanel->setCaption(Localization::lineSquadAutonomyPopup);
+    _popupPanel->setPanelName("SquadAutonomyPopup");
+    _popupPanel->show(false);
+
 }
 
 void SquadAutonomyPanel::onTabChanged(DatapanelGUI* panel, int category)
 {
-
     refresh();
+    _popupPanel->show(false);
     if (_optionsTab)
     {
         _optionsTab->updateFloatingPanel(category);
     }
+}
+
+void SquadAutonomyPanel::onPanelClosed(MyGUI::Widget* sender, const std::string& name)
+{
+    hide();
 }
 
 void SquadAutonomyPanel::OptionsTab::updateFloatingPanel(int category)
@@ -130,6 +158,7 @@ void SquadAutonomyPanel::show()
 void SquadAutonomyPanel::hide()
 {
     _panel->show(false);
+    _popupPanel->show(false);
 }
 
 bool SquadAutonomyPanel::isVisible()
@@ -593,19 +622,19 @@ std::string SquadAutonomyPanel::MainTab::getBuildingName(const Building& buildin
 }
 
 
-SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, int category) :
+SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
     _panel(&panel),
     _floatingPanel(nullptr),
     _selectedSquad(nullptr),
     _category(category),
     _subCategory(0),
-    _basic(new BasicOptions(*this, panel, category)),
-    _labour(new LabourOptions(*this, panel, category)),
-    _combat(new CombatOptions(*this, panel, category)),
-    _guard(new GuardOptions(*this, panel, category)),
-    _shopping(new ShoppingOptions(*this, panel, category)),
-    _inventory(new InventoryOptions(*this, panel, category)),
-    _travel(new TravelOptions(*this, panel, category))
+    _basic(new BasicOptions(*this, panel, popupPanel, category)),
+    _labour(new LabourOptions(*this, panel, popupPanel, category)),
+    _combat(new CombatOptions(*this, panel, popupPanel, category)),
+    _guard(new GuardOptions(*this, panel, popupPanel, category)),
+    _shopping(new ShoppingOptions(*this, panel, popupPanel, category)),
+    _inventory(new InventoryOptions(*this, panel, popupPanel, category)),
+    _travel(new TravelOptions(*this, panel, popupPanel, category))
 {
 }
 
@@ -735,7 +764,7 @@ void SquadAutonomyPanel::OptionsTab::refreshCallback(MyGUI::ComboBox* sender, si
     {
         return;
     }
-    
+    _popupPanel->show(false);
     refresh();
 }
 
@@ -780,16 +809,17 @@ void SquadAutonomyPanel::OptionsTab::readFromSquadSettings(const SquadSettingsIn
 }
 
 
-SquadAutonomyPanel::OptionsTab::OptionsBase::OptionsBase(OptionsTab &optionsTab, DatapanelGUI &panel, int category) :
+SquadAutonomyPanel::OptionsTab::OptionsBase::OptionsBase(OptionsTab &optionsTab, DatapanelGUI &panel, DatapanelGUI& popupPanel, int category) :
     _optionsTab(&optionsTab),
     _panel(&panel),
+    _popupPanel(&popupPanel),
     _category(category)
 {
 }
 
 
-SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category) :
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+    OptionsBase(optionsTab, panel, popupPanel, category),
     startWorkTime(0.0f),
     endWorkTime(24.0f),
     autoMovementSpeed(false),
@@ -864,8 +894,8 @@ void SquadAutonomyPanel::OptionsTab::BasicOptions::writeToSquadSettings(SquadSet
 }
 
 
-SquadAutonomyPanel::OptionsTab::LabourOptions::LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category) :
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::LabourOptions::LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+    OptionsBase(optionsTab, panel, popupPanel, category),
     setAll(0.0),
     science(1.0),
     labouring(1.0),
@@ -995,8 +1025,8 @@ void SquadAutonomyPanel::OptionsTab::LabourOptions::writeToSquadSettings(SquadSe
 }
 
 
-SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category) :
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+    OptionsBase(optionsTab, panel, popupPanel, category),
     attackEnemies(true),
     protectAllies(true),
     doMedic(true),
@@ -1060,8 +1090,8 @@ void SquadAutonomyPanel::OptionsTab::CombatOptions::writeToSquadSettings(SquadSe
 }
 
 
-SquadAutonomyPanel::OptionsTab::GuardOptions::GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category) :
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::GuardOptions::GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+    OptionsBase(optionsTab, panel, popupPanel, category),
     manTurrets(false),
     stayInsideGate(false),
     closeGate(false)
@@ -1130,8 +1160,8 @@ const ItemFunction itemFunctions[] =
     ITEM_SEVERED_LIMB
 };
 
-SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category):
+    OptionsBase(optionsTab, panel, popupPanel, category),
     itemFunctionListIndex(ITEM_FIRSTAID),
     amount(0)
 {
@@ -1230,7 +1260,10 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
 
             for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
             {
-                Utils::addText(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
+                //Utils::addText(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
+                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
+                button->button->setUserData(*iter);
+                button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openShopItemDetail);
             }
             auto sellItems = settings.getSellItems();
             Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
@@ -1238,14 +1271,15 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
             Utils::setCallback(*clearSellItemButton, this, &OptionsTab::ShoppingOptions::clearSellItem);
             for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
             {
-                Utils::addText(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
+                //Utils::addText(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
+                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
+                button->button->setUserData(*iter);
+                button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openShopItemDetail);
             }
         }
     }
     return hasTask;
 }
-
-
 
 void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* line)
 {
@@ -1345,6 +1379,17 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearSellItem(DataPanelLin
     _optionsTab->refresh();
 }
 
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::openShopItemDetail(MyGUI::Widget* sender)
+{
+    if (_popupPanel)
+    {
+        _popupPanel->show(true);
+        std::pair<const ItemFunction, int> item = *sender->getUserData<std::pair<const ItemFunction, int>>();
+        _popupPanel->setCaption(getItemFunctionName(item.first));
+        _popupPanel->clear();
+    }
+}
+
 void SquadAutonomyPanel::OptionsTab::ShoppingOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
     doShopping = squadSettings.getDoShopping();
@@ -1355,8 +1400,8 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(Squad
     squadSettings.setDoShopping(doShopping);
 }
 
-SquadAutonomyPanel::OptionsTab::InventoryOptions::InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category) :
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::InventoryOptions::InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+    OptionsBase(optionsTab, panel, popupPanel, category),
     doLooting(true),
     putLootsInStorage(true),
     ignoreEquipped(true),
@@ -1453,8 +1498,8 @@ void SquadAutonomyPanel::OptionsTab::InventoryOptions::writeToSquadSettings(Squa
     squadSettings.setIgnoreEquipped(ignoreEquipped);
 }
 
-SquadAutonomyPanel::OptionsTab::TravelOptions::TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, int category):
-    OptionsBase(optionsTab, panel, category),
+SquadAutonomyPanel::OptionsTab::TravelOptions::TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category):
+    OptionsBase(optionsTab, panel, popupPanel, category),
     townListIndex(0)
 {
 }
