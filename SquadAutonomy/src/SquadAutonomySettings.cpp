@@ -1,9 +1,13 @@
-#include "SquadAutonomy.h"
 #include "SquadAutonomySettings.h"
 #include "SquadAutonomyModSettings.h"
 #include "SquadAutonomySettingsUtils.h"
 
 #include <Debug.h>
+
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/prettywriter.h>
 
 #include <ogre/OgreStringConverter.h>
 #include <boost/scoped_ptr.hpp>
@@ -12,6 +16,7 @@
 #include <kenshi/GameWorld.h>
 #include <kenshi/Building/UseableStuff.h>
 #include <kenshi/Character.h>
+#include <kenshi/Town.h>
 #include <kenshi/StateBroadcastData.h>
 #include <kenshi/Platoon.h>
 #include <kenshi/Faction.h>
@@ -92,24 +97,34 @@ void SquadAutonomySettings::_initGameData()
     }*/
 }
 
+void SquadAutonomySettings::initSaveDocument()
+{
+    saveDocument.SetObject();
+}
+
 bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
 {
-    std::ofstream saveFile(savePath);
+    std::ofstream saveFile(savePath + L"SquadAutonomySave.json");
     if (!saveFile.is_open())
     {
         DebugLog("Save: Cannot open file");
         return false;
     }
 
-    DebugLog("Saving settings to " + converter.to_bytes(savePath));
-    //DebugLog("Saving " + Ogre::StringConverter::toString(squadSettings.size()) + " squads");
-
-    saveFile << std::boolalpha; // output bools as text
-
+    initSaveDocument();
+    rapidjson::Document::AllocatorType& allocator = saveDocument.GetAllocator();
+    rapidjson::Value squadSettingsInfos;
+    squadSettingsInfos.SetArray();
     for (auto it = squadSettings.begin(); it != squadSettings.end(); ++it)
     {
-        (*it)->writeToStream(saveFile);
+        rapidjson::Value info = (*it)->getInfoMember(allocator);
+        if (!info.IsNull()) squadSettingsInfos.PushBack(info, allocator);
     }
+    saveDocument.AddMember("squadSettingsInfo", squadSettingsInfos, allocator);
+    rapidjson::OStreamWrapper osw(saveFile);
+    rapidjson::PrettyWriter<rapidjson::OStreamWrapper> writer(osw);
+    saveDocument.Accept(writer);
+    DebugLog("Saving settings to " + converter.to_bytes(savePath));
 
     return true;
 }
@@ -117,7 +132,7 @@ bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
 bool SquadAutonomySettings::loadSettings(const std::wstring& savePath)
 {
     //initialized = false;
-    std::ifstream saveFile(savePath);
+    std::ifstream saveFile(savePath + L"SquadAutonomy.save");
     if (!saveFile.is_open())
     {
         DebugLog("Load: Cannot open save file");
@@ -355,7 +370,8 @@ bool SquadSettingsInfo::writeToStream(std::ostream &stream) const
     {
         return false;
     }
-
+    
+    /*
     stream << "Squad:";
     writeHandSettingToStream(stream, platoonHand, _squad->activePlatoon->getName());
     stream << '\n';
@@ -369,9 +385,41 @@ bool SquadSettingsInfo::writeToStream(std::ostream &stream) const
     writeSquadOptionsToStream(stream);
 
     stream << "EndSquad:" << '\n';
-
+    */
     return true;
 }
+
+rapidjson::Value SquadSettingsInfo::getInfoMember(rapidjson::Document::AllocatorType& allocator) const
+{
+    if (!_squad || !_squad->activePlatoon)
+    {
+        return rapidjson::Value();
+    }
+
+    hand platoonHand = _squad->getHandle();
+    if (!platoonHand)
+    {
+        return rapidjson::Value();
+    }
+    
+    rapidjson::Value settingsInfo;
+    settingsInfo.SetObject();
+    settingsInfo.AddMember("squad", getHandMember(allocator, platoonHand, _squad->activePlatoon->getName()), allocator);
+    settingsInfo.AddMember("enable", _enabled, allocator);
+    rapidjson::Value home;
+    if (_homeBuilding) home = getHandMember(allocator, _homeBuilding->getHandle(), _homeBuilding->displayName);
+    settingsInfo.AddMember("homeBuilding", home, allocator);
+    rapidjson::Value work;
+    if (_workBuilding) work = getHandMember(allocator, _workBuilding->getHandle(), _workBuilding->displayName);
+    settingsInfo.AddMember("workBuilding", work, allocator);
+    settingsInfo.AddMember("packages", getSquadPackagesMember(allocator), allocator);
+    settingsInfo.AddMember("options", getSquadOptionsMember(allocator), allocator);
+    //doc.AddMember("settingsInfo", settingsInfo, allocator);
+
+    return settingsInfo;
+}
+
+
 
 Platoon* SquadSettingsInfo::getSquad()
 {
@@ -958,44 +1006,46 @@ void SquadAutonomy::SquadSettingsInfo::setDoShopping(bool val)
     _doShopping = val;
 }
 
-std::unordered_map<ItemFunction, int> SquadAutonomy::SquadSettingsInfo::getBuyItems() const
+std::unordered_map<ItemFunction, ShoppingItemInfo> SquadAutonomy::SquadSettingsInfo::getBuyItems() const
 {
     return _buyItems;
 }
 
-std::unordered_map<ItemFunction, int>* SquadAutonomy::SquadSettingsInfo::getBuyItemsPtr()
+std::unordered_map<ItemFunction, ShoppingItemInfo>* SquadAutonomy::SquadSettingsInfo::getBuyItemsPtr()
 {
     return &_buyItems;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setBuyItems(std::unordered_map<ItemFunction, int> val)
+void SquadAutonomy::SquadSettingsInfo::setBuyItems(std::unordered_map<ItemFunction, ShoppingItemInfo> val)
 {
     _buyItems = val;
 }
 
 void SquadAutonomy::SquadSettingsInfo::addBuyItem(ItemFunction itemFunction, int quantity)
 {
-    _buyItems[itemFunction] = quantity;
+    ShoppingItemInfo item(quantity);
+    _buyItems[itemFunction] = item;
 }
 
-std::unordered_map<ItemFunction, int> SquadAutonomy::SquadSettingsInfo::getSellItems() const
+std::unordered_map<ItemFunction, ShoppingItemInfo> SquadAutonomy::SquadSettingsInfo::getSellItems() const
 {
     return _sellItems;
 }
 
-std::unordered_map<ItemFunction, int>* SquadAutonomy::SquadSettingsInfo::getSellItemsPtr()
+std::unordered_map<ItemFunction, ShoppingItemInfo>* SquadAutonomy::SquadSettingsInfo::getSellItemsPtr()
 {
     return &_sellItems;
 }
 
-void SquadAutonomy::SquadSettingsInfo::setSellItems(std::unordered_map<ItemFunction, int> val)
+void SquadAutonomy::SquadSettingsInfo::setSellItems(std::unordered_map<ItemFunction, ShoppingItemInfo> val)
 {
     _sellItems = val;
 }
 
 void SquadAutonomy::SquadSettingsInfo::addSellItem(ItemFunction itemFunction, int quantity)
 {
-    _sellItems[itemFunction] = quantity;
+    ShoppingItemInfo item(quantity);
+    _sellItems[itemFunction] = item;
 }
 
 bool SquadAutonomy::SquadSettingsInfo::getDoLooting() const
@@ -1087,6 +1137,161 @@ std::vector<TownBase*>* SquadAutonomy::SquadSettingsInfo::getTargetTownsPtr()
     return &_targetTowns;
 }
 
+rapidjson::Value SquadSettingsInfo::getHandMember(rapidjson::Document::AllocatorType& allocator, hand handToWrite, const std::string& name)
+{
+    if (!handToWrite.isValid())
+    {
+        return rapidjson::Value();
+    }
+
+    rapidjson::Value obj;
+    obj.SetObject();
+    rapidjson::Value handName;
+    handName.SetString(name.c_str(), allocator);
+    if (!name.empty()) obj.AddMember("name", handName, allocator);
+    rapidjson::Value objHand;
+    objHand.SetArray();
+    objHand.PushBack<int>(static_cast<int>(handToWrite.type), allocator);
+    objHand.PushBack<unsigned int>(handToWrite.container, allocator);
+    objHand.PushBack<unsigned int>(handToWrite.containerSerial, allocator);
+    objHand.PushBack<unsigned int>(handToWrite.index, allocator);
+    objHand.PushBack<unsigned int>(handToWrite.serial, allocator);
+    obj.AddMember("hand", objHand, allocator);
+    return obj;
+
+}
+
+rapidjson::Value SquadSettingsInfo::getSquadPackagesMember(rapidjson::Document::AllocatorType& allocator) const
+{
+    rapidjson::Value packages;
+    packages.SetArray();
+    if (!_squadPackages.empty())
+    {
+        for (auto it = _squadPackages.begin(); it != _squadPackages.end(); ++it)
+        {
+            auto data = it->second;
+
+            for (int i = 0; i < data.size(); ++i)
+            {
+                rapidjson::Value package;
+                rapidjson::Value packageName;
+                packageName.SetString(data[i]->name.c_str(), allocator);
+                package.SetObject();
+                package.AddMember("priority", it->first, allocator);
+                package.AddMember("name", packageName, allocator);
+                packages.PushBack(package, allocator);
+            }
+        }
+    }
+    return packages;
+}
+
+rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjson::Document::AllocatorType& allocator) const
+{
+    rapidjson::Value options;
+    options.SetObject();
+
+    rapidjson::Value general;
+    general.SetObject();
+    general.AddMember("startWorkTime", _startWorkTime, allocator);
+    general.AddMember("endWorkTime", _endWorkTime, allocator);
+    general.AddMember("autoMovementSpeed", _autoMovementSpeed, allocator);
+    general.AddMember("restUntilHealed", _restUntilHealed, allocator);
+    general.AddMember("restThreshold", _restThreshold, allocator);
+    general.AddMember("healedThreshold", _healedThreshold, allocator);
+    general.AddMember("usePaidBeds", _usePaidBeds, allocator);
+    general.AddMember("doSleep", _doSleep, allocator);
+    options.AddMember("general", general, allocator);
+
+    rapidjson::Value labour;
+    labour.SetObject();
+    labour.AddMember("labourScience", _labourScience, allocator);
+    labour.AddMember("labourLabouring", _labourLabouring, allocator);
+    labour.AddMember("labourFarming", _labourFarming, allocator);
+    labour.AddMember("labourEngineer", _labourEngineer, allocator);
+    labour.AddMember("labourCooking", _labourCooking, allocator);
+    labour.AddMember("labourRobotics", _labourRobotics, allocator);
+    labour.AddMember("labourMedic", _labourMedic, allocator);
+    labour.AddMember("labourWeaponSmith", _labourWeaponSmith, allocator);
+    labour.AddMember("labourArmourSmith", _labourArmourSmith, allocator);
+    labour.AddMember("labourCrossbowSmith", _labourCrossbowSmith, allocator);
+    labour.AddMember("labourAutomaticMachine", _labourAutomaticMachine, allocator);
+    labour.AddMember("labourOther", _labourOther, allocator);
+    options.AddMember("labour", labour, allocator);
+
+    rapidjson::Value combat;
+    combat.SetObject();
+    combat.AddMember("attackEnemies", _attackEnemies, allocator);
+    combat.AddMember("protectAllies", _protectAllies, allocator);
+    combat.AddMember("doMedic", _doMedic, allocator);
+    combat.AddMember("doRescue", _doRescue, allocator);
+    combat.AddMember("rescueOwnSquadOnly", _rescueOwnSquadOnly, allocator);
+    combat.AddMember("manTurrets", _manTurrets, allocator);
+    combat.AddMember("stayInsideGate", _stayInsideGate, allocator);
+    combat.AddMember("closeGate", _closeGate, allocator);
+    options.AddMember("combat", combat, allocator);
+
+    rapidjson::Value shopping;
+    shopping.SetObject();
+    shopping.AddMember("doShopping", _doShopping, allocator);
+    shopping.AddMember("buyItems", getShoppingItemsMember(allocator, _buyItems), allocator);
+    shopping.AddMember("buyItems", getShoppingItemsMember(allocator, _sellItems), allocator);
+    options.AddMember("shopping", shopping, allocator);
+
+    rapidjson::Value inventory;
+    inventory.SetObject();
+    inventory.AddMember("doLooting", _doLooting, allocator);
+    inventory.AddMember("putLootsInStorage", _putLootsInStorage, allocator);
+    inventory.AddMember("ignoreEquipped", _ignoreEquipped, allocator);
+    inventory.AddMember("forbidItems", getForbidItemsMember(allocator, _forbidItems), allocator);
+    options.AddMember("inventory", inventory, allocator);
+
+    return options;
+}
+rapidjson::Value SquadSettingsInfo::getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo> shoppingItems)
+{
+    rapidjson::Value items;
+    items.SetArray();
+    for (auto iter = shoppingItems.begin(); iter != shoppingItems.end(); ++iter)
+    {
+        ShoppingItemInfo info = iter->second;
+        rapidjson::Value item;
+        item.SetObject();
+        item.AddMember("itemFunction", static_cast<int>(iter->first), allocator);
+        item.AddMember("quantity", info.quantity, allocator);
+        item.AddMember("onlyGoodDeal", info.onlyGoodDeal, allocator);
+        rapidjson::Value shopTowns;
+        shopTowns.SetArray();
+        for (int i = 0; i < info.shopTowns.size(); ++i)
+        {
+            TownBase* town = info.shopTowns[i];
+            shopTowns.PushBack(getHandMember(allocator, town->getHandle(), ""), allocator);
+        }
+        item.AddMember("shopTowns", shopTowns, allocator);
+
+        items.PushBack(item, allocator);
+    }
+    return items;
+}
+
+rapidjson::Value SquadSettingsInfo::getForbidItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_set<ItemFunction> forbidItems)
+{
+    rapidjson::Value items;
+    items.SetArray();
+    for (auto iter = forbidItems.begin(); iter != forbidItems.end(); ++iter)
+    {
+        rapidjson::Value item;
+        item.SetObject();
+        item.AddMember("itemFunction", static_cast<int>(*iter), allocator);
+
+        items.PushBack(item, allocator);
+    }
+    return items;
+}
+
+
+
+
 hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)
 {
     size_t start = dataLine.rfind('>');
@@ -1125,18 +1330,30 @@ Building* SquadSettingsInfo::parseBuildingSetting(const std::string& dataLine)
     return buildingHand.getBuilding();
 }
 
-std::unordered_map<ItemFunction, int> SquadAutonomy::SquadSettingsInfo::parseTradeItems(const std::string& dataLine)
+std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppingItemsFromStream(std::istream& stream)
 {
-    std::unordered_map<ItemFunction, int> tradeItems;
+    // itemFunction(int) quantity(int) onlyGoodDeal:onlyGoodDeal(bool) town:town hand(5 ints with spaces inbetween)...
+    std::unordered_map<ItemFunction, ShoppingItemInfo> shoppingItems;
+    std::string line;
 
-    std::istringstream iss(dataLine);
-    int itemFunction = 0;
-    int quantity = 0;
-    while (iss >> itemFunction && iss >> quantity)
+    while (std::getline(stream, line))
     {
-        tradeItems[static_cast<ItemFunction>(itemFunction)] = quantity;
+        std::istringstream iss(line);
+        int itemFunction = 0;
+        int quantity = 0;
+        bool onlyGoodDeal = false;
+        iss >> itemFunction
+            >> quantity;
+        ShoppingItemInfo shoppingItem(quantity);
+        if (std::getline(stream, line))
+        {
+            SettingsUtils::parseBoolSetting(line, onlyGoodDeal);
+            shoppingItem.onlyGoodDeal = onlyGoodDeal;
+        }
+        shoppingItems[static_cast<ItemFunction>(itemFunction)] = shoppingItem;
     }
-    return tradeItems;
+
+    return shoppingItems;
 }
 
 void SquadSettingsInfo::readSquadPackagesFromStream(std::istream& stream)
@@ -1352,12 +1569,12 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
         }
         if (type == "BuyItems")
         {
-            _buyItems = parseTradeItems(dataLine);
+            _buyItems = readShoppingItemsFromStream(stream);
             continue;
         }
         if (type == "SellItems")
         {
-            _sellItems = parseTradeItems(dataLine);
+            _sellItems = readShoppingItemsFromStream(stream);
             continue;
         }
         if (type == "DoLooting")
@@ -1386,125 +1603,3 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
     }
 }
 
-bool SquadSettingsInfo::writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name)
-{
-    if (!handToWrite)
-    {
-        return false;
-    }
-
-    stream
-        << " <" << name << "> "
-        << handToWrite.index << ' '
-        << handToWrite.serial << ' '
-        << handToWrite.type << ' '
-        << handToWrite.container << ' '
-        << handToWrite.containerSerial;
-
-    return true;
-}
-
-bool SquadSettingsInfo::writeBuildingSettingToStream(std::ostream &stream, const Building *building, const std::string& tag)
-{
-    bool writeOk = true;
-
-    stream << '\t' << tag << ':';
-    if (building)
-    {
-        writeOk = writeHandSettingToStream(stream, building->getHandle(), building->displayName);
-    }
-    stream << '\n';
-
-    return writeOk;
-}
-
-void SquadSettingsInfo::writeSquadPackagesToStream(std::ostream &stream) const
-{
-    stream << "\tPackages:\n";
-    if (!_squadPackages.empty())
-    {
-        for (auto it = _squadPackages.begin(); it != _squadPackages.end(); ++it)
-        {
-            auto data = it->second;
-
-            for (int j = 0; j < data.size(); ++j)
-            {
-                stream
-                    << "\t\t" << it->first << ':'
-                    << " <" + data[j]->name + '>'
-                    << '\n';
-            }
-        }
-    }
-    stream << "\tEndPackages:" << '\n';
-}
-
-void SquadSettingsInfo::writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, int> tradeItems)
-{
-    for (auto iter = tradeItems.begin(); iter != tradeItems.end(); ++iter)
-    {
-        stream << static_cast<int>(iter->first) << " " << iter->second << " ";
-    }
-    stream << '\n';
-}
-
-void SquadSettingsInfo::writeForbidItemsToStream(std::ostream& stream, const std::unordered_set<ItemFunction> forbidItems)
-{
-    for (auto iter = forbidItems.begin(); iter != forbidItems.end(); ++iter)
-    {
-        stream << static_cast<int>(*iter) << " ";
-    }
-    stream << '\n';
-}
-
-void SquadSettingsInfo::writeSquadOptionsToStream(std::ostream &stream) const
-{
-    stream
-        << "\tOptions:" << '\n'
-        << "\t\tStartWorkTime: " << _startWorkTime << '\n'
-        << "\t\tEndWorkTime: " << _endWorkTime << '\n'
-        << "\t\tOverwriteSpeed: " << _autoMovementSpeed << '\n'
-        << "\t\tRestUntilHealed: " << _restUntilHealed << '\n'
-        << "\t\t\tRestThreshold: " << _restThreshold << '\n'
-        << "\t\t\tHealedThreshold: " << _healedThreshold << '\n'
-        << "\t\tUsePaidBeds: " << _usePaidBeds << '\n'
-        << "\t\tDoSleep: " << _doSleep << '\n'
-
-        << "\t\tLabourScience: " << _labourScience << '\n'
-        << "\t\tLabourLabouring: " << _labourLabouring << '\n'
-        << "\t\tLabourFarming: " << _labourFarming << '\n'
-        << "\t\tLabourEngineer: " << _labourEngineer << '\n'
-        << "\t\tLabourCooking: " << _labourCooking << '\n'
-        << "\t\tLabourRobotics: " << _labourRobotics << '\n'
-        << "\t\tLabourMedic: " << _labourMedic << '\n'
-        << "\t\tLabourWeaponSmith: " << _labourWeaponSmith << '\n'
-        << "\t\tLabourArmourSmith: " << _labourArmourSmith << '\n'
-        << "\t\tLabourCrossbowSmith: " << _labourCrossbowSmith << '\n'
-        << "\t\tLabourAutomaticMachine: " << _labourAutomaticMachine << '\n'
-        << "\t\tLabourOther: " << _labourOther << '\n'
-
-        << "\t\tAttackEnemies: " << _attackEnemies << '\n'
-        << "\t\tProtectAllies: " << _protectAllies << '\n'
-        << "\t\tDoMedic: " << _doMedic << '\n'
-        << "\t\tDoRescue: " << _doRescue << '\n'
-        << "\t\tRescueOwnSquadOnly: " << _rescueOwnSquadOnly << '\n'
-
-        << "\t\tManTurrets: " << _manTurrets << '\n'
-        << "\t\tStayInsideGate: " << _stayInsideGate << '\n'
-        << "\t\tCloseGate: " << _closeGate << '\n'
-
-        << "\t\tDoShopping: " << _doShopping << '\n';
-    stream << "\t\tBuyItems: ";
-    writeTradeItemsToStream(stream, _buyItems);
-    stream << "\t\tSellItems: ";
-    writeTradeItemsToStream(stream, _sellItems);
-
-    stream
-        << "\t\tDoLooting: " << _doLooting << '\n'
-        << "\t\tPutLootsInStorage: " << _putLootsInStorage << '\n'
-        << "\t\tIgnoreEquipped: " << _ignoreEquipped << '\n';
-    stream << "\t\tForbidItems: ";
-    writeForbidItemsToStream(stream, _forbidItems);
-
-    stream << "\tEndOptions:" << '\n';
-}

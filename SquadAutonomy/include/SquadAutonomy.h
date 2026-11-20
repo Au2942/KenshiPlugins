@@ -12,6 +12,19 @@
 
 namespace SquadAutonomy
 {
+    struct ShoppingItemInfo
+    {
+        ShoppingItemInfo(): quantity(0), onlyGoodDeal(false)
+        {
+        }
+        ShoppingItemInfo(int _quantity) : quantity(_quantity), onlyGoodDeal(false)
+        {
+        }
+        int quantity;
+        bool onlyGoodDeal;
+        std::vector<TownBase*> shopTowns;
+    };
+
     extern ogre_unordered_map<TaskType, TaskData*>::type* taskTypetaskData;
     extern const TaskData* (*getTaskDataConst)(TaskType key);
     extern bool (*EscMenu_openedOtherWindows)(class EscMenu*);
@@ -27,8 +40,6 @@ namespace SquadAutonomy
     bool SetAI(Platoon*, const std::map<int, std::vector<GameData*>>& aiPackages, bool endAction = true);
     bool ResetAI(Platoon*, bool endAction = true);
     void SetNearestFriendlyTownAsHome(Platoon* squad);
-    int tradeItemsOfTypeInInventoryCount(ItemFunction itemFunction, Character* character, Inventory* inventory);
-    void updateTradeItemsCount(AI* ai, Character* character);
     void ClearTask(Platoon*, TaskType);
     void OpenSquadAutonomyPanel(Platoon* platoon);
     void OpenSquadAutonomyPanelMainBar();

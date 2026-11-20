@@ -163,7 +163,7 @@ namespace SquadAutonomy
         if (settings && settings->isEnabled())
         {
             if (!settings->getDoShopping()) return true;
-            updateTradeItemsCount(thisptr, character);
+            //updateTradeItemsCount(thisptr, character);
 
             auto sellItems = settings->getSellItems();
 
@@ -177,7 +177,7 @@ namespace SquadAutonomy
                 {
                     backpack->getInventory()->getAllItemsWithFunction(items, iter->first);
                 }
-                int amountToKeep = iter->second;
+                int amountToKeep = iter->second.quantity;
                 int amountOwned = 0;
                 for (int i = 0; i < items.size(); ++i)
                 {
@@ -202,8 +202,8 @@ namespace SquadAutonomy
                 {
                     itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, backpack->getInventory());
                 }
-                Logger::logDebug("Buy itemFunc: " + sc::toString(static_cast<int>(iter->first)) + " owned: " + sc::toString(itemCount) + " max:" + sc::toString(iter->second), SHOPPING);
-                if (itemCount < iter->second) return false;
+                Logger::logDebug("Buy itemFunc: " + sc::toString(static_cast<int>(iter->first)) + " owned: " + sc::toString(itemCount) + " max:" + sc::toString(iter->second.quantity), SHOPPING);
+                if (itemCount < iter->second.quantity) return false;
             }
             
             return true;
@@ -249,7 +249,7 @@ namespace SquadAutonomy
                 {
                     backpack->getInventory()->getAllItemsWithFunction(itemsToSell, iter->first);
                 }
-                int amountToKeep = iter->second;
+                int amountToKeep = iter->second.quantity;
                 int amountOwned = 0;
                 for (int i = 0; i < itemsToSell.size(); ++i)
                 {
@@ -467,6 +467,7 @@ namespace SquadAutonomy
         return itemCount;
     }
 
+    /*
     void updateTradeItemsCount(AI* ai, Character* character)
     {
         for (int i = 0; i < ai->tradingInfo->tradeItems.size(); ++i)
@@ -486,7 +487,7 @@ namespace SquadAutonomy
             tradeItem->count = itemCount;
         }
     }
-
+    */
 
     int getTradeItemPrice(Item* tradeItem, Town* tradeTown, Platoon* traderSquad, TradeCulture* shopCulture, bool selling)
     {
@@ -555,7 +556,7 @@ namespace SquadAutonomy
             {
                 backpack->getInventory()->getAllItemsWithFunction(items, iter->first);
             }
-            int amountToKeep = iter->second;
+            int amountToKeep = iter->second.quantity;
             int amountOwned = 0;
             for (int i = 0; i < items.size(); ++i)
             {

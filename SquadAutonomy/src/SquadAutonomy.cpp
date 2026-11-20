@@ -134,7 +134,7 @@ namespace SquadAutonomy
 
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
-    std::wstring saveName = L"SquadAutonomy.save";
+    //std::wstring saveName = L"SquadAutonomySave";
     std::wstring modPath = L"";
     std::wstring settingsSavePath = L"";
 
@@ -598,7 +598,7 @@ namespace SquadAutonomy
             squadSettings->unassignSquadHome();
         }
         shouldSave = true;
-        settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/' + saveName;
+        settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/';
         
         int result = saveGame_orig(thisptr, location, name);
 
@@ -613,7 +613,7 @@ namespace SquadAutonomy
         if (result != 0) return result;
         shouldLoad = true;
         SquadAutonomySettings::getSingleton().initialized = false;
-        settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/' + saveName;
+        settingsSavePath = converter.from_bytes(location) + converter.from_bytes(name) + L'/';
         return result;
     }
 

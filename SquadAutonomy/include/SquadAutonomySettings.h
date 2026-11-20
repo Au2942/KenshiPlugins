@@ -1,5 +1,8 @@
 #pragma once
-#include "extern/TradingInfo.h"
+#include "SquadAutonomy.h"
+
+#include <rapidjson/document.h>
+
 #include <kenshi/GameData.h>
 #include <kenshi/PlayerInterface.h>
 #include <kenshi/Faction.h>
@@ -15,6 +18,7 @@ namespace SquadAutonomy
 
         static std::unique_ptr<SquadSettingsInfo> readFromStream(std::istream& stream);
         bool writeToStream(std::ostream& stream) const;
+        rapidjson::Value getInfoMember(rapidjson::Document::AllocatorType& allocator) const;
 
         Platoon* getSquad();
         PlayerInterface* getPlayerInterface();
@@ -97,22 +101,15 @@ namespace SquadAutonomy
         bool getCloseGate() const;
         void setCloseGate(bool val);
 
-        struct ShoppingItem
-        {
-            ItemFunction _itemFunction;
-            int _amount;
-            bool _onlyGoodDeal;
-            std::vector<TownBase*> _townToTrade;
-        };
         bool getDoShopping() const;
         void setDoShopping(bool val);
-        std::unordered_map<ItemFunction, int> getBuyItems() const;
-        std::unordered_map<ItemFunction, int>* getBuyItemsPtr();
-        void setBuyItems(std::unordered_map<ItemFunction, int> val);
+        std::unordered_map<ItemFunction, ShoppingItemInfo> getBuyItems() const;
+        std::unordered_map<ItemFunction, ShoppingItemInfo>* getBuyItemsPtr();
+        void setBuyItems(std::unordered_map<ItemFunction, ShoppingItemInfo> val);
         void addBuyItem(ItemFunction itemFunction, int quantity);
-        std::unordered_map<ItemFunction, int> getSellItems() const;
-        std::unordered_map<ItemFunction, int>* getSellItemsPtr();
-        void setSellItems(std::unordered_map<ItemFunction, int> val);
+        std::unordered_map<ItemFunction, ShoppingItemInfo> getSellItems() const;
+        std::unordered_map<ItemFunction, ShoppingItemInfo>* getSellItemsPtr();
+        void setSellItems(std::unordered_map<ItemFunction, ShoppingItemInfo> val);
         void addSellItem(ItemFunction itemFunction, int quantity);
 
         bool getDoLooting() const;
@@ -135,19 +132,26 @@ namespace SquadAutonomy
         std::vector<TownBase*>* getTargetTownsPtr();
 
     private:
-        static hand parseHandSetting(const std::string& dataLine);
-        static Building* parseBuildingSetting(const std::string& dataLine);
-        static std::unordered_map <ItemFunction,int> parseTradeItems(const std::string& dataLine);
-        void readSquadPackagesFromStream(std::istream& stream);
-        void readSquadOptionsFromStream(std::istream& stream);
-
+        /*
         static bool writeHandSettingToStream(std::ostream& stream, hand handToWrite, const std::string& name);
         static bool writeBuildingSettingToStream(std::ostream& stream, const Building* building, const std::string& tag);
-        static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, int>);
-        static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_set<ShoppingItem>);
+        static void writeTradeItemsToStream(std::ostream& stream, const std::unordered_map<ItemFunction, ShoppingItemInfo>);
         static void writeForbidItemsToStream(std::ostream& stream, const std::unordered_set<ItemFunction> forbidItems);
         void writeSquadPackagesToStream(std::ostream& stream) const;
         void writeSquadOptionsToStream(std::ostream& stream) const;
+        */
+        static rapidjson::Value getHandMember(rapidjson::Document::AllocatorType& allocator, hand handToWrite, const std::string& name);
+        rapidjson::Value getSquadPackagesMember(rapidjson::Document::AllocatorType& allocator) const;
+        rapidjson::Value getSquadOptionsMember(rapidjson::Document::AllocatorType& allocator) const;
+        static rapidjson::Value getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo>);
+        static rapidjson::Value getForbidItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_set<ItemFunction> forbidItems);
+
+        static hand parseHandSetting(const std::string& dataLine);
+        static Building* parseBuildingSetting(const std::string& dataLine);
+        static std::unordered_map <ItemFunction, ShoppingItemInfo> readShoppingItemsFromStream(std::istream& stream);
+        void readSquadPackagesFromStream(std::istream& stream);
+        void readSquadOptionsFromStream(std::istream& stream);
+
         void addTasksFromPackage(GameData* data);
         void addTasksFromGoals(GameData* data, lektor<GameData*>& goalDatas);
         void addSignalFromPackage(GameData* data);
@@ -196,8 +200,8 @@ namespace SquadAutonomy
         // Shopping
         bool _doShopping;
         
-        std::unordered_set<ShoppingItem> _buyItems;
-        std::unordered_set<ShoppingItem> _sellItems;
+        std::unordered_map<ItemFunction, ShoppingItemInfo> _buyItems;
+        std::unordered_map<ItemFunction, ShoppingItemInfo> _sellItems;
         //std::unordered_map<ItemFunction, int> _buyItems;
         //std::unordered_map<ItemFunction, int> _sellItems;
         // Inventory
@@ -216,6 +220,7 @@ namespace SquadAutonomy
         static SquadAutonomySettings& getSingleton();
         static bool initialized;
         std::vector<std::unique_ptr<SquadSettingsInfo>> squadSettings;
+        void initSaveDocument();
         bool saveSettings(const std::wstring&);
         bool loadSettings(const std::wstring&);
         SquadSettingsInfo* getSquadSettings(Platoon*, bool createNew = false);
@@ -233,6 +238,8 @@ namespace SquadAutonomy
         SquadAutonomySettings(SquadAutonomySettings&& other);
         SquadAutonomySettings& operator=(const SquadAutonomySettings& other);
         SquadAutonomySettings& operator=(SquadAutonomySettings&& other);
+
+        rapidjson::Document saveDocument;
 
         std::vector<GameData*> _AIPackageList;
         std::vector<GameData*> _squadTemplateList;

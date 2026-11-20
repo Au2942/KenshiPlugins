@@ -1261,7 +1261,7 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
             for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
             {
                 //Utils::addText(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
-                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
+                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second.quantity));
                 button->button->setUserData(*iter);
                 button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openShopItemDetail);
             }
@@ -1272,7 +1272,7 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
             for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
             {
                 //Utils::addText(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
-                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
+                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second.quantity));
                 button->button->setUserData(*iter);
                 button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openShopItemDetail);
             }
@@ -1306,7 +1306,7 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* 
         int buyAmount = (int)amount;
         if (sellItems.find(itemFunction) != sellItems.end())
         {
-            int oldSellAmount = sellItems[itemFunction];
+            int oldSellAmount = sellItems[itemFunction].quantity;
             squadSettings->addSellItem(itemFunction, std::max(buyAmount, oldSellAmount));
         }
         squadSettings->addBuyItem(itemFunction, buyAmount);
@@ -1335,7 +1335,7 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addSellItem(DataPanelLine*
         int sellAmount = (int)amount;
         if (buyItems.find(itemFunction) != buyItems.end())
         {
-            sellAmount = std::max(sellAmount, buyItems[itemFunction]);
+            sellAmount = std::max(sellAmount, buyItems[itemFunction].quantity);
         }
         squadSettings->addSellItem(itemFunction, sellAmount);
     }
