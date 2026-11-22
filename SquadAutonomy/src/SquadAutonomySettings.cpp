@@ -31,7 +31,7 @@ bool SquadAutonomySettings::initialized = false;
 
 SquadAutonomySettings::SquadAutonomySettings()
 {
-    _initGameData();
+    _init();
     initialized = true;
 }
 
@@ -45,6 +45,12 @@ SquadAutonomySettings& SquadAutonomySettings::getSingleton()
     }
 
     return *singleton.get();
+}
+
+void SquadAutonomySettings::_init()
+{
+    _saveFileName = L"SquadAutonomySave.json";
+    _initGameData();
 }
 
 void SquadAutonomySettings::_initGameData()
@@ -81,30 +87,17 @@ void SquadAutonomySettings::_initGameData()
     auto newEndIt = std::unique(_AIPackageList.begin(), _AIPackageList.end());
     _AIPackageList.erase(newEndIt, _AIPackageList.end());
     datas.clear();
-
-
-    /*ou->gamedata.getDataOfType(datas, SQUAD_TEMPLATE);
-    {
-        for (uint32_t i = 0; i < datas.size(); ++i)
-        {
-            std::string packageName = datas[i]->name;
-            if (packageName.size() >= identifier.size() && packageName.compare(packageName.size() - identifier.size(), identifier.size(), identifier) == 0)
-            {
-                DebugLog("Load package: " + packageName);
-                _squadTemplateList.push_back(datas[i]);
-            }
-        }
-    }*/
 }
 
 void SquadAutonomySettings::initSaveDocument()
 {
-    saveDocument.SetObject();
+    _saveDocument.SetObject();
 }
 
 bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
 {
-    std::ofstream saveFile(savePath + L"SquadAutonomySave.json");
+    std::wstring saveFilePath = savePath + _saveFileName;
+    std::ofstream saveFile(saveFilePath);
     if (!saveFile.is_open())
     {
         DebugLog("Save: Cannot open file");
@@ -112,7 +105,7 @@ bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
     }
 
     initSaveDocument();
-    rapidjson::Document::AllocatorType& allocator = saveDocument.GetAllocator();
+    rapidjson::Document::AllocatorType& allocator = _saveDocument.GetAllocator();
     rapidjson::Value squadSettingsInfos;
     squadSettingsInfos.SetArray();
     for (auto it = squadSettings.begin(); it != squadSettings.end(); ++it)
@@ -120,11 +113,11 @@ bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
         rapidjson::Value info = (*it)->getInfoMember(allocator);
         if (!info.IsNull()) squadSettingsInfos.PushBack(info, allocator);
     }
-    saveDocument.AddMember("squadSettingsInfo", squadSettingsInfos, allocator);
+    _saveDocument.AddMember("squadSettingsInfo", squadSettingsInfos, allocator);
     rapidjson::OStreamWrapper osw(saveFile);
     rapidjson::PrettyWriter<rapidjson::OStreamWrapper> writer(osw);
-    saveDocument.Accept(writer);
-    DebugLog("Saving settings to " + converter.to_bytes(savePath));
+    _saveDocument.Accept(writer);
+    DebugLog("Saving settings to " + converter.to_bytes(saveFilePath));
 
     return true;
 }
@@ -132,31 +125,56 @@ bool SquadAutonomySettings::saveSettings(const std::wstring& savePath)
 bool SquadAutonomySettings::loadSettings(const std::wstring& savePath)
 {
     //initialized = false;
-    std::ifstream saveFile(savePath + L"SquadAutonomy.save");
+    std::wstring saveFilePath = savePath + _saveFileName;
+    std::ifstream saveFile(saveFilePath);
     if (!saveFile.is_open())
     {
-        DebugLog("Load: Cannot open save file");
+        // backward compatibility
+        saveFilePath = savePath + L"SquadAutonomy.save";
+        saveFile.open(saveFilePath);
+        if (!saveFile.is_open())
+        {
+            DebugLog("Load: Cannot open save file");
+            return false;
+        }
+        DebugLog("Loading settings file at " + converter.to_bytes(saveFilePath));
+        squadSettings.clear();
+        while (true)
+        {
+            std::unique_ptr<SquadSettingsInfo> currentSquadSettings = SquadSettingsInfo::readFromStream(saveFile);
+            if (currentSquadSettings)
+            {
+                squadSettings.push_back(std::move(currentSquadSettings));
+            }
+            else
+            {
+                break;
+            }
+        }
+        saveFile.close();
+        // should delete the old file as well probably
+        //DeleteFileW(saveFilePath.c_str());
+        return true;
+    }
+
+    rapidjson::IStreamWrapper isw(saveFile);
+    _saveDocument.ParseStream(isw);
+    if (_saveDocument.HasParseError() || !_saveDocument.IsObject())
+    {
+        initSaveDocument();
         return false;
     }
-
-    DebugLog("Loading settings file at " + converter.to_bytes(savePath));
+    DebugLog("Loading settings file at " + converter.to_bytes(saveFilePath));
     squadSettings.clear();
-
-    while (true)
+    auto itr = _saveDocument.FindMember("squadSettingsInfo");
+    if (itr != _saveDocument.MemberEnd())
     {
-        std::unique_ptr<SquadSettingsInfo> currentSquadSettings = SquadSettingsInfo::readFromStream(saveFile);
-        if (currentSquadSettings)
+        for (auto subitr = itr->value.Begin(); subitr != itr->value.End(); ++subitr)
         {
-            squadSettings.push_back(std::move(currentSquadSettings));
-        }
-        else
-        {
-            break;
+            squadSettings.push_back(SquadSettingsInfo::readFromMember(*subitr));
         }
     }
-
     saveFile.close();
-    //initialized = true;
     return true;
 }
 
@@ -247,9 +265,12 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _stayInsideGate(false),
     _closeGate(false),
     _doShopping(false),
+    _buyItems(),
+    _sellItems(),
     _doLooting(false),
     _putLootsInStorage(false),
-    _ignoreEquipped(true)
+    _ignoreEquipped(true),
+    _forbidItems()
 {
     Faction* faction = squad.getFaction();
     if (faction)
@@ -350,6 +371,70 @@ std::unique_ptr<SquadSettingsInfo> SquadSettingsInfo::readFromStream(std::istrea
             settingsInfo->readSquadOptionsFromStream(stream);
             continue;
         }
+    }
+
+    settingsInfo->enableAutonomy(enable, false);
+
+
+    return settingsInfo;
+}
+
+std::unique_ptr<SquadSettingsInfo> SquadAutonomy::SquadSettingsInfo::readFromMember(rapidjson::Value& member)
+{
+    auto itr = member.FindMember("squad");
+    hand hand;
+    if (itr != member.MemberEnd())
+    {
+        rapidjson::Value& squad = itr->value;
+        auto itr = squad.FindMember("hand");
+        if (itr != squad.MemberEnd())
+        {
+            hand = parseHandMember(itr->value);
+        }
+    }
+    if (!hand.isValid())
+    {
+        return nullptr;
+    }
+    Platoon* squad = hand.getPlatoon();
+    hand.setNull();
+    if (!squad)
+    {
+        return nullptr;
+    }
+    std::unique_ptr<SquadSettingsInfo> settingsInfo(new SquadSettingsInfo(*squad));
+    settingsInfo->enableAutonomy(false);
+    settingsInfo->unassignSquadHome();
+    bool enable = false;
+    DebugLog("Load Squad " + squad->activePlatoon->getName());
+
+    itr = member.FindMember("enable");
+    if (itr != member.MemberEnd())
+    {
+        enable = itr->value.GetBool();
+    }
+
+    itr = member.FindMember("homeBuilding");
+    if (itr != member.MemberEnd())
+    {
+        settingsInfo->setBuilding(parseBuildingMember(itr->value), true);
+    }
+    itr = member.FindMember("workBuilding");
+    if (itr != member.MemberEnd())
+    {
+        settingsInfo->setBuilding(parseBuildingMember(itr->value), false);
+    }
+
+    itr = member.FindMember("packages");
+    if (itr != member.MemberEnd())
+    {
+        settingsInfo->readSquadPackagesFromMember(itr->value);
+    }
+
+    itr = member.FindMember("options");
+    if (itr != member.MemberEnd())
+    {
+        settingsInfo->readSquadOptionsFromMember(itr->value);
     }
 
     settingsInfo->enableAutonomy(enable, false);
@@ -1226,16 +1311,20 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjs
     combat.AddMember("doMedic", _doMedic, allocator);
     combat.AddMember("doRescue", _doRescue, allocator);
     combat.AddMember("rescueOwnSquadOnly", _rescueOwnSquadOnly, allocator);
+    options.AddMember("combat", combat, allocator);
+
+    rapidjson::Value guard;
+    guard.SetObject();
     combat.AddMember("manTurrets", _manTurrets, allocator);
     combat.AddMember("stayInsideGate", _stayInsideGate, allocator);
     combat.AddMember("closeGate", _closeGate, allocator);
-    options.AddMember("combat", combat, allocator);
+    options.AddMember("guard", guard, allocator);
 
     rapidjson::Value shopping;
     shopping.SetObject();
     shopping.AddMember("doShopping", _doShopping, allocator);
     shopping.AddMember("buyItems", getShoppingItemsMember(allocator, _buyItems), allocator);
-    shopping.AddMember("buyItems", getShoppingItemsMember(allocator, _sellItems), allocator);
+    shopping.AddMember("sellItems", getShoppingItemsMember(allocator, _sellItems), allocator);
     options.AddMember("shopping", shopping, allocator);
 
     rapidjson::Value inventory;
@@ -1262,9 +1351,9 @@ rapidjson::Value SquadSettingsInfo::getShoppingItemsMember(rapidjson::Document::
         item.AddMember("onlyGoodDeal", info.onlyGoodDeal, allocator);
         rapidjson::Value shopTowns;
         shopTowns.SetArray();
-        for (int i = 0; i < info.shopTowns.size(); ++i)
+        for (auto townIter = info.shopTowns.begin(); townIter != info.shopTowns.end(); ++townIter)
         {
-            TownBase* town = info.shopTowns[i];
+            TownBase* town = *townIter;
             shopTowns.PushBack(getHandMember(allocator, town->getHandle(), ""), allocator);
         }
         item.AddMember("shopTowns", shopTowns, allocator);
@@ -1289,7 +1378,315 @@ rapidjson::Value SquadSettingsInfo::getForbidItemsMember(rapidjson::Document::Al
     return items;
 }
 
+hand SquadSettingsInfo::parseHandMember(rapidjson::Value& member)
+{
+    if (!member.IsArray() || member.Size() != 5) return nullptr;
+    hand hand;
+    hand.type = static_cast<itemType>(member[0].GetInt());
+    hand.container = member[1].GetUint();
+    hand.containerSerial = member[2].GetUint();
+    hand.index = member[3].GetUint();
+    hand.serial = member[4].GetUint();
+    return hand;
+}
 
+Building* SquadSettingsInfo::parseBuildingMember(rapidjson::Value& member)
+{
+
+    auto itr = member.FindMember("hand");
+    if (itr != member.MemberEnd())
+    {
+        hand hand = parseHandMember(itr->value);
+        if (hand.isValid())
+        {
+            return hand.getBuilding();
+        }
+    }
+
+    return nullptr;
+}
+
+void SquadAutonomy::SquadSettingsInfo::readSquadPackagesFromMember(rapidjson::Value& member)
+{
+    std::vector<GameData*>* _AIPackageList = SquadAutonomySettings::getSingleton().getAIPackageList();
+    for (auto itr = member.Begin(); itr != member.End(); ++itr)
+    {
+        int priority = -1;
+        std::string packageName = "";
+        auto packageItr = itr->FindMember("priority");
+        if (packageItr != itr->MemberEnd())
+        {
+            priority = packageItr->value.GetInt();
+        }
+        else continue;
+        packageItr = itr->FindMember("name");
+        if (packageItr != itr->MemberEnd())
+        {
+            packageName = packageItr->value.GetString();
+        }
+
+        auto packageInListIt = std::find_if(
+            _AIPackageList->begin(),
+            _AIPackageList->end(),
+            [&packageName](GameData* packageData) { return packageName == packageData->name; }
+        );
+        DebugLog("Package: " + sc::toString(priority) + " " + packageName);
+        if (*packageInListIt) addPackage(priority, *packageInListIt);
+    }
+}
+
+void SquadSettingsInfo::readSquadOptionsFromMember(rapidjson::Value& member)
+{
+    for (auto itr = member.MemberBegin(); itr != member.MemberEnd(); ++itr)
+    {
+        std::string key = itr->name.GetString();
+        rapidjson::Value& subMember = itr->value;
+        if (key == "general")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+                if (key == "startWorkTime")
+                {
+                    _startWorkTime = subItr->value.GetFloat();
+                }
+                else if (key == "endWorkTime")
+                {
+                    _endWorkTime = subItr->value.GetFloat();
+                }
+                else if (key == "autoMovementSpeed")
+                {
+                    _autoMovementSpeed = subItr->value.GetBool();
+                }
+                else if (key == "restUntilHealed")
+                {
+                    _restUntilHealed = subItr->value.GetBool();
+                }
+                else if (key == "restThreshold")
+                {
+                    _restThreshold = subItr->value.GetFloat();
+                }
+                else if (key == "healedThreshold")
+                {
+                    _healedThreshold = subItr->value.GetFloat();
+                }
+                else if (key == "usePaidBeds")
+                {
+                    _usePaidBeds = subItr->value.GetBool();
+                }
+                else if (key == "doSleep")
+                {
+                    _doSleep = subItr->value.GetBool();
+                }
+            }
+        }
+        else if (key == "labour")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+                if (key == "labourScience")
+                {
+                    _labourScience = subItr->value.GetFloat();
+                }
+                else if (key == "labourLabouring")
+                {
+                    _labourLabouring = subItr->value.GetFloat();
+                }
+                else if (key == "labourEngineer")
+                {
+                    _labourEngineer = subItr->value.GetFloat();
+                }
+                else if (key == "labourCooking")
+                {
+                    _labourCooking = subItr->value.GetFloat();
+                }
+                else if (key == "labourRobotics")
+                {
+                    _labourRobotics = subItr->value.GetFloat();
+                }
+                else if (key == "labourMedic")
+                {
+                    _labourMedic = subItr->value.GetFloat();
+                }
+                else if (key == "labourWeaponSmith")
+                {
+                    _labourWeaponSmith = subItr->value.GetFloat();
+                }
+                else if (key == "labourArmourSmith")
+                {
+                    _labourArmourSmith = subItr->value.GetFloat();
+                }
+                else if (key == "labourCrossbowSmith")
+                {
+                    _labourCrossbowSmith = subItr->value.GetFloat();
+                }
+                else if (key == "labourAutomaticMachine")
+                {
+                    _labourAutomaticMachine = subItr->value.GetFloat();
+                }
+                else if (key == "labourOther")
+                {
+                    _labourOther = subItr->value.GetFloat();
+                }
+            }
+        }
+        else if (key == "combat")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+                if (key == "attackEnemies")
+                {
+                    _attackEnemies = subItr->value.GetBool();
+                }
+                else if (key == "protectAllies")
+                {
+                    _protectAllies = subItr->value.GetBool();
+                }
+                else if (key == "doMedic")
+                {
+                    _doMedic = subItr->value.GetBool();
+                }
+                else if (key == "doRescue")
+                {
+                    _doRescue = subItr->value.GetBool();
+                }
+                else if (key == "rescueOwnSquadOnly")
+                {
+                    _rescueOwnSquadOnly = subItr->value.GetBool();
+                }
+            }
+        }
+        else if (key == "guard")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+
+                if (key == "manTurrets")
+                {
+                    _manTurrets = subItr->value.GetBool();
+                }
+                else if (key == "stayInsideGate")
+                {
+                    _stayInsideGate = subItr->value.GetBool();
+                }
+                else if (key == "closeGate")
+                {
+                    _closeGate = subItr->value.GetBool();
+                }
+            }
+        }
+        else if (key == "shopping")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+
+                if (key == "doShopping")
+                {
+                    _doShopping = subItr->value.GetBool();
+                }
+                else if (key == "buyItems")
+                {
+                    _buyItems = readShoppingItemsFromMember(subItr->value);
+                }
+                else if (key == "sellItems")
+                {
+                    _sellItems = readShoppingItemsFromMember(subItr->value);
+                }
+            }
+        }
+        else if (key == "inventory")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+
+                if (key == "doLooting")
+                {
+                    _doLooting = subItr->value.GetBool();
+                }
+                else if (key == "putLootsInStorage")
+                {
+                    _putLootsInStorage = subItr->value.GetBool();
+                }
+                else if (key == "ignoreEquipped")
+                {
+                    _ignoreEquipped = subItr->value.GetBool();
+                }
+                else if (key == "forbidItems")
+                {
+                    _forbidItems = readForbidItemsFromMember(subItr->value);
+                }
+            }
+        }
+    }
+}
+
+std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppingItemsFromMember(rapidjson::Value& member)
+{
+    // array of objs with member itemFunction(int), quantity(int), onlyGoodDeal(bool), shopTowns(array of townbase hand array)
+    std::unordered_map<ItemFunction, ShoppingItemInfo> shoppingItems;
+    for (auto itr = member.Begin(); itr != member.End(); ++itr)
+    {
+        ItemFunction itemFunc = ITEM_NO_FUNCTION;
+        auto subItr = itr->FindMember("itemFunction");
+        if (subItr != itr->MemberEnd())
+        {
+            itemFunc = static_cast<ItemFunction>(subItr->value.GetInt());
+        }
+        else continue;
+        int quantity = 0;
+        SettingsUtils::parseIntSetting(*itr, "quantity", quantity);
+        bool onlyGoodDeal = false;
+        SettingsUtils::parseBoolSetting(*itr, "onlyGoodDeal", onlyGoodDeal);
+        subItr = itr->FindMember("shopTowns");
+        std::unordered_set<TownBase*> shopTowns;
+        if (subItr != itr->MemberEnd())
+        {
+            // iterating over an array of townbase* hand array
+            for (auto shopTownsItr = subItr->value.Begin(); shopTownsItr != subItr->value.End(); ++shopTownsItr)
+            {
+                auto handItr = shopTownsItr->FindMember("hand");
+                if (handItr != shopTownsItr->MemberEnd())
+                {
+                    hand townHand = parseHandMember(handItr->value);
+                    if (townHand)
+                    {
+                        TownBase* town = townHand.getTown();
+                        if (town) shopTowns.insert(town);
+                    }
+                }
+            }
+        }
+        ShoppingItemInfo shoppingItemInfo(quantity);
+        shoppingItemInfo.onlyGoodDeal = onlyGoodDeal;
+        shoppingItemInfo.shopTowns = shopTowns;
+        shoppingItems[itemFunc] = shoppingItemInfo;
+    }
+    return shoppingItems;
+}
+
+std::unordered_set<ItemFunction> SquadAutonomy::SquadSettingsInfo::readForbidItemsFromMember(rapidjson::Value& member)
+{
+    std::unordered_set<ItemFunction> forbidItems;
+
+    for (auto itr = member.Begin(); itr != member.End(); ++itr)
+    {
+        ItemFunction itemFunc = ITEM_NO_FUNCTION;
+        auto subItr = itr->FindMember("itemFunction");
+        if (subItr != itr->MemberEnd())
+        {
+            itemFunc = static_cast<ItemFunction>(subItr->value.GetInt());
+        }
+        else continue;
+        forbidItems.insert(itemFunc);
+    }
+
+    return forbidItems;
+}
 
 
 hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)
@@ -1345,11 +1742,6 @@ std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppi
         iss >> itemFunction
             >> quantity;
         ShoppingItemInfo shoppingItem(quantity);
-        if (std::getline(stream, line))
-        {
-            SettingsUtils::parseBoolSetting(line, onlyGoodDeal);
-            shoppingItem.onlyGoodDeal = onlyGoodDeal;
-        }
         shoppingItems[static_cast<ItemFunction>(itemFunction)] = shoppingItem;
     }
 

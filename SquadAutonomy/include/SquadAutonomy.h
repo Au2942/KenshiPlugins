@@ -22,7 +22,7 @@ namespace SquadAutonomy
         }
         int quantity;
         bool onlyGoodDeal;
-        std::vector<TownBase*> shopTowns;
+        std::unordered_set<TownBase*> shopTowns;
     };
 
     extern ogre_unordered_map<TaskType, TaskData*>::type* taskTypetaskData;

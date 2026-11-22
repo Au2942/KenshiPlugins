@@ -7,13 +7,26 @@
 
 namespace SquadAutonomy
 {
-    DataPanelLine_Button* SquadAutonomyPanelUtils::addTextButton(DatapanelGUI& panel, int category, const std::string& label)
+    DataPanelLine_Button* SquadAutonomyPanelUtils::addTextButton(DatapanelGUI& panel, int category, const std::string& text, const std::string& label, bool textbox)
     {
-        DataPanelLine_Button* button = panel.setLineTextButton("", label, category, 1.0f, "Kenshi_Button2");
-
-        button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
-        button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
-
+        DataPanelLine_Button* button = panel.setLineTextButton(text, label, category, 1.0f, "Kenshi_Button2");
+        if (!text.empty())
+        {
+            button->w1->setVisible(true);
+            button->button->setRealSize(0.3, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+            button->button->setRealPosition(1.0 - static_cast<float>(button->w1->getLeft())/button->button->getParent()->getWidth() - 0.3, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
+            if (textbox)
+            {
+                button->w1->changeWidgetSkin("Kenshi_GenericTextBoxFlat");
+                button->w1->setCaption(text);
+                button->w1->setSize(button->button->getLeft() - button->w1->getLeft(), button->w1->getHeight());
+            }
+        }
+        else
+        {
+            button->button->setRealSize(0.7, static_cast<float>(button->button->getHeight()) / button->button->getParent()->getHeight());
+            button->button->setRealPosition(0.15, static_cast<float>(button->button->getTop()) / button->button->getParent()->getHeight());
+        }
         return button;
     }
 
@@ -36,11 +49,11 @@ namespace SquadAutonomy
         return checkbox;
     }
 
-    DataPanelLine_DropBox* SquadAutonomyPanelUtils::addDropBox(DatapanelGUI& panel, int category, const std::string& label, int& indexValue, bool goBox, float width, bool showLabel, bool seperateTextLine)
+    DataPanelLine_DropBox* SquadAutonomyPanelUtils::addDropBox(DatapanelGUI& panel, int category, const std::string& label, int& indexValue, bool goBox, float width, bool showLabel, bool seperateTextLine, bool textbox)
     {
         if (seperateTextLine)
         {
-            addText(panel, category, label, true, true, MyGUI::Align::HCenter | MyGUI::Align::VCenter);
+            addText(panel, category, label, true, textbox, MyGUI::Align::Center);
         }
         auto dropBox = panel.setLineDropBox(label, category, &indexValue, goBox, width);
         if (!showLabel)
@@ -64,11 +77,11 @@ namespace SquadAutonomy
     }
     */
 
-    DataPanelLine_SliderEditable* SquadAutonomyPanelUtils::addSlider(DatapanelGUI& panel, int category, const std::string& label, bool showLabel, float& value, float min, float max, int precision, bool wordWrap, bool seperateTextLine)
+    DataPanelLine_SliderEditable* SquadAutonomyPanelUtils::addSlider(DatapanelGUI& panel, int category, const std::string& label, bool showLabel, float& value, float min, float max, int precision, bool wordWrap, bool seperateTextLine, bool textbox)
     {
         if (seperateTextLine)
         {
-            addText(panel, category, label);
+            addText(panel, category, label, wordWrap, textbox, MyGUI::Align::Center);
         }
         auto slider = panel.setLineSliderEditable(label, category, showLabel, min, max, &value);
         slider->setPrecision(precision);
@@ -106,6 +119,15 @@ namespace SquadAutonomy
         }
 
         return text;
+    }
+
+    std::string SquadAutonomyPanelUtils::getTownBiomeName(TownBase* town)
+    {
+        std::string biomeName = "";
+        if (town->biome && town->biome->data) biomeName = town->biome->data->name;
+        std::string townName = town->getKnownName();
+        if (!biomeName.empty() && biomeName != "NONE") townName += ", " + biomeName;
+        return townName;
     }
 
 }

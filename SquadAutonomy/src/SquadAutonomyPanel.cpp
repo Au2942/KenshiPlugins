@@ -4,6 +4,8 @@
 #include "SquadAutonomyLocalization.h"
 #include "SquadAutonomyPanelUtils.h"
 
+#include <extern/AreaBiomeGroup.h>
+
 #include <Debug.h>
 
 #include <ogre/OgreStringConverter.h>
@@ -21,7 +23,6 @@
 #include <kenshi/Town.h>
 #include <kenshi/Building/Building.h>
 #include <kenshi/GameWorld.h>
-//#include <kenshi/ZoneManager.h>
 
 using namespace SquadAutonomy;
 
@@ -62,7 +63,8 @@ void SquadAutonomyPanel::create()
     _panel->setCaption(Localization::lineSquadAutonomy);
     _panel->setPanelName("SquadAutonomy");
     
-    createPopup();
+    _popupPanel.reset(new PopupPanel());
+    _popupPanel->create();
 
     _mainTab.reset(new MainTab(*_panel, 0));
     _optionsTab.reset(new OptionsTab(*_panel, *_popupPanel, 1));
@@ -92,26 +94,10 @@ void SquadAutonomyPanel::create()
     
 }
 
-void SquadAutonomyPanel::createPopup()
-{
-    // create popup panel
-    if (_popupPanel != nullptr)
-    {
-        _popupPanel->show(false);
-        gui->destroy(_popupPanel);
-    }
-
-    _popupPanel = gui->createDatapanel(0.25f, 0.125f, 0.25f, 0.3f, true, "Window", true);
-    //_popupPanel->setCaption(Localization::lineSquadAutonomyPopup);
-    _popupPanel->setPanelName("SquadAutonomyPopup");
-    _popupPanel->show(false);
-
-}
-
 void SquadAutonomyPanel::onTabChanged(DatapanelGUI* panel, int category)
 {
     refresh();
-    _popupPanel->show(false);
+    if (_popupPanel) _popupPanel->hide();
     if (_optionsTab)
     {
         _optionsTab->updateFloatingPanel(category);
@@ -158,7 +144,7 @@ void SquadAutonomyPanel::show()
 void SquadAutonomyPanel::hide()
 {
     _panel->show(false);
-    _popupPanel->show(false);
+    _popupPanel->hide();
 }
 
 bool SquadAutonomyPanel::isVisible()
@@ -201,6 +187,83 @@ void SquadAutonomyPanel::createModSettingsButton()
     btn->eventMouseButtonClick += MyGUI::newDelegate(ShowModSettings);
 }
 
+SquadAutonomyPanel::PopupPanel::PopupPanel():
+    _panel(nullptr)
+{
+}
+
+void SquadAutonomyPanel::PopupPanel::create()
+{
+    // create popup panel
+    if (_panel != nullptr)
+    {
+        _panel->show(false);
+        gui->destroy(_panel);
+    }
+
+    _panel = gui->createDatapanel(0.25f, 0.125f, 0.25f, 0.35f, true, "Window", true);
+    _panel->setPanelName("SquadAutonomyPopup");
+
+    _panel->win->getClientWidget()->setRealSize((float)_panel->win->getClientWidget()->getWidth()/_panel->win->getClientWidget()->getParent()->getWidth(), 0.9);
+    _bottomPanel = _panel->win->getClientWidget()->getParent()->createWidgetReal<MyGUI::Widget>("Kenshi_GenericWindowHeaderSkin", 0.0, 0.9, 1.0, 0.1, MyGUI::Align::Left, "BottomPanel");
+    _bottomButton = _bottomPanel->createWidgetReal<MyGUI::Button>("Kenshi_Button1", 0.25, 0.1, 0.5, 0.8, MyGUI::Align::Center, "BottomButton");
+    _panel->show(false);
+}
+
+void SquadAutonomyPanel::PopupPanel::refresh()
+{
+    if (_panel) _panel->clear();
+}
+
+void SquadAutonomyPanel::PopupPanel::show(bool showBottomPanel)
+{
+    if (_panel)
+    {
+        _bottomPanel->setVisible(showBottomPanel);
+        _panel->show(true);
+    }
+}
+
+void SquadAutonomyPanel::PopupPanel::hide()
+{
+    if (_panel) _panel->show(false);
+}
+
+bool SquadAutonomyPanel::PopupPanel::isVisible()
+{
+    if (!_panel) return false;
+    return _panel->isVisible();
+}
+
+DatapanelGUI* SquadAutonomyPanel::PopupPanel::getPanel() const
+{
+    return _panel;
+}
+
+template<typename T>
+void SquadAutonomy::SquadAutonomyPanel::PopupPanel::setupBottomButton(std::string caption, T* object, void(T::* callback)(MyGUI::Widget*))
+{
+    setBottomButtonCaption(caption);
+    clearBottomButtonClick();
+    onBottomButtonClick(object, callback);
+}
+
+template<typename T>
+void SquadAutonomyPanel::PopupPanel::onBottomButtonClick(T* object, void(T::* callback)(MyGUI::Widget*))
+{
+    _bottomButton->eventMouseButtonClick += MyGUI::newDelegate(object, callback);
+}
+
+void SquadAutonomyPanel::PopupPanel::clearBottomButtonClick()
+{
+    _bottomButton->eventMouseButtonClick.clear();
+}
+
+void SquadAutonomyPanel::PopupPanel::setBottomButtonCaption(std::string caption)
+{
+    _bottomButton->setCaption(caption);
+}
+
 
 SquadAutonomyPanel::MainTab::MainTab(DatapanelGUI& panel, int tabId) :
     _panel(&panel),
@@ -234,22 +297,22 @@ void SquadAutonomyPanel::MainTab::refresh()
 
     _panel->addSpace(_category, 0.25f);
 
-    auto homeButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Set Squad Home Building"));
+    auto homeButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Set Squad Home Building"));
     Utils::setCallback(*homeButton, this, &MainTab::setHome);
 
-    auto workButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Set Squad Work Building"));
+    auto workButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Set Squad Work Building"));
     Utils::setCallback(*workButton, this, &MainTab::setWork);
 
     //auto barButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Make Building a Bar"));
     //Utils::setCallback(*barButton, this, &MainTab::setBar);
 
-    auto clearButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buildings"));
+    auto clearButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Clear Buildings"));
     Utils::setCallback(*clearButton, this, &MainTab::clearBuildings);
 
     _panel->addSpace(_category, 0.25f);
     _panel->setLineSpacing(24.0);
 
-    auto textBox = Utils::addText(*_panel, _category, Localization::gettext("AI Package"), true, true, MyGUI::Align::Center);
+    auto textBox = Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("AI Package"), true, false, MyGUI::Align::Center);
 
     auto editBox = _panel->setLineTextEditable(Localization::gettext("Search"), "", _category, true, false, MyGUI::Align::Left, 0.95f);
     Utils::setCallback(*editBox, this, &MainTab::changeAIPackageSearchText);
@@ -268,10 +331,10 @@ void SquadAutonomyPanel::MainTab::refresh()
     _panel->addSpace(_category, 0.25f);
     _panel->setLineSpacing(32.0);
 
-    auto addAIButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add AI Package"));
+    auto addAIButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Add AI Package"));
     Utils::setCallback(*addAIButton, this, &MainTab::addAI);
 
-    auto clearAIButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear AI Packages"));
+    auto clearAIButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Clear AI Packages"));
     Utils::setCallback(*clearAIButton, this, &MainTab::clearAI);
 
     _panel->addSpace(_category, 0.25f);
@@ -622,8 +685,9 @@ std::string SquadAutonomyPanel::MainTab::getBuildingName(const Building& buildin
 }
 
 
-SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::OptionsTab(DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     _panel(&panel),
+    _popupPanel(&popupPanel),
     _floatingPanel(nullptr),
     _selectedSquad(nullptr),
     _category(category),
@@ -764,7 +828,7 @@ void SquadAutonomyPanel::OptionsTab::refreshCallback(MyGUI::ComboBox* sender, si
     {
         return;
     }
-    _popupPanel->show(false);
+    if (_popupPanel) _popupPanel->hide();
     refresh();
 }
 
@@ -809,7 +873,7 @@ void SquadAutonomyPanel::OptionsTab::readFromSquadSettings(const SquadSettingsIn
 }
 
 
-SquadAutonomyPanel::OptionsTab::OptionsBase::OptionsBase(OptionsTab &optionsTab, DatapanelGUI &panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::OptionsBase::OptionsBase(OptionsTab &optionsTab, DatapanelGUI &panel, PopupPanel& popupPanel, int category) :
     _optionsTab(&optionsTab),
     _panel(&panel),
     _popupPanel(&popupPanel),
@@ -818,7 +882,7 @@ SquadAutonomyPanel::OptionsTab::OptionsBase::OptionsBase(OptionsTab &optionsTab,
 }
 
 
-SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::BasicOptions::BasicOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     startWorkTime(0.0f),
     endWorkTime(24.0f),
@@ -894,7 +958,7 @@ void SquadAutonomyPanel::OptionsTab::BasicOptions::writeToSquadSettings(SquadSet
 }
 
 
-SquadAutonomyPanel::OptionsTab::LabourOptions::LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::LabourOptions::LabourOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     setAll(0.0),
     science(1.0),
@@ -1025,7 +1089,7 @@ void SquadAutonomyPanel::OptionsTab::LabourOptions::writeToSquadSettings(SquadSe
 }
 
 
-SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     attackEnemies(true),
     protectAllies(true),
@@ -1090,7 +1154,7 @@ void SquadAutonomyPanel::OptionsTab::CombatOptions::writeToSquadSettings(SquadSe
 }
 
 
-SquadAutonomyPanel::OptionsTab::GuardOptions::GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::GuardOptions::GuardOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     manTurrets(false),
     stayInsideGate(false),
@@ -1160,10 +1224,15 @@ const ItemFunction itemFunctions[] =
     ITEM_SEVERED_LIMB
 };
 
-SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category):
+SquadAutonomyPanel::OptionsTab::ShoppingOptions::ShoppingOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     itemFunctionListIndex(ITEM_FIRSTAID),
-    amount(0)
+    quantity(0.0),
+    selectedItem(nullptr),
+    itemQuantity(0.0),
+    itemOnlyGoodDeal(false),
+    townListIndex(0),
+    itemShopTowns()
 {
 }
 
@@ -1237,44 +1306,47 @@ void updateItemFunctionList(DataPanelLine_DropBox* dropBox)
 bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo& settings)
 {
     bool hasTask = false;
+    selectedItem = nullptr;
     if (settings.hasTask(SHOPPING))
     {
         hasTask = true;
+        _panel->setLineSpacing(28.0);
         auto shoppingBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Shopping"), doShopping);
         Utils::setCallback(*shoppingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
         if (doShopping)
         {
-            auto dropBox = Utils::addDropBox(*_panel, _category, Localization::lineItemCategory, itemFunctionListIndex, false, 1.0f, false, true);
+            auto dropBox = Utils::addDropBox(*_panel, _category, *_MainColorCode + Localization::lineItemCategory, itemFunctionListIndex, false, 1.0f, false, true);
             updateItemFunctionList(dropBox);
             dropBox->setSelectedValue(itemFunctionListIndex);
-            Utils::addSlider(*_panel, _category, Localization::gettext("Min Amount"), true, amount, 0.0f, 50.0f, 0);
-            auto addBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Buy Item"));
+            Utils::addSlider(*_panel, _category, Localization::gettext("Quantity"), true, quantity, 0.0f, 50.0f, 0);
+            auto addBuyItemButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Add Buy Item"));
             Utils::setCallback(*addBuyItemButton, this, &OptionsTab::ShoppingOptions::addBuyItem);
-            auto addSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Sell Item"));
+            auto addSellItemButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Add Sell Item"));
             Utils::setCallback(*addSellItemButton, this, &OptionsTab::ShoppingOptions::addSellItem);
 
             auto buyItems = settings.getBuyItems();
-            Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), false, false);
-            auto clearBuyItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Buy Items"));
+            //Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), false, false);
+            auto clearBuyItemButton = Utils::addTextButton(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), Localization::gettext("Clear Buy Items"));
             Utils::setCallback(*clearBuyItemButton, this, &OptionsTab::ShoppingOptions::clearBuyItem);
 
             for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
             {
                 //Utils::addText(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second));
-                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second.quantity));
-                button->button->setUserData(*iter);
-                button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openShopItemDetail);
+                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Buy") + " " + getItemFunctionName(iter->first) +
+                    Localization::gettext(": until >=") + " " + Ogre::StringConverter::toString(iter->second.quantity), "Info", true);
+                button->button->setUserData(iter->first);
+                button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openBuyItemDetail);
             }
             auto sellItems = settings.getSellItems();
-            Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
-            auto clearSellItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Sell Item"));
+            //Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
+            auto clearSellItemButton = Utils::addTextButton(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), Localization::gettext("Clear Sell Item"));
             Utils::setCallback(*clearSellItemButton, this, &OptionsTab::ShoppingOptions::clearSellItem);
             for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
             {
-                //Utils::addText(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second));
-                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) + Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second.quantity));
-                button->button->setUserData(*iter);
-                button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openShopItemDetail);
+                auto button = Utils::addTextButton(*_panel, _category, Localization::gettext("Sell") + " " + getItemFunctionName(iter->first) +
+                    Localization::gettext(": until <=") + " " + Ogre::StringConverter::toString(iter->second.quantity), "Info", true);
+                button->button->setUserData(iter->first);
+                button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openSellItemDetail);
             }
         }
     }
@@ -1296,14 +1368,14 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addBuyItem(DataPanelLine* 
 
     if (squadSettings)
     {
-        if (amount < 1)
+        if (quantity < 1)
         {
             ou->showPlayerAMessage(Localization::gettext("Buy amount must be higher than 0"), false);
             return;
         }
         ItemFunction itemFunction = static_cast<ItemFunction>(dropBox->getSelectedValue());
         auto sellItems = squadSettings->getSellItems();
-        int buyAmount = (int)amount;
+        int buyAmount = (int)quantity;
         if (sellItems.find(itemFunction) != sellItems.end())
         {
             int oldSellAmount = sellItems[itemFunction].quantity;
@@ -1332,7 +1404,7 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::addSellItem(DataPanelLine*
     {
         ItemFunction itemFunction = static_cast<ItemFunction>(dropBox->getSelectedValue());
         auto buyItems = squadSettings->getBuyItems();
-        int sellAmount = (int)amount;
+        int sellAmount = (int)quantity;
         if (buyItems.find(itemFunction) != buyItems.end())
         {
             sellAmount = std::max(sellAmount, buyItems[itemFunction].quantity);
@@ -1379,15 +1451,130 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearSellItem(DataPanelLin
     _optionsTab->refresh();
 }
 
-void SquadAutonomyPanel::OptionsTab::ShoppingOptions::openShopItemDetail(MyGUI::Widget* sender)
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::addTown(DataPanelLine* line)
 {
+    if (!SquadAutonomySettings::getSingleton().initialized)
+    {
+        return;
+    }
+    SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
+    TownBase* town = nullptr;
+    if (townListIndex < settings.getTownBaseList()->size())
+    {
+        DebugLog("townbaselist size: " + sc::toString(settings.getTownBaseList()->size()));
+        town = settings.getTownBaseList()->at(townListIndex);
+    }
+    if (town)
+    {
+        itemShopTowns.insert(town);
+        refreshShopItemDetail(nullptr);
+    }
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::clearTown(DataPanelLine* line)
+{
+    itemShopTowns.clear();
+    refreshShopItemDetail(nullptr);
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::updateSelectedItemInfo(MyGUI::Widget* sender)
+{
+    selectedItem->second.quantity = itemQuantity;
+    selectedItem->second.onlyGoodDeal = itemOnlyGoodDeal;
+    selectedItem->second.shopTowns = itemShopTowns;
+    _popupPanel->hide();
+    _optionsTab->refresh();
+}
+
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::openBuyItemDetail(MyGUI::Widget* sender)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+    ItemFunction func = *sender->getUserData<ItemFunction>();
+    auto buyItems = squadSettings->getBuyItemsPtr();
+    auto iter = buyItems->find(func);
+    if (iter != buyItems->end())
+    {
+        selectedItem = &(*iter);
+        setupTradeItemDetail();
+    }
+}
+
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::openSellItemDetail(MyGUI::Widget* sender)
+{
+    if (!SquadAutonomySettings::getSingleton().initialized || !_optionsTab->_selectedSquad)
+    {
+        return;
+    }
+    auto squadSettings = SquadAutonomySettings::getSingleton().getSquadSettings(_optionsTab->_selectedSquad, true);
+    ItemFunction func = *sender->getUserData<ItemFunction>();
+    auto sellItems = squadSettings->getSellItemsPtr();
+    auto iter = sellItems->find(func);
+    if (iter != sellItems->end())
+    {
+        selectedItem = &(*iter);
+        setupTradeItemDetail();
+    }
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::setupTradeItemDetail()
+{
+    itemQuantity = selectedItem->second.quantity;
+    itemOnlyGoodDeal = selectedItem->second.onlyGoodDeal;
+    itemShopTowns.clear();
+    itemShopTowns = selectedItem->second.shopTowns;
+    _popupPanel->setupBottomButton("Save Settings", this, &ShoppingOptions::updateSelectedItemInfo);
+    refreshShopItemDetail(nullptr);
+}
+
+void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refreshShopItemDetail(DataPanelLine* line)
+{
+    if (!selectedItem) return;
     if (_popupPanel)
     {
-        _popupPanel->show(true);
-        std::pair<const ItemFunction, int> item = *sender->getUserData<std::pair<const ItemFunction, int>>();
-        _popupPanel->setCaption(getItemFunctionName(item.first));
-        _popupPanel->clear();
+        auto popup = _popupPanel->getPanel();
+        _popupPanel->show();
+        //std::pair<const ItemFunction, ShoppingItemInfo>* item = 
+        popup->clear();
+        popup->setLineSpacing(28.0);
+        popup->setCaption(getItemFunctionName(selectedItem->first));
+        
+        Utils::addSlider(*popup, 0, Localization::gettext("Quantity"), true, itemQuantity, 0.0f, 50.0f, 0);
+
+        auto goodDealBox = Utils::addCheckbox(*popup, 0, Localization::gettext("Only Good Deal"), itemOnlyGoodDeal);
+        //Utils::setCallback(*goodDealBox, this, &refreshShopItemDetail);
+        auto editBox = popup->setLineTextEditable(Localization::gettext("Search"), "", 0, true, false, MyGUI::Align::Left, 0.95f);
+        Utils::setCallback(*editBox, this, &ShoppingOptions::changeTownSearchText);
+        //probably have to change the changeTownSearchText to accept std::string for the dropBox key
+        //and has a method inside options to call for their specific dropbox
+        auto dropBox = popup->setLineDropBox(Localization::lineTownList, 0, &townListIndex, false, 1.0f);
+        _optionsTab->updateTownList(*popup, "", Localization::lineTownList, 0, townListIndex);
+        auto addTownButton = Utils::addTextButton(*popup, 0, "", Localization::gettext("Add shopping town"));
+        Utils::setCallback(*addTownButton, this, &ShoppingOptions::addTown);
+        auto clearTownButton = Utils::addTextButton(*popup, 0, "", Localization::gettext("Clear shopping towns"));
+        Utils::setCallback(*clearTownButton, this, &ShoppingOptions::clearTown);
+        for (auto iter = itemShopTowns.begin(); iter != itemShopTowns.end(); ++iter)
+        {
+            Utils::addText(*popup, 0, Utils::getTownBiomeName(*iter), true, true);
+        }
+        //popup->addSpace(0, 1.0);
+        Utils::addText(*popup, 0, "", false, false); //dummy textbox
     }
+}
+
+void SquadAutonomyPanel::OptionsTab::ShoppingOptions::changeTownSearchText(DataPanelLine* line)
+{
+    if (!line || line->classType != DataPanelLine::DPL_TEXT_EDIT)
+    {
+        return;
+    }
+
+    std::string keyword = dynamic_cast<DataPanelLine_TextEditable*>(line)->editBox->getOnlyText();
+
+    _optionsTab->updateTownList(*_popupPanel->getPanel(), keyword, Localization::lineTownList, 0, townListIndex);
 }
 
 void SquadAutonomyPanel::OptionsTab::ShoppingOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
@@ -1400,7 +1587,7 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(Squad
     squadSettings.setDoShopping(doShopping);
 }
 
-SquadAutonomyPanel::OptionsTab::InventoryOptions::InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category) :
+SquadAutonomyPanel::OptionsTab::InventoryOptions::InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     doLooting(true),
     putLootsInStorage(true),
@@ -1429,12 +1616,12 @@ bool SquadAutonomyPanel::OptionsTab::InventoryOptions::refresh(SquadSettingsInfo
             Utils::setCallback(*ignoreEquippedBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
 
             //auto dropBox = _panel->setLineDropBox(Localization::lineItemCategory, _category, &itemFunctionListIndex, false, 1.0f);
-            auto dropBox = Utils::addDropBox(*_panel, _category, Localization::lineItemCategory, itemFunctionListIndex, false, 1.0f, false, true);
+            auto dropBox = Utils::addDropBox(*_panel, _category, *_MainColorCode + Localization::lineItemCategory, itemFunctionListIndex, false, 1.0f, false, true);
             updateItemFunctionList(dropBox);
             dropBox->setSelectedValue(itemFunctionListIndex);
-            auto addForbidItemButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Add Forbid Item"));
+            auto addForbidItemButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Add Forbid Item"));
             Utils::setCallback(*addForbidItemButton, this, &OptionsTab::InventoryOptions::addForbidItem);
-            auto clearForbidItemsButton = Utils::addTextButton(*_panel, _category, Localization::gettext("Clear Forbid Items"));
+            auto clearForbidItemsButton = Utils::addTextButton(*_panel, _category, "", Localization::gettext("Clear Forbid Items"));
             Utils::setCallback(*clearForbidItemsButton, this, &OptionsTab::InventoryOptions::clearForbidItems);
             auto forbidItems = settings.getForbidItems();
             for (auto iter = forbidItems.begin(); iter != forbidItems.end(); ++iter)
@@ -1498,31 +1685,14 @@ void SquadAutonomyPanel::OptionsTab::InventoryOptions::writeToSquadSettings(Squa
     squadSettings.setIgnoreEquipped(ignoreEquipped);
 }
 
-SquadAutonomyPanel::OptionsTab::TravelOptions::TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, DatapanelGUI& popupPanel, int category):
-    OptionsBase(optionsTab, panel, popupPanel, category),
-    townListIndex(0)
-{
-}
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::changeTownSearchText(DataPanelLine* line)
-{
-    if (!line || line->classType != DataPanelLine::DPL_TEXT_EDIT)
-    {
-        return;
-    }
-
-    std::string keyword = dynamic_cast<DataPanelLine_TextEditable*>(line)->editBox->getOnlyText();
-
-    updateTownList(keyword);
-}
-
-void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::string& keyword)
+void SquadAutonomyPanel::OptionsTab::updateTownList(DatapanelGUI& panel, const std::string& keyword, const std::string& dropBoxKey, int category, int index)
 {
     if (!SquadAutonomySettings::getSingleton().initialized)
     {
         return;
     }
-    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(_panel->getLine(Localization::lineTownList, _category));
+    auto dropBox = dynamic_cast<DataPanelLine_DropBox*>(panel.getLine(dropBoxKey, category));
     if (!dropBox)
     {
         return;
@@ -1530,7 +1700,7 @@ void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::st
     // sync townlist in settings
     SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
 
-    int currentSelected = townListIndex;
+    int currentSelected = index;
     if (currentSelected < 0)
     {
         currentSelected = 0;
@@ -1549,12 +1719,24 @@ void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::st
         TownBase* town = dynamic_cast<TownBase*>(*iter);
         if (!town) continue;
         if (!town->isDiscovered()) continue;
+        switch (town->townType)
+        {
+        case TownType::TOWN_NULL:
+        case TownType::TOWN_POI:
+        case TownType::TOWN_RUINS:
+        case TownType::TOWN_PRISON:
+        case TownType::TOWN_NEST:
+        case TownType::TOWN_NEST_MARKER:
+            continue;
+        default:
+            break;
+        }
         towns.push_back(town);
     }
     //sort alphabetically
     std::sort(towns.begin(), towns.end(), [](TownBase* a, TownBase* b)
     {
-        return a->getKnownName() < b->getKnownName();
+        return Utils::getTownBiomeName(a) < Utils::getTownBiomeName(b);
     });
 
     townObjects.clear();
@@ -1567,7 +1749,8 @@ void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::st
         for (auto iter = towns.begin(); iter != towns.end(); ++iter)
         {
             TownBase* town = dynamic_cast<TownBase*>(*iter);
-            dropBox->addAValue(town->getKnownName(), count);
+
+            dropBox->addAValue(Utils::getTownBiomeName(town), count);
             settingsTowns->push_back(town);
             count++;
         }
@@ -1579,12 +1762,14 @@ void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::st
         for (auto iter = towns.begin(); iter != towns.end(); ++iter)
         {
             TownBase* town = dynamic_cast<TownBase*>(*iter);
-            const std::string& name = town->getKnownName();
-            std::string nameUpper = name;
+
+            std::string townName = Utils::getTownBiomeName(town);
+            std::string nameUpper = townName;
             std::transform(nameUpper.begin(), nameUpper.end(), nameUpper.begin(), [](char c) { return std::toupper(c); });
             if (nameUpper.find(keywordUpper) != std::string::npos)
             {
-                dropBox->addAValue(name, count);
+                
+                dropBox->addAValue(townName, count);
                 settingsTowns->push_back(town);
                 if (selectVal == -1 || count == currentSelected)
                 {
@@ -1598,7 +1783,13 @@ void SquadAutonomyPanel::OptionsTab::TravelOptions::updateTownList(const std::st
     dropBox->setSelectedValue(selectVal);
 }
 
-bool SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(SquadSettingsInfo& settings)
+SquadAutonomyPanel::OptionsTab::TravelOptions::TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
+    OptionsBase(optionsTab, panel, popupPanel, category),
+    townListIndex(0)
+{
+}
+
+bool SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(SquadSettingsInfo& settings)
 {
     bool hasSignal = false;
     if (settings.hasSignal(SIG_WANDERING_TOWN_TO_TOWN))
@@ -1607,15 +1798,27 @@ bool SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(Squad
         auto editBox = _panel->setLineTextEditable(Localization::gettext("Search"), "", _category, true, false, MyGUI::Align::Left, 0.95f);
         Utils::setCallback(*editBox, this, &TravelOptions::changeTownSearchText);
         auto dropBox = _panel->setLineDropBox(Localization::lineTownList, _category, &townListIndex, false, 1.0f);
-        updateTownList();
+        _optionsTab->updateTownList(*_panel, "", Localization::lineTownList, _category, townListIndex);
     }
     return hasSignal;
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
+void SquadAutonomyPanel::OptionsTab::TravelOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
 }
 
-void SquadAutonomy::SquadAutonomyPanel::OptionsTab::TravelOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
+void SquadAutonomyPanel::OptionsTab::TravelOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
 {
+}
+
+void SquadAutonomyPanel::OptionsTab::TravelOptions::changeTownSearchText(DataPanelLine* line)
+{
+    if (!line || line->classType != DataPanelLine::DPL_TEXT_EDIT)
+    {
+        return;
+    }
+
+    std::string keyword = dynamic_cast<DataPanelLine_TextEditable*>(line)->editBox->getOnlyText();
+
+    _optionsTab->updateTownList(*_panel, keyword, Localization::lineTownList, _category, townListIndex);
 }

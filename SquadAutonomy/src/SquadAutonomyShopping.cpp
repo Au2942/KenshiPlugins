@@ -47,6 +47,7 @@ namespace SquadAutonomy
         }
         return result;
     }
+
     float (*scoreShopping_orig)(AI* thisptr, const hand& subject, const Ogre::Vector3& v);
     float scoreShopping_hook(AI* thisptr, const hand& subject, const Ogre::Vector3& v)
     {

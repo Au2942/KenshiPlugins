@@ -17,6 +17,7 @@ namespace SquadAutonomy
         SquadSettingsInfo(Platoon& squad);
 
         static std::unique_ptr<SquadSettingsInfo> readFromStream(std::istream& stream);
+        static std::unique_ptr<SquadSettingsInfo> readFromMember(rapidjson::Value& member);
         bool writeToStream(std::ostream& stream) const;
         rapidjson::Value getInfoMember(rapidjson::Document::AllocatorType& allocator) const;
 
@@ -146,6 +147,13 @@ namespace SquadAutonomy
         static rapidjson::Value getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo>);
         static rapidjson::Value getForbidItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_set<ItemFunction> forbidItems);
 
+        static hand parseHandMember(rapidjson::Value& member);
+        static Building* parseBuildingMember(rapidjson::Value& member);
+        void readSquadPackagesFromMember(rapidjson::Value& member);
+        void readSquadOptionsFromMember(rapidjson::Value& member);
+        static std::unordered_map <ItemFunction, ShoppingItemInfo> readShoppingItemsFromMember(rapidjson::Value& member);
+        static std::unordered_set <ItemFunction> readForbidItemsFromMember(rapidjson::Value& member);
+
         static hand parseHandSetting(const std::string& dataLine);
         static Building* parseBuildingSetting(const std::string& dataLine);
         static std::unordered_map <ItemFunction, ShoppingItemInfo> readShoppingItemsFromStream(std::istream& stream);
@@ -155,6 +163,7 @@ namespace SquadAutonomy
         void addTasksFromPackage(GameData* data);
         void addTasksFromGoals(GameData* data, lektor<GameData*>& goalDatas);
         void addSignalFromPackage(GameData* data);
+
         Platoon* _squad;
         PlayerInterface* _pi;
         bool _enabled;
@@ -239,11 +248,13 @@ namespace SquadAutonomy
         SquadAutonomySettings& operator=(const SquadAutonomySettings& other);
         SquadAutonomySettings& operator=(SquadAutonomySettings&& other);
 
-        rapidjson::Document saveDocument;
+        rapidjson::Document _saveDocument;
+        std::wstring _saveFileName;
 
         std::vector<GameData*> _AIPackageList;
         std::vector<GameData*> _squadTemplateList;
         std::vector<TownBase*> _townBaseList;
+        void _init();
         void _initGameData();
     };
 
