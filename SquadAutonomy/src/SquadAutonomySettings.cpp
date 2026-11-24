@@ -13,10 +13,12 @@
 #include <boost/scoped_ptr.hpp>
 
 #include <kenshi/Globals.h>
+#include <kenshi/RootObjectFactory.h>
 #include <kenshi/GameWorld.h>
 #include <kenshi/Building/UseableStuff.h>
 #include <kenshi/Character.h>
 #include <kenshi/Town.h>
+#include <kenshi/Item.h>
 #include <kenshi/StateBroadcastData.h>
 #include <kenshi/Platoon.h>
 #include <kenshi/Faction.h>
@@ -53,6 +55,34 @@ void SquadAutonomySettings::_init()
     _initGameData();
 }
 
+void SquadAutonomySettings::_populateItemDatasByFunctionList(lektor<GameData*> datas, ItemFunction itemFunc)
+{
+    std::sort(datas.begin(), datas.end(), [](GameData* a, GameData* b)
+    {
+        return a->name < b->name;
+    });
+    for (uint32_t i = 0; i < datas.size(); ++i)
+    {
+        auto data = datas[i];
+        if (!data->filesdata["physics file"].empty())
+        {
+            _addItemToItemDatasByFunctionList(data, itemFunc);
+        }
+    }
+    datas.clear();
+}
+
+void SquadAutonomy::SquadAutonomySettings::_addItemToItemDatasByFunctionList(GameData* data, ItemFunction itemFunc)
+{
+    auto itr = _itemDatasByFunctionList.find(itemFunc);
+    if (itr == _itemDatasByFunctionList.end())
+    {
+        _itemDatasByFunctionList[itemFunc] = std::vector<GameData*>();
+    }
+    _itemDatasByFunctionList[itemFunc].push_back(data);
+    Logger::logDebug("Loaded item: " + data->name + " func: " + sc::toString(static_cast<int>(itemFunc)));
+}
+
 void SquadAutonomySettings::_initGameData()
 {
     lektor<GameData*> datas;
@@ -86,7 +116,30 @@ void SquadAutonomySettings::_initGameData()
 
     auto newEndIt = std::unique(_AIPackageList.begin(), _AIPackageList.end());
     _AIPackageList.erase(newEndIt, _AIPackageList.end());
+
     datas.clear();
+    ou->gamedata.getDataOfType(datas, ITEM);
+    ou->gamedata.getDataOfType(datas, NEST_ITEM);
+    ou->gamedata.getDataOfType(datas, MAP_ITEM);
+    for (uint32_t i = 0; i < datas.size(); ++i)
+    {
+        auto data = datas[i];
+        ItemFunction itemFunc = static_cast<ItemFunction>(data->idata["item function"]);
+        if (data->type != NEST_ITEM || !data->filesdata["physics file"].empty())
+        {
+            _addItemToItemDatasByFunctionList(data, itemFunc);
+        }
+    }
+    datas.clear();
+    ou->gamedata.getDataOfType(datas, WEAPON);
+    ou->gamedata.getDataOfType(datas, CROSSBOW);
+    _populateItemDatasByFunctionList(datas, ITEM_WEAPON);
+    ou->gamedata.getDataOfType(datas, ARMOUR);
+    _populateItemDatasByFunctionList(datas, ITEM_CLOTHING);
+    ou->gamedata.getDataOfType(datas, CONTAINER);
+    _populateItemDatasByFunctionList(datas, ITEM_CONTAINER);
+    ou->gamedata.getDataOfType(datas, RESEARCH);
+    _populateItemDatasByFunctionList(datas, ITEM_BLUEPRINT);
 }
 
 void SquadAutonomySettings::initSaveDocument()
@@ -208,6 +261,19 @@ std::vector<GameData*>* SquadAutonomySettings::getSquadTemplate()
 {
     return &_squadTemplateList;
 }
+std::unordered_map<ItemFunction, std::vector<GameData*>>* SquadAutonomy::SquadAutonomySettings::getItemDatasList()
+{
+    return &_itemDatasByFunctionList;
+}
+std::vector<GameData*>* SquadAutonomy::SquadAutonomySettings::getItemDatas(ItemFunction itemFunc)
+{
+    auto itr = _itemDatasByFunctionList.find(itemFunc);
+    if (itr != _itemDatasByFunctionList.end())
+    {
+        return &((*itr).second);
+    }
+    return nullptr;
+}
 std::vector<TownBase*>* SquadAutonomy::SquadAutonomySettings::getTownBaseList()
 {
     return &_townBaseList;
@@ -270,7 +336,9 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _doLooting(false),
     _putLootsInStorage(false),
     _ignoreEquipped(true),
-    _forbidItems()
+    _forbidItems(),
+    _targetTowns(),
+    _targetTownIndex(0)
 {
     Faction* faction = squad.getFaction();
     if (faction)
@@ -1197,9 +1265,24 @@ void SquadAutonomy::SquadSettingsInfo::clearTargetTown()
     _targetTowns.clear();
 }
 
-TownBase* SquadAutonomy::SquadSettingsInfo::getCurrentTargetTown(bool moveToNext)
+TownBase* SquadAutonomy::SquadSettingsInfo::getCurrentTargetTown()
 {
     return _targetTowns[_targetTownIndex];
+}
+
+void SquadAutonomy::SquadSettingsInfo::nextTargetTown()
+{
+    _targetTownIndex = (_targetTownIndex + 1) % _targetTowns.size();
+}
+
+int SquadAutonomy::SquadSettingsInfo::getTargetTownIndex()
+{
+    return _targetTownIndex;
+}
+
+int& SquadAutonomy::SquadSettingsInfo::getTargetTownIndexRef()
+{
+    return _targetTownIndex;
 }
 
 void SquadAutonomy::SquadSettingsInfo::setTargetTownIndex(int val)
@@ -1323,8 +1406,8 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjs
     rapidjson::Value shopping;
     shopping.SetObject();
     shopping.AddMember("doShopping", _doShopping, allocator);
-    shopping.AddMember("buyItems", getShoppingItemsMember(allocator, _buyItems), allocator);
-    shopping.AddMember("sellItems", getShoppingItemsMember(allocator, _sellItems), allocator);
+    shopping.AddMember("buyItems", getShoppingItemsMember(allocator, _buyItems, true), allocator);
+    shopping.AddMember("sellItems", getShoppingItemsMember(allocator, _sellItems, false), allocator);
     options.AddMember("shopping", shopping, allocator);
 
     rapidjson::Value inventory;
@@ -1335,9 +1418,15 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjs
     inventory.AddMember("forbidItems", getForbidItemsMember(allocator, _forbidItems), allocator);
     options.AddMember("inventory", inventory, allocator);
 
+    rapidjson::Value travel;
+    travel.SetObject();
+    travel.AddMember("targetTownIndex", _targetTownIndex, allocator);
+    travel.AddMember("targetTowns", getTargetTownsMember(allocator, _targetTowns), allocator);
+    options.AddMember("travel", travel, allocator);
+
     return options;
 }
-rapidjson::Value SquadSettingsInfo::getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo> shoppingItems)
+rapidjson::Value SquadSettingsInfo::getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo> shoppingItems, bool buying)
 {
     rapidjson::Value items;
     items.SetArray();
@@ -1349,6 +1438,24 @@ rapidjson::Value SquadSettingsInfo::getShoppingItemsMember(rapidjson::Document::
         item.AddMember("itemFunction", static_cast<int>(iter->first), allocator);
         item.AddMember("quantity", info.quantity, allocator);
         item.AddMember("onlyGoodDeal", info.onlyGoodDeal, allocator);
+        if (!buying) item.AddMember("onlyStolenItems", info.onlyStolenItems, allocator);
+
+        rapidjson::Value shopItemDatas;
+        shopItemDatas.SetArray();
+        for (auto dataIter = info.shopItemDatas.begin(); dataIter != info.shopItemDatas.end(); ++dataIter)
+        {
+            GameData* data = *dataIter;
+            rapidjson::Value itemData;
+            itemData.SetObject();
+            itemData.AddMember("itemType", static_cast<int>(data->type), allocator);
+            rapidjson::Value dataName;
+            dataName.SetString((data->name).c_str(), allocator);
+            itemData.AddMember("name", dataName, allocator);
+            shopItemDatas.PushBack(itemData, allocator);
+        }
+        item.AddMember("shopItemDatas", shopItemDatas, allocator);
+
+        item.AddMember("excludeTowns", info.excludeTowns, allocator);
         rapidjson::Value shopTowns;
         shopTowns.SetArray();
         for (auto townIter = info.shopTowns.begin(); townIter != info.shopTowns.end(); ++townIter)
@@ -1376,6 +1483,17 @@ rapidjson::Value SquadSettingsInfo::getForbidItemsMember(rapidjson::Document::Al
         items.PushBack(item, allocator);
     }
     return items;
+}
+
+rapidjson::Value SquadAutonomy::SquadSettingsInfo::getTargetTownsMember(rapidjson::Document::AllocatorType& allocator, const std::vector<TownBase*> targetTowns)
+{
+    rapidjson::Value towns;
+    towns.SetArray();
+    for (int i = 0; i < targetTowns.size(); ++i)
+    {
+        towns.PushBack(getHandMember(allocator, targetTowns[i]->getHandle(), ""), allocator);
+    }
+    return towns;
 }
 
 hand SquadSettingsInfo::parseHandMember(rapidjson::Value& member)
@@ -1590,11 +1708,11 @@ void SquadSettingsInfo::readSquadOptionsFromMember(rapidjson::Value& member)
                 }
                 else if (key == "buyItems")
                 {
-                    _buyItems = readShoppingItemsFromMember(subItr->value);
+                    _buyItems = readShoppingItemsFromMember(subItr->value, true);
                 }
                 else if (key == "sellItems")
                 {
-                    _sellItems = readShoppingItemsFromMember(subItr->value);
+                    _sellItems = readShoppingItemsFromMember(subItr->value, false);
                 }
             }
         }
@@ -1622,10 +1740,26 @@ void SquadSettingsInfo::readSquadOptionsFromMember(rapidjson::Value& member)
                 }
             }
         }
+        else if (key == "travel")
+        {
+            for (auto subItr = subMember.MemberBegin(); subItr != subMember.MemberEnd(); ++subItr)
+            {
+                key = subItr->name.GetString();
+
+                if (key == "targetTownIndex")
+                {
+                    _targetTownIndex = subItr->value.GetInt();
+                }
+                else if (key == "targetTowns")
+                {
+                    _targetTowns = readTargetTownsFromMember(subItr->value);
+                }
+            }
+        }
     }
 }
 
-std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppingItemsFromMember(rapidjson::Value& member)
+std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppingItemsFromMember(rapidjson::Value& member, bool buying)
 {
     // array of objs with member itemFunction(int), quantity(int), onlyGoodDeal(bool), shopTowns(array of townbase hand array)
     std::unordered_map<ItemFunction, ShoppingItemInfo> shoppingItems;
@@ -1642,6 +1776,52 @@ std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppi
         SettingsUtils::parseIntSetting(*itr, "quantity", quantity);
         bool onlyGoodDeal = false;
         SettingsUtils::parseBoolSetting(*itr, "onlyGoodDeal", onlyGoodDeal);
+        bool onlyStolenItems = false;
+        if (!buying)
+        {
+            SettingsUtils::parseBoolSetting(*itr, "onlyStolenItems", onlyStolenItems);
+        }
+        subItr = itr->FindMember("shopItemDatas");
+        std::unordered_set<GameData*> shopItemDatas;
+        if (SquadAutonomySettings::initialized)
+        {
+            SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
+            auto itemDatas = settings.getItemDatas(itemFunc);
+            if (itemDatas->size() > 0)
+            {
+                if (subItr != itr->MemberEnd())
+                {
+                    for (auto dataItr = subItr->value.Begin(); dataItr != subItr->value.End(); ++dataItr)
+                    {
+                        auto dataSubItr = dataItr->FindMember("itemType");
+                        itemType type = NULL_ITEM;
+                        if (dataSubItr != dataItr->MemberEnd())
+                        {
+                            type = static_cast<itemType>(dataSubItr->value.GetInt());
+                        }
+                        else continue;
+                        std::string name = "";
+                        dataSubItr = dataItr->FindMember("name");
+                        if (dataSubItr != dataItr->MemberEnd())
+                        {
+                            name = dataSubItr->value.GetString();
+                        }
+                        for (int i = 0; i < itemDatas->size(); ++i)
+                        {
+                            GameData* data = itemDatas->at(i);
+                            if (data->type == type && data->name == name)
+                            {
+                                shopItemDatas.insert(data);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        bool excludeTowns = false;
+        SettingsUtils::parseBoolSetting(*itr, "excludeTowns", excludeTowns);
         subItr = itr->FindMember("shopTowns");
         std::unordered_set<TownBase*> shopTowns;
         if (subItr != itr->MemberEnd())
@@ -1663,6 +1843,9 @@ std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppi
         }
         ShoppingItemInfo shoppingItemInfo(quantity);
         shoppingItemInfo.onlyGoodDeal = onlyGoodDeal;
+        shoppingItemInfo.onlyStolenItems = onlyStolenItems;
+        shoppingItemInfo.shopItemDatas = shopItemDatas;
+        shoppingItemInfo.excludeTowns = excludeTowns;
         shoppingItemInfo.shopTowns = shopTowns;
         shoppingItems[itemFunc] = shoppingItemInfo;
     }
@@ -1686,6 +1869,26 @@ std::unordered_set<ItemFunction> SquadAutonomy::SquadSettingsInfo::readForbidIte
     }
 
     return forbidItems;
+}
+
+std::vector<TownBase*> SquadAutonomy::SquadSettingsInfo::readTargetTownsFromMember(rapidjson::Value& member)
+{
+    std::vector<TownBase*> targetTowns;
+
+    for (auto itr = member.Begin(); itr != member.End(); ++itr)
+    {
+        auto subItr = itr->FindMember("hand");
+        if (subItr != itr->MemberEnd())
+        {
+            hand townHand = parseHandMember(subItr->value);
+            if (townHand)
+            {
+                TownBase* town = townHand.getTown();
+                if (town) targetTowns.push_back(town);
+            }
+        }
+    }
+    return targetTowns;
 }
 
 

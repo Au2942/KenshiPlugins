@@ -49,12 +49,8 @@ namespace SquadAutonomy
         return checkbox;
     }
 
-    DataPanelLine_DropBox* SquadAutonomyPanelUtils::addDropBox(DatapanelGUI& panel, int category, const std::string& label, int& indexValue, bool goBox, float width, bool showLabel, bool seperateTextLine, bool textbox)
+    DataPanelLine_DropBox* SquadAutonomyPanelUtils::addDropBox(DatapanelGUI& panel, int category, const std::string& label, int& indexValue, bool goBox, float width, bool showLabel)
     {
-        if (seperateTextLine)
-        {
-            addText(panel, category, label, true, textbox, MyGUI::Align::Center);
-        }
         auto dropBox = panel.setLineDropBox(label, category, &indexValue, goBox, width);
         if (!showLabel)
         {
@@ -77,15 +73,11 @@ namespace SquadAutonomy
     }
     */
 
-    DataPanelLine_SliderEditable* SquadAutonomyPanelUtils::addSlider(DatapanelGUI& panel, int category, const std::string& label, bool showLabel, float& value, float min, float max, int precision, bool wordWrap, bool seperateTextLine, bool textbox)
+    DataPanelLine_SliderEditable* SquadAutonomyPanelUtils::addSlider(DatapanelGUI& panel, int category, const std::string& label, bool showLabel, float& value, float min, float max, int precision, bool wordWrap)
     {
-        if (seperateTextLine)
-        {
-            addText(panel, category, label, wordWrap, textbox, MyGUI::Align::Center);
-        }
         auto slider = panel.setLineSliderEditable(label, category, showLabel, min, max, &value);
         slider->setPrecision(precision);
-        if (showLabel && !seperateTextLine && wordWrap)
+        if (showLabel && wordWrap)
         {
             int wrapCount = slider->nameText->getTextSize().width / slider->nameText->getTextRegion().width;
             int margin = slider->nameText->getHeight() - slider->nameText->getTextRegion().height;

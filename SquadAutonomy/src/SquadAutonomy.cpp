@@ -105,8 +105,13 @@ namespace SquadAutonomy
     std::string* _MainColorCode = nullptr;
     std::string* _GreyedColorCode = nullptr;
     bool (*EscMenu_openedOtherWindows)(class EscMenu*) = nullptr;
+    bool (*Package_HangAroundBar_signalStart)(AIPackage*) = nullptr; //0x291eb0 GOG 0x291a40
+    bool (*Package_HangAroundBar_signalEnd)(AIPackage*) = nullptr; //0x2917d0 GOG 0x291360 
+    void (*Package_HangAroundBar_activateAndSetup)(AIPackage*) = nullptr; //0x293290 GOG 0x292e20
     bool (*Package_WanderingTrader_signalStart)(AIPackage*) = nullptr;
+    bool (*Package_WanderingTrader_signalEnd)(AIPackage*) = nullptr; //0x286a10 GOG 0x2865a0
     void (*Package_WanderingTrader_activateAndSetup)(AIPackage*) = nullptr; //0x286700
+    void (*Package_WanderingTrader_clearMissionTown)(AIPackage*) = nullptr; //0x288b90
     bool (*CharBody_NV_setCurrentAction)(CharBody*, Tasker*) = nullptr;
     Building* (*Task_ManTheGate_FindGate)(Tasker*, Character*, hand) = nullptr;
     void (*Task_ManTheGate_Update)(Tasker*, CharBody*) = nullptr;
@@ -642,7 +647,6 @@ namespace SquadAutonomy
             }
         }
     }
-
 
     // for assigning home to homeless squad (mostly the wandering squad)
     // used to do this by getting everything towns and compare the distance to each
@@ -2557,6 +2561,94 @@ namespace SquadAutonomy
         return SpeedSelector_getMoveSpeed_orig(thisptr, character, speed);
     }
 
+    bool (*Package_HangAroundBar_signalStart_orig)(AIPackage* thisptr);
+    bool Package_HangAroundBar_signalStart_hook(AIPackage* thisptr)
+    {
+        Platoon* squad = thisptr->squad;
+        SquadSettingsInfo* settings = nullptr;
+        ActivePlatoon* activePlatoon = nullptr;
+        if (squad)
+        {
+            activePlatoon = squad->activePlatoon;
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        }
+        if (settings && settings->isEnabled())
+        {
+            // overwrite mission town here
+            if (settings->hasSignal(SIG_WANDERING_TOWN_TO_TOWN) && settings->getTargetTowns().size() > 0)
+            {
+                Blackboard* bb = thisptr->blackboard;
+                if (bb)
+                {
+                    if (bb->getCurrentTownLocation() != settings->getCurrentTargetTown())
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        return Package_HangAroundBar_signalStart_orig(thisptr);
+    }
+
+
+    bool (*Package_HangAroundBar_signalEnd_orig)(AIPackage* thisptr);
+    bool Package_HangAroundBar_signalEnd_hook(AIPackage* thisptr)
+    {
+        Platoon* squad = thisptr->squad;
+        SquadSettingsInfo* settings = nullptr;
+        ActivePlatoon* activePlatoon = nullptr;
+        if (squad)
+        {
+            activePlatoon = squad->activePlatoon;
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        }
+        if (settings && settings->isEnabled())
+        {
+            // overwrite mission town here
+            if (settings->hasSignal(SIG_WANDERING_TOWN_TO_TOWN) && settings->getTargetTowns().size() > 0)
+            {
+                Blackboard* bb = thisptr->blackboard;
+                if (bb)
+                {
+                    if (bb->getCurrentTownLocation() != settings->getCurrentTargetTown())
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return Package_HangAroundBar_signalEnd_orig(thisptr);
+    }
+
+    void (*Package_HangAroundBar_activateAndSetup_orig)(AIPackage* thisptr);
+    void Package_HangAroundBar_activateAndSetup_hook(AIPackage* thisptr)
+    {
+        // inside calls getNearishTown and assign that to missionTown
+        Platoon* squad = thisptr->squad;
+        SquadSettingsInfo* settings = nullptr;
+        ActivePlatoon* activePlatoon = nullptr;
+        if (squad)
+        {
+            activePlatoon = squad->activePlatoon;
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        }
+        if (settings && settings->isEnabled())
+        {
+            if (settings->hasSignal(SIG_WANDERING_TOWN_TO_TOWN) && settings->getTargetTowns().size() > 0)
+            {
+                Blackboard* bb = thisptr->blackboard;
+                if (bb)
+                {
+                    if (bb->getCurrentTownLocation() != settings->getCurrentTargetTown())
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+        Package_HangAroundBar_activateAndSetup_orig(thisptr);
+    }
+
     void (*Package_WanderingTrader_activateAndSetup_orig)(AIPackage* thisptr);
     void Package_WanderingTrader_activateAndSetup_hook(AIPackage* thisptr)
     {
@@ -2572,8 +2664,13 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            // overwrite mission town here!
-            //thisptr->missionTown;
+            // overwrite mission town here
+            if (settings->getTargetTowns().size() > 0)
+            {
+                thisptr->missionTown = settings->getCurrentTargetTown();
+                //TownBase* targetTown = reinterpret_cast<TownBase*>(reinterpret_cast<uintptr_t>(thisptr) + 0xb0);
+                //targetTown = settings->getCurrentTargetTown();
+            }
         }
     }
 
@@ -2592,7 +2689,6 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            //DebugLog("periodicUpdate: Wandering");
             //check if all squads members are awake/active
             for (auto iter = activePlatoon->things.begin(); iter != activePlatoon->things.end(); ++iter)
             {
@@ -2601,22 +2697,78 @@ namespace SquadAutonomy
                 MedicalSystem* medical = obj->getMedical();
                 if (stateBroadcast && (stateBroadcast->isSleeping || stateBroadcast->unconcious))
                 {
-                    //DebugLog("Member is sleeping");
-                    return false;
-                }
-                if (medical && (medical->restedState < settings->getHealedThresholdP()))
-                {
                     return false;
                 }
             }
-
-            //DebugLog("wasASuccessEnd");
         }
 
         return Package_WanderingTrader_signalStart_orig(thisptr);
     }
 
-    
+    bool (*Package_WanderingTrader_signalEnd_orig)(AIPackage* thisptr);
+    bool Package_WanderingTrader_signalEnd_hook(AIPackage* thisptr)
+    {
+        bool result = Package_WanderingTrader_signalEnd_orig(thisptr);
+        if (result)
+        {
+            Platoon* squad = thisptr->squad;
+            SquadSettingsInfo* settings = nullptr;
+            ActivePlatoon* activePlatoon = nullptr;
+            if (squad)
+            {
+                activePlatoon = squad->activePlatoon;
+                settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+            }
+            if (settings && settings->isEnabled())
+            {
+                Blackboard* bb = thisptr->blackboard;
+                if (bb)
+                {
+                    if (!bb->currentTownLocation || bb->currentTownLocation != settings->getCurrentTargetTown())
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    void (*Package_WanderingTrader_clearMissionTown_orig)(AIPackage* thisptr);
+    void Package_WanderingTrader_clearMissionTown_hook(AIPackage* thisptr)
+    {
+        // called in Package_WanderingTrader::PeriodicUpdate when blackboard->getCurrentTown == AIPackage->missionTown
+        Platoon* squad = thisptr->squad;
+        SquadSettingsInfo* settings = nullptr;
+        ActivePlatoon* activePlatoon = nullptr;
+        if (squad)
+        {
+            activePlatoon = squad->activePlatoon;
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        }
+        if (settings && settings->isEnabled())
+        {
+            // overwrite mission town here
+            if (settings->getTargetTowns().size() > 0)
+            {
+                Blackboard* bb = thisptr->blackboard;
+                if (bb)
+                {
+                    // grace period for when loading a game
+                    // TODO: find better way for this
+                    if (bb->getTimeSpentInTown_inGameHours() > 2.0 && bb->currentTownLocation && bb->currentTownLocation == settings->getCurrentTargetTown())
+                    {
+                        settings->nextTargetTown();
+                    }
+                    else return;
+                }
+            }
+        }
+        Package_WanderingTrader_clearMissionTown_orig(thisptr);
+
+    }
+
+
     // task scoring
     // I mostly use this to prevent unwanted actions (working during rest hours or resting during work hours)
     // interesting one is PATROL_TOWN where I make the score slowly diminish so they stop patrolling to do other things
@@ -2754,6 +2906,16 @@ namespace SquadAutonomy
             }
             else if (type == RELAX_IN_TOWN_PACKAGE)
             {
+                if (settings->hasTask(SHOPPING) && settings->getDoShopping())
+                {
+                    hand dummy;
+                    ai->findShop(nullptr, dummy, true);
+                    if (dummy)
+                    {
+                        Logger::logDebug(character->displayName + " can't relax, found shop.", SHOPPING);
+                        return 0.0;
+                    }
+                }
                 Character* leader = squad->getSquadLeader();
                 if (leader && character != leader)
                 {
@@ -3047,8 +3209,13 @@ namespace SquadAutonomy
             {
                 *(uintptr_t*)&SquadAutonomy::EscMenu_openedOtherWindows = baseAddr + 0x916250;
                 *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr + 0x212db18;
+                *(uintptr_t*)&SquadAutonomy::Package_HangAroundBar_signalStart = baseAddr + 0x291eb0;
+                *(uintptr_t*)&SquadAutonomy::Package_HangAroundBar_signalEnd = baseAddr + 0x2917d0;
+                *(uintptr_t*)&SquadAutonomy::Package_HangAroundBar_activateAndSetup = baseAddr + 0x293290;
                 *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x286960;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalEnd = baseAddr + 0x286a10;
                 *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_activateAndSetup = baseAddr + 0x286700;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_clearMissionTown = baseAddr + 0x288b90;
                 *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f48238;
                 *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f48350;
                 *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce80f0;
@@ -3079,8 +3246,13 @@ namespace SquadAutonomy
             {
                 *(uintptr_t*)&SquadAutonomy::EscMenu_openedOtherWindows = baseAddr + 0x915970;
                 *(uintptr_t*)&SquadAutonomy::rentedBeds = baseAddr + 0x212BA58;
+                *(uintptr_t*)&SquadAutonomy::Package_HangAroundBar_signalStart = baseAddr + 0x291a40;
+                *(uintptr_t*)&SquadAutonomy::Package_HangAroundBar_signalEnd = baseAddr + 0x291360;
+                *(uintptr_t*)&SquadAutonomy::Package_HangAroundBar_activateAndSetup = baseAddr + 0x292e20;
                 *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalStart = baseAddr + 0x2864F0;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_signalEnd = baseAddr + 0x2865a0;
                 *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_activateAndSetup = baseAddr + 0x286290;
+                *(uintptr_t*)&SquadAutonomy::Package_WanderingTrader_clearMissionTown = baseAddr + 0x288720;
                 *(uintptr_t*)&SquadAutonomy::_MainColorCode = baseAddr + 0x01f46248;
                 *(uintptr_t*)&SquadAutonomy::_GreyedColorCode = baseAddr + 0x01f46360;
                 *(uintptr_t*)&SquadAutonomy::taskTypetaskData = baseAddr + 0x1ce60F0;
@@ -3241,11 +3413,22 @@ namespace SquadAutonomy
         ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");*/
         /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &SquadAutonomy::setTaskExpiryTimer_hook, &SquadAutonomy::setTaskExpiryTimer_orig))
         ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");*/
-
+        /*
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_HangAroundBar_signalStart, &SquadAutonomy::Package_HangAroundBar_signalStart_hook, &SquadAutonomy::Package_HangAroundBar_signalStart_orig))
+            ErrorLog("Could not add Package_HangAroundBar::signalStart hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_HangAroundBar_signalEnd, &SquadAutonomy::Package_HangAroundBar_signalEnd_hook, &SquadAutonomy::Package_HangAroundBar_signalEnd_orig))
+            ErrorLog("Could not add Package_HangAroundBar::signalEnd hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_HangAroundBar_activateAndSetup, &SquadAutonomy::Package_HangAroundBar_activateAndSetup_hook, &SquadAutonomy::Package_HangAroundBar_activateAndSetup_orig))
+            ErrorLog("Could not add Package_HangAroundBar::activateAndSetup hook!");
+        */
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalStart, &SquadAutonomy::Package_WanderingTrader_signalStart_hook, &SquadAutonomy::Package_WanderingTrader_signalStart_orig))
-            ErrorLog("Could not add Package_WanderingTrader::signal_start hook!");
+            ErrorLog("Could not add Package_WanderingTrader::signalStart hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_signalEnd, &SquadAutonomy::Package_WanderingTrader_signalEnd_hook, &SquadAutonomy::Package_WanderingTrader_signalEnd_orig))
+            ErrorLog("Could not add Package_WanderingTrader::signalEnd hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_activateAndSetup, &SquadAutonomy::Package_WanderingTrader_activateAndSetup_hook, &SquadAutonomy::Package_WanderingTrader_activateAndSetup_orig))
             ErrorLog("Could not add Package_WanderingTrader::activateAndSetup hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_WanderingTrader_clearMissionTown, &SquadAutonomy::Package_WanderingTrader_clearMissionTown_hook, &SquadAutonomy::Package_WanderingTrader_clearMissionTown_orig))
+            ErrorLog("Could not add Package_WanderingTrader::Package_WanderingTrader_clearMissionTown hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_hook, &SquadAutonomy::Task_MoveToDoor_Gate_ChooseSide_gatePosition_orig))
             ErrorLog("Could not add Task_MoveToDoor_Gate_ChooseSide_gatePosition hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_ManTheGate_Update, &SquadAutonomy::Task_ManTheGate_Update_hook, &SquadAutonomy::Task_ManTheGate_Update_orig))

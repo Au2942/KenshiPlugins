@@ -14,15 +14,23 @@ namespace SquadAutonomy
 {
     struct ShoppingItemInfo
     {
-        ShoppingItemInfo(): quantity(0), onlyGoodDeal(false)
+        ShoppingItemInfo(): quantity(0), onlyGoodDeal(false), excludeTowns(false), onlyStolenItems(false), shopItemDatas(), shopTowns()
         {
         }
-        ShoppingItemInfo(int _quantity) : quantity(_quantity), onlyGoodDeal(false)
+        ShoppingItemInfo(int _quantity) : quantity(_quantity), onlyGoodDeal(false), onlyStolenItems(false), excludeTowns(false), shopItemDatas(), shopTowns()
         {
         }
         int quantity;
         bool onlyGoodDeal;
+        bool onlyStolenItems;
+        bool excludeTowns;
+        std::unordered_set<GameData*> shopItemDatas; //use name + item type for saving/loading?
         std::unordered_set<TownBase*> shopTowns;
+        bool hasShopTown(TownBase* town)
+        {
+            auto itr = shopTowns.find(town);
+            return itr != shopTowns.end();
+        }
     };
 
     extern ogre_unordered_map<TaskType, TaskData*>::type* taskTypetaskData;

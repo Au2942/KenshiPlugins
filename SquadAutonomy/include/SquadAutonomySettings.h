@@ -126,7 +126,10 @@ namespace SquadAutonomy
 
         void addTargetTown(TownBase* town);
         void clearTargetTown();
-        TownBase* getCurrentTargetTown(bool moveToNext = true);
+        TownBase* getCurrentTargetTown();
+        void nextTargetTown();
+        int getTargetTownIndex();
+        int& getTargetTownIndexRef();
         void setTargetTownIndex(int val);
         int getTargetTownIndex() const;
         std::vector<TownBase*> getTargetTowns() const;
@@ -144,15 +147,17 @@ namespace SquadAutonomy
         static rapidjson::Value getHandMember(rapidjson::Document::AllocatorType& allocator, hand handToWrite, const std::string& name);
         rapidjson::Value getSquadPackagesMember(rapidjson::Document::AllocatorType& allocator) const;
         rapidjson::Value getSquadOptionsMember(rapidjson::Document::AllocatorType& allocator) const;
-        static rapidjson::Value getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo>);
+        static rapidjson::Value getShoppingItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_map<ItemFunction, ShoppingItemInfo>, bool buying);
         static rapidjson::Value getForbidItemsMember(rapidjson::Document::AllocatorType& allocator, const std::unordered_set<ItemFunction> forbidItems);
+        static rapidjson::Value getTargetTownsMember(rapidjson::Document::AllocatorType& allocator, const std::vector<TownBase*> targetTowns);
 
         static hand parseHandMember(rapidjson::Value& member);
         static Building* parseBuildingMember(rapidjson::Value& member);
         void readSquadPackagesFromMember(rapidjson::Value& member);
         void readSquadOptionsFromMember(rapidjson::Value& member);
-        static std::unordered_map <ItemFunction, ShoppingItemInfo> readShoppingItemsFromMember(rapidjson::Value& member);
-        static std::unordered_set <ItemFunction> readForbidItemsFromMember(rapidjson::Value& member);
+        static std::unordered_map<ItemFunction, ShoppingItemInfo> readShoppingItemsFromMember(rapidjson::Value& member, bool buying);
+        static std::unordered_set<ItemFunction> readForbidItemsFromMember(rapidjson::Value& member);
+        static std::vector<TownBase*> readTargetTownsFromMember(rapidjson::Value& member);
 
         static hand parseHandSetting(const std::string& dataLine);
         static Building* parseBuildingSetting(const std::string& dataLine);
@@ -208,19 +213,16 @@ namespace SquadAutonomy
         bool _closeGate;
         // Shopping
         bool _doShopping;
-        
         std::unordered_map<ItemFunction, ShoppingItemInfo> _buyItems;
         std::unordered_map<ItemFunction, ShoppingItemInfo> _sellItems;
-        //std::unordered_map<ItemFunction, int> _buyItems;
-        //std::unordered_map<ItemFunction, int> _sellItems;
         // Inventory
         bool _doLooting;
         bool _putLootsInStorage;
         bool _ignoreEquipped;
         std::unordered_set<ItemFunction> _forbidItems;
         // Travel
-        std::vector<TownBase*> _targetTowns;
         int _targetTownIndex;
+        std::vector<TownBase*> _targetTowns;
     };
 
     class SquadAutonomySettings
@@ -235,6 +237,8 @@ namespace SquadAutonomy
         SquadSettingsInfo* getSquadSettings(Platoon*, bool createNew = false);
         std::vector<GameData*>* getAIPackageList();
         std::vector<GameData*>* getSquadTemplate();
+        std::unordered_map<ItemFunction, std::vector<GameData*>>* getItemDatasList();
+        std::vector<GameData*>* getItemDatas(ItemFunction itemFunc);
         std::vector<TownBase*>* getTownBaseList();
         void removeSquadSettings(Platoon*);
 
@@ -248,12 +252,16 @@ namespace SquadAutonomy
         SquadAutonomySettings& operator=(const SquadAutonomySettings& other);
         SquadAutonomySettings& operator=(SquadAutonomySettings&& other);
 
+        void _populateItemDatasByFunctionList(lektor<GameData*> datas, ItemFunction itemFunc);
+        void _addItemToItemDatasByFunctionList(GameData* data, ItemFunction itemFunc);
+
         rapidjson::Document _saveDocument;
         std::wstring _saveFileName;
 
         std::vector<GameData*> _AIPackageList;
         std::vector<GameData*> _squadTemplateList;
         std::vector<TownBase*> _townBaseList;
+        std::unordered_map<ItemFunction, std::vector<GameData*>> _itemDatasByFunctionList;
         void _init();
         void _initGameData();
     };

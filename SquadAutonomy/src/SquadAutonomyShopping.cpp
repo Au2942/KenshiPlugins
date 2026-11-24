@@ -3,6 +3,8 @@
 #include "SquadAutonomyLocalization.h"
 #include "SquadAutonomyLog.h"
 
+#include <util/lektorExtension.h>
+
 #include <kenshi/gui/ForgottenGUI.h>
 
 #include <kenshi/util/hand.h>
@@ -74,36 +76,49 @@ namespace SquadAutonomy
         SquadSettingsInfo* settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         if (settings && settings->isEnabled() && settings->getDoShopping())
         {
-            if (out && out.getBuilding())
+            lektor<Building*>* shopCandidates = new lektor<Building*>();
+            TownBase* currentTown = character->getCurrentTownLocation();
+            if (currentTown) shopCandidates = currentTown->findAllBuildingsWithFunction(BF_SHOP, character);
+            else if (out && out.getBuilding())
             {
                 Building* outBuilding = out.getBuilding();
                 if (outBuilding->getSpecialFunction() != BF_SHOP || !outBuilding->getInventory() || (outBuilding->getFaction() == squad->getFaction()))
                 {
                     out.setNull();
-                    score = 0.0;
+                    return 0.0;
+                }
+                else lektorEx::push_back(*shopCandidates, outBuilding);
+            }
+
+            for (int i = 0; i < shopCandidates->size(); ++i)
+            {
+                Building* shopBuilding = shopCandidates->at(i);
+                if (shopBuilding->getSpecialFunction() != BF_SHOP || !shopBuilding->getInventory() || (shopBuilding->getFaction() == squad->getFaction()))
+                {
+                    continue;
                 }
                 else
                 {
-                    //thisptr->tradingInfo->tradeItems.clear();
-                    //thisptr->_createTradingInfo();
-                    Inventory* shopInventory = outBuilding->getInventory();
+                    Inventory* shopInventory = shopBuilding->getInventory();
 
-                    if (hasSellableItem(settings, character, outBuilding))
+                    if (hasSellableItem(settings, character, shopBuilding))
                     {
                         Logger::logDebug(character->displayName + ": has sellable item", SHOPPING);
+                        out = shopBuilding->getHandle();
+                        return 1.0;
                     }
-                    else if (hasBuyableItem(settings, character, outBuilding))
+                    else if (hasBuyableItem(settings, character, shopBuilding))
                     {
                         Logger::logDebug(character->displayName + ": has buyable item", SHOPPING);
-                    }
-                    else
-                    {
-                        out.setNull();
-                        score = 0.0;
+                        out = shopBuilding->getHandle();
+                        return 1.0;
                     }
                 }
             }
+            out.setNull();
+            return 0.0;
         }
+
         return score;
     }
 /*
@@ -169,14 +184,15 @@ namespace SquadAutonomy
             auto sellItems = settings->getSellItems();
 
             Inventory* inventory = character->getInventory();
+            ContainerItem* backpack = character->hasABackpackOn();
+            Inventory* backpackInventory = backpack ? backpack->getInventory() : nullptr;
             for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
             {
                 lektor<Item*> items;
                 inventory->getAllItemsWithFunction(items, iter->first);
-                ContainerItem* backpack = character->hasABackpackOn();
-                if (backpack)
+                if (backpackInventory)
                 {
-                    backpack->getInventory()->getAllItemsWithFunction(items, iter->first);
+                    backpackInventory->getAllItemsWithFunction(items, iter->first);
                 }
                 int amountToKeep = iter->second.quantity;
                 int amountOwned = 0;
@@ -185,7 +201,6 @@ namespace SquadAutonomy
                     amountOwned += items[i]->quantity;
                 }
                 // has less or equal to keep amount
-                Logger::logDebug("Sell itemFunc: " + sc::toString(static_cast<int>(iter->first)) + " owned: " + sc::toString(amountOwned) + " max:" + sc::toString(amountToKeep), SHOPPING);
                 if (amountOwned > amountToKeep) return false;
             }
 
@@ -198,15 +213,13 @@ namespace SquadAutonomy
                 {
                     itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, inventory);
                 }
-                ContainerItem* backpack = character->hasABackpackOn();
-                if (backpack)
+                if (backpackInventory)
                 {
-                    itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, backpack->getInventory());
+                    itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, backpackInventory);
                 }
-                Logger::logDebug("Buy itemFunc: " + sc::toString(static_cast<int>(iter->first)) + " owned: " + sc::toString(itemCount) + " max:" + sc::toString(iter->second.quantity), SHOPPING);
                 if (itemCount < iter->second.quantity) return false;
             }
-            
+            Logger::logDebug("No item to buy/sell", SHOPPING);
             return true;
         }
         return boughtShitComplete_orig(thisptr, subject, _a2);
@@ -224,15 +237,18 @@ namespace SquadAutonomy
 
             // grabbing necessary values
             Inventory* inventory = character->getInventory();
+            ContainerItem* backpack = character->hasABackpackOn();
+            Inventory* backpackInventory = backpack ? backpack->getInventory() : nullptr;
             Inventory* shopInventory = shop->getInventory();
-            if (!inventory || !shopInventory) return false;
+            Building* shopBuilding = shop->furnitureParentBuilding();
+            if (!inventory || !shopInventory || !shopBuilding) return false;
 
             Town* tradingTown = shop->getRealTown();
             Character* trader = shop->getResidentSquadLeader();
             Platoon* traderPlatoon = nullptr;
             TradeCulture* tradeCulture = nullptr;
-            if (!trader && shop->furnitureParentBuilding())
-                trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
+            if (!trader && shopBuilding)
+                trader = shopBuilding->getResidentSquadLeader();
             if (trader && trader->getPlatoon())
                 traderPlatoon = trader->getPlatoon()->me;
             if (traderPlatoon && traderPlatoon->getFaction())
@@ -242,13 +258,21 @@ namespace SquadAutonomy
             auto sellItems = settings->getSellItems();
             for (auto iter = sellItems.begin(); iter != sellItems.end(); iter++)
             {
-
+                if (iter->second.shopTowns.size() > 0)
+                {
+                    TownBase* shopTown = shop->getTown();
+                    bool hasTown = shopTown ? iter->second.hasShopTown(shopTown) : false;
+                    if (iter->second.excludeTowns)
+                    {
+                        if (hasTown) continue;
+                    }
+                    else if (!shopTown || !hasTown) continue;
+                }
                 lektor<Item*> itemsToSell;
                 inventory->getAllItemsWithFunction(itemsToSell, iter->first);
-                ContainerItem* backpack = character->hasABackpackOn();
-                if (backpack)
+                if (backpackInventory)
                 {
-                    backpack->getInventory()->getAllItemsWithFunction(itemsToSell, iter->first);
+                    backpackInventory->getAllItemsWithFunction(itemsToSell, iter->first);
                 }
                 int amountToKeep = iter->second.quantity;
                 int amountOwned = 0;
@@ -268,6 +292,7 @@ namespace SquadAutonomy
                     std::string sectionName = originalItem->inventorySection;
                     Inventory* itemInventory = originalItem->getInventoryWeAreIn().getRootObject()->getInventory();
                     InventorySection* section = itemInventory->getSection(sectionName);
+                    if (iter->second.onlyStolenItems && !originalItem->isStolen(false)) continue;
                     if (section)
                     {
                         if (section->isAnEquippedItemSection) continue;
@@ -286,7 +311,11 @@ namespace SquadAutonomy
                             sellItem->quantity = 1;
                             originalItem->quantity -= 1;
                         }
-                        int price = getTradeItemPrice(sellItem, tradingTown, traderPlatoon, tradeCulture, true);
+                        // can move this outside the item transfer block
+                        // use price < 0 as a skip flag
+                        int price = getTradeItemPrice(sellItem, tradingTown, character, trader, traderPlatoon, tradeCulture, true);
+                        // if onlyGoodDeal then check if sell price is lower/equal to base price
+                        if (iter->second.onlyGoodDeal && (price <= sellItem->getValueSingle(true))) price = -1;
                         if (price >= 0 && sellItemToShop(sellItem, price, trader, shop))
                         {
                             trader->takeMoney(price);
@@ -322,13 +351,69 @@ namespace SquadAutonomy
             auto buyItems = settings->getBuyItems();
             for (auto iter = buyItems.begin(); iter != buyItems.end(); iter++)
             {
+                if (iter->second.shopTowns.size() > 0)
+                {
+                    TownBase* shopTown = shop->getTown();
+                    bool hasTown = shopTown ? iter->second.hasShopTown(shopTown) : false;
+                    if (iter->second.excludeTowns)
+                    {
+                        if (hasTown) continue;
+                    }
+                    else if (!shopTown || !hasTown) continue;
+                }
+
+                int itemCount = 0;
+                if (inventory)
+                {
+                    itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, inventory);
+                }
+                if (backpackInventory)
+                {
+                    itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, backpackInventory);
+                }
+                if (itemCount >= iter->second.quantity) continue;
+
                 lektor<Item*> itemsToBuy;
                 shopInventory->getAllItemsWithFunction(itemsToBuy, iter->first);
-                if (iter->first == ITEM_FOOD) shopInventory->getAllItemsWithFunction(itemsToBuy, ITEM_FOOD_RESTRICTED);
+                
+                if (iter->first == ITEM_FOOD)
+                {
+                    shopInventory->getAllItemsWithFunction(itemsToBuy, ITEM_FOOD_RESTRICTED);
+                }
 
+                lektor<Building*> storages;
+                shopBuilding->findAllFurnitureWithFunction(storages, BF_GENERAL_STORAGE);
+                shopBuilding->findAllFurnitureWithFunction(storages, BF_RESOURCE_STORAGE);
+                for (int i = 0; i < storages.size(); ++i)
+                {
+                    Inventory* storageInventory = storages[i]->getInventory();
+                    if (!storageInventory) continue;
+                    storageInventory->getAllItemsWithFunction(itemsToBuy, iter->first);
+                    if (iter->first == ITEM_FOOD)
+                    {
+                        storageInventory->getAllItemsWithFunction(itemsToBuy, ITEM_FOOD_RESTRICTED);
+                    }
+                }
+
+                // sort food by quality
+                if (iter->first == ITEM_FOOD)
+                {
+                    std::sort(itemsToBuy.begin(), itemsToBuy.end(), [](Item* a, Item* b)
+                    {
+                        return a->originalFullChargeAmount > b->originalFullChargeAmount;
+                    });
+                }
+                else
+                {   
+                    //sort everything else by price?
+                    std::sort(itemsToBuy.begin(), itemsToBuy.end(), [](Item* a, Item* b)
+                    {
+                        return a->getValueSingle(true) > b->getValueSingle(true);
+                    });
+                }
                 // tried using inventoryGUI::RClickAutoTrade but that requires the inventoryGUI to be created which can only be done safely on UI thread
                 // based the following code from buySomething and buyItem code for buying stuffs
-                for (int i = static_cast<int>(itemsToBuy.size()) - 1; i >= 0; --i)
+                for (int i = 0; i < itemsToBuy.size(); ++i)
                 {
                     // ignore equipped section
                     Item* originalItem = itemsToBuy[i];
@@ -352,7 +437,11 @@ namespace SquadAutonomy
                             buyItem->quantity = 1;
                             originalItem->quantity -= 1;
                         }
-                        int price = getTradeItemPrice(buyItem, tradingTown, traderPlatoon, tradeCulture, false);
+                        // can move this outside the item transfer block
+                        // use price < 0 as a skip flag
+                        int price = getTradeItemPrice(buyItem, tradingTown, character, trader, traderPlatoon, tradeCulture, false);
+                        // if onlyGoodDeal then check if buy price is higher/equal to base price
+                        if (iter->second.onlyGoodDeal && (price <= buyItem->getValueSingle(true))) price = -1;
                         if (price >= 0 && buyItemFromShop(buyItem, price, character))
                         {
                             character->takeMoney(price);
@@ -433,13 +522,18 @@ namespace SquadAutonomy
         int itemCount = 0;
         if (inventory)
         {
+            lektor<Item*> itemsOfType;
             if (itemFunction == ITEM_FOOD || itemFunction == ITEM_FOOD_RESTRICTED)
             {
-                itemCount = inventory->getNumFoodItems(character);
+                inventory->getAllItemsWithFunction(itemsOfType, ITEM_FOOD);
+                inventory->getAllItemsWithFunction(itemsOfType, ITEM_FOOD_RESTRICTED);
+                for (int i = 0; i < itemsOfType.size(); ++i)
+                {
+                    itemCount += itemsOfType[i]->quantity;
+                }
             }
             else
             {
-                lektor<Item*> itemsOfType;
                 inventory->getAllItemsWithFunction(itemsOfType, itemFunction);
                 for (int i = 0; i < itemsOfType.size(); ++i)
                 {
@@ -490,11 +584,11 @@ namespace SquadAutonomy
     }
     */
 
-    int getTradeItemPrice(Item* tradeItem, Town* tradeTown, Platoon* traderSquad, TradeCulture* shopCulture, bool selling)
+    int getTradeItemPrice(Item* tradeItem, Town* tradeTown, Character* me, Character* trader, Platoon* traderSquad, TradeCulture* shopCulture, bool selling)
     {
-        if (selling && tradeItem->isStolen(false))
+        if (selling && tradeItem->isStolen(false) && !traderSquad->iBuyStolenGoods(tradeItem) && trader->getFencingSuccessChance(tradeItem, me) < 1.0)
         {
-            Logger::logDebug(tradeItem->displayName + " is a stolen item", SHOPPING);
+            Logger::logDebug(tradeItem->displayName + ": might get caught selling stolen item", SHOPPING);
             return -1;
         }
         int price = tradeItem->getValueSingle(selling);
@@ -505,9 +599,9 @@ namespace SquadAutonomy
         // check if tradeculture allow it
         if (tradeTown)
         {
-            if (selling && tradeTown->isIllegal(tradeItem))
+            if (selling && tradeTown->isIllegal(tradeItem) && !traderSquad->iBuyIllegalGoods())
             {
-                Logger::logDebug(tradeItem->displayName + " is illegal", SHOPPING);
+                Logger::logDebug(tradeItem->displayName + ": is illegal", SHOPPING);
                 return -1;
             }
             Logger::logDebug(tradeItem->displayName + ": " + sc::toString(price) +
@@ -518,9 +612,9 @@ namespace SquadAutonomy
         }
         else if (shopCulture)
         {
-            if (selling && shopCulture->isItemIllegal(itemData))
+            if (selling && shopCulture->isItemIllegal(itemData) && !traderSquad->iBuyIllegalGoods())
             {
-                Logger::logDebug(tradeItem->displayName + " is illegal", SHOPPING);
+                Logger::logDebug(tradeItem->displayName + ": is illegal", SHOPPING);
                 return -1;
             }
             if (shopCulture->hasTradePriceMultiplier(itemData))
@@ -535,27 +629,41 @@ namespace SquadAutonomy
     bool hasSellableItem(SquadSettingsInfo* settings, Character* character, Building* shop)
     {
         if (!shop) return false;
-        Logger::logDebug(character->displayName + " has sellable item check: " + shop->displayName, SHOPPING);
+        Building* shopBuilding = shop->furnitureParentBuilding();
+        if (!shopBuilding) return false;
+        Logger::logDebug(character->displayName + " check sellable item: " + shopBuilding->displayName, SHOPPING);
         auto sellItems = settings->getSellItems();
-        bool hasValidSellItem = false;
         Town* tradingTown = shop->getRealTown();
         TradeCulture* tradeCulture = nullptr;
         Inventory* inventory = character->getInventory();
+        ContainerItem* backpack = character->hasABackpackOn();
+        Inventory* backpackInventory = backpack ? backpack->getInventory() : nullptr;
         Inventory* shopInventory = shop->getInventory();
         if (!inventory || !shopInventory) return false;
         Character* trader = shop->getResidentSquadLeader();
         Platoon* traderPlatoon = nullptr;
-        if (!trader && shop->furnitureParentBuilding()) trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
-        if (trader && trader->getPlatoon()) traderPlatoon = trader->getPlatoon()->me;
+        if (!trader) trader = shopBuilding->getResidentSquadLeader();
+        if (!trader) return false;
+        if (trader->getPlatoon()) traderPlatoon = trader->getPlatoon()->me;
         if (traderPlatoon && traderPlatoon->getFaction()) tradeCulture = &traderPlatoon->getFaction()->tradeCulture;
         for (auto iter = sellItems.begin(); iter != sellItems.end(); ++iter)
         {
+            if (iter->second.shopTowns.size() > 0)
+            {
+                TownBase* shopTown = shop->getTown();
+                bool hasTown = shopTown ? iter->second.hasShopTown(shopTown) : false;
+                if (iter->second.excludeTowns)
+                {
+                    if (hasTown) continue;
+                }
+                else if (!shopTown || !hasTown) continue;
+            }
+
             lektor<Item*> items;
             inventory->getAllItemsWithFunction(items, iter->first);
-            ContainerItem* backpack = character->hasABackpackOn();
-            if (backpack)
+            if (backpackInventory)
             {
-                backpack->getInventory()->getAllItemsWithFunction(items, iter->first);
+                backpackInventory->getAllItemsWithFunction(items, iter->first);
             }
             int amountToKeep = iter->second.quantity;
             int amountOwned = 0;
@@ -564,44 +672,54 @@ namespace SquadAutonomy
                 amountOwned += items[i]->quantity;
             }
             // has less or equal to keep amount
-            if (amountOwned <= amountToKeep) continue;
+            if (amountOwned <= amountToKeep)
+            {
+                Logger::logDebug("Itemfunc: " + sc::toString(static_cast<int>(iter->first)) + " owned: " + sc::toString(amountOwned) + " amount: " + sc::toString(amountToKeep));
+                continue;
+            }
 
             for (int i = 0; i < items.size(); ++i)
             {
-
                 auto item = items[i];
+                if (iter->second.onlyStolenItems && !item->isStolen(false)) continue;
                 if (!shopInventory->hasRoomForItem(item->getGameData())) continue;
 
-                int price = getTradeItemPrice(item, tradingTown, traderPlatoon, tradeCulture, true);
+                int price = getTradeItemPrice(item, tradingTown, character, trader, traderPlatoon, tradeCulture, true);
                 if (price < 0) continue;
-                hasValidSellItem = true;
-                break;
+                // if onlyGoodDeal then check if sell price is lower/equal to base price
+                if (iter->second.onlyGoodDeal && (price <= item->getValueSingle(true))) continue;
 
                 // check if can afford it
-                Logger::logDebug("Shop money: " + sc::toString(shop->getMoney()));
-                if (price <= shop->getMoney())
+                Logger::logDebug("Shop money: " + sc::toString(trader->getMoney()));
+                if (price <= trader->getMoney())
                 {
-                    hasValidSellItem = true;
                     Logger::logDebug(item->displayName + " is sellable", SHOPPING);
-                    break;
+                    return true;
                 }
 
             }
-            if (hasValidSellItem) break;
         }
-        return hasValidSellItem;
+        return false;
     }
 
 
     bool checkValidBuyItem(Character* character, Item* itemToBuy)
     {
+        GameData* itemData = itemToBuy->getGameData();
+        if (!itemData) return false;
         if (character->getInventory())
         {
             Inventory* inventory = character->getInventory();
-            if (!inventory->hasRoomForItem(itemToBuy->getGameData()))
+            if (!inventory->hasRoomForItem(itemData))
             {
-                Logger::logDebug("No room for: " + itemToBuy->displayName, SHOPPING);
-                return false;
+                ContainerItem* backpack = character->hasABackpackOn();
+                Inventory* backpackInventory = backpack ? backpack->getInventory() : nullptr;
+                if (!backpackInventory || !backpackInventory->hasRoomForItem(itemData))
+                {
+                    Logger::logDebug("No room for: " + itemToBuy->displayName, SHOPPING);
+                    return false;
+                }
+
             }
             if (itemToBuy->itemFunction == ITEM_FOOD || itemToBuy->itemFunction == ITEM_FOOD_RESTRICTED)
             {
@@ -651,7 +769,7 @@ namespace SquadAutonomy
 
                     if (crossbow && crossbow->gunClass) ammoType = crossbow->gunClass->ammoType;
                     //DebugLog(crossbow->displayName + " ammo type: " + ammoType->name + " : " + itemToBuy->displayName);
-                    if (ammoType && ammoType == itemToBuy->getGameData())
+                    if (ammoType && ammoType == itemData)
                     {
                         //DebugLog("Valid ammo type!");
                         validAmmoType = true;
@@ -670,49 +788,96 @@ namespace SquadAutonomy
     bool hasBuyableItem(SquadSettingsInfo* settings, Character* character, Building* shop)
     {
         if (!shop) return false;
-        Logger::logDebug(character->displayName + " has buyable item check: " + shop->displayName, SHOPPING);
+        Building* shopBuilding = shop->furnitureParentBuilding();
+        if (!shopBuilding) return false;
+        Logger::logDebug(character->displayName + " check buyable item: " + shopBuilding->displayName, SHOPPING);
         auto buyItems = settings->getBuyItems();
-        bool hasValidBuyItem = false;
         Town* tradingTown = shop->getRealTown();
         TradeCulture* tradeCulture = nullptr;
         Inventory* inventory = character->getInventory();
+        ContainerItem* backpack = character->hasABackpackOn();
+        Inventory* backpackInventory = backpack ? backpack->getInventory() : nullptr;
         Inventory* shopInventory = shop->getInventory();
         if (!inventory || !shopInventory) return false;
         Character* trader = shop->getResidentSquadLeader();
         Platoon* traderPlatoon = nullptr;
-        if (!trader && shop->furnitureParentBuilding()) trader = shop->furnitureParentBuilding()->getResidentSquadLeader();
+        if (!trader) trader = shopBuilding->getResidentSquadLeader();
         if (trader && trader->getPlatoon()) traderPlatoon = trader->getPlatoon()->me;
         if (traderPlatoon && traderPlatoon->getFaction()) tradeCulture = &traderPlatoon->getFaction()->tradeCulture;
         for (auto iter = buyItems.begin(); iter != buyItems.end(); ++iter)
         {
+            if (iter->second.shopTowns.size() > 0)
+            {
+                TownBase* shopTown = shop->getTown();
+                bool hasTown = shopTown ? iter->second.hasShopTown(shopTown) : false;
+                if (iter->second.excludeTowns)
+                {
+                    if (hasTown) continue;
+                }
+                else if (!shopTown || !hasTown) continue;
+            }
+
+            int itemCount = 0;
+            if (inventory)
+            {
+                itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, inventory);
+            }
+            if (backpackInventory)
+            {
+                itemCount += tradeItemsOfTypeInInventoryCount(iter->first, character, backpackInventory);
+            }
+            if (itemCount >= iter->second.quantity)
+            {
+                Logger::logDebug("Itemfunc: " + sc::toString(static_cast<int>(iter->first)) + " owned: " + sc::toString(itemCount) + " amount: " + sc::toString(iter->second.quantity));
+                continue;
+            }
+
+
             lektor<Item*> items;
             shopInventory->getAllItemsWithFunction(items, iter->first);
-            if (iter->first == ITEM_FOOD) shopInventory->getAllItemsWithFunction(items, ITEM_FOOD_RESTRICTED);
-
+            if (iter->first == ITEM_FOOD)
+            {
+                shopInventory->getAllItemsWithFunction(items, ITEM_FOOD_RESTRICTED);
+            }
+            lektor<Building*> storages;
+            shopBuilding->findAllFurnitureWithFunction(storages, BF_GENERAL_STORAGE);
+            shopBuilding->findAllFurnitureWithFunction(storages, BF_RESOURCE_STORAGE);
+            for (int i = 0; i < storages.size(); ++i)
+            {
+                Inventory* storageInventory = storages[i]->getInventory();
+                if (!storageInventory) continue;
+                storageInventory->getAllItemsWithFunction(items, iter->first);
+                if (iter->first == ITEM_FOOD)
+                {
+                    storageInventory->getAllItemsWithFunction(items, ITEM_FOOD_RESTRICTED);
+                }
+            }
             for (int i = 0; i < items.size(); ++i)
             {
                 auto item = items[i];
                 if (!checkValidBuyItem(character, item))
                 {
+                    Logger::logDebug(item->displayName + " not a valid buy item", SHOPPING);
                     continue;
                 }
-                int price = getTradeItemPrice(item, tradingTown, traderPlatoon, tradeCulture, false);
+                int price = getTradeItemPrice(item, tradingTown, character, trader, traderPlatoon, tradeCulture, false);
                 if (price < 0) continue;
-                hasValidBuyItem = true;
-                break;
-
+                // if onlyGoodDeal then check if buy price is higher/equal to base price
+                if (iter->second.onlyGoodDeal && (price >= item->getValueSingle(false)))
+                {
+                    Logger::logDebug(item->displayName + " not a good deal", SHOPPING);
+                    continue;
+                }
                 // check if can afford it
                 Logger::logDebug("My money: " + sc::toString(character->getMoney()));
                 if (price <= character->getMoney())
                 {
-                    hasValidBuyItem = true;
                     Logger::logDebug(item->displayName + " is buyable", SHOPPING);
-                    break;
+                    return true;
                 }
             }
-            if (hasValidBuyItem) break;
         }
-        return hasValidBuyItem;
+        return false;
     }
 
 
@@ -744,6 +909,11 @@ namespace SquadAutonomy
         }
         if (!buyer->giveItem(item, false, false))
         {
+            ContainerItem* backpack = buyer->hasABackpackOn();
+            if (backpack)
+            {
+                if (backpack->giveItem(item, false, false)) return true;
+            }
             Logger::logDebug(buyer->displayName + ": no room for - " + item->displayName, SHOPPING);
             return false;
         }

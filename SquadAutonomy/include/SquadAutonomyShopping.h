@@ -13,7 +13,7 @@ namespace SquadAutonomy
 {
 	int tradeItemsOfTypeInInventoryCount(ItemFunction itemFunction, Character* character, Inventory* inventory);
 	//void updateTradeItemsCount(AI* ai, Character* character);
-	int getTradeItemPrice(Item* tradeItem, Town* tradeTown, Platoon* traderSquad, TradeCulture* shopCulture, bool selling);
+	int getTradeItemPrice(Item* tradeItem, Town* tradeTown, Character* me, Character* trader, Platoon* traderSquad, TradeCulture* shopCulture, bool selling);
 	bool hasSellableItem(SquadSettingsInfo* settings, Character* character, Building* shop);
 	bool checkValidBuyItem(Character* character, Item* itemToBuy);
 	bool hasBuyableItem(SquadSettingsInfo* settings, Character* character, Building* shop);

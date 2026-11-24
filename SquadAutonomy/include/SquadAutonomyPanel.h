@@ -110,6 +110,7 @@ namespace SquadAutonomy
         void updateFloatingPanel(int category);
 
         void updateTownList(DatapanelGUI& panel, const std::string& keyword = "", const std::string& dropBoxKey = "", int category = 0, int index = 0);
+        void updateItemDataByFunctionList(DatapanelGUI& panel, const std::string& keyword = "", const std::string& dropBoxKey = "", int category = 0, int index = 0, ItemFunction itemFunc = ITEM_NO_FUNCTION);
 
     private:
         class OptionsBase;
@@ -257,17 +258,20 @@ namespace SquadAutonomy
         void addSellItem(DataPanelLine* line);
         void clearBuyItem(DataPanelLine* line);
         void clearSellItem(DataPanelLine* line);
-        void addTown(DataPanelLine* line);
-        void clearTown(DataPanelLine* line);
 
         void updateSelectedItemInfo(MyGUI::Widget* sender);
 
         void openBuyItemDetail(MyGUI::Widget* sender);
         void openSellItemDetail(MyGUI::Widget* sender);
-        void setupTradeItemDetail();
+        void setupTradeItemDetail(ItemFunction func);
         void refreshShopItemDetail(DataPanelLine* line);
 
+        void changeItemSearchText(DataPanelLine* line);
+        void addItem(DataPanelLine* line);
+        void clearItems(DataPanelLine* line);
         void changeTownSearchText(DataPanelLine* line);
+        void addTown(DataPanelLine* line);
+        void clearTowns(DataPanelLine* line);
 
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
@@ -275,9 +279,16 @@ namespace SquadAutonomy
         bool doShopping;
         int itemFunctionListIndex;
         float quantity;
+        bool isBuyItem;
         std::pair<const ItemFunction, ShoppingItemInfo>* selectedItem;
+        std::pair<const ItemFunction, ShoppingItemInfo>* checkItem;
+        ItemFunction itemItemFunction;
         float itemQuantity;
         bool itemOnlyGoodDeal;
+        bool itemOnlyStolenItems;
+        int itemItemDataListIndex;
+        std::unordered_set<GameData*> itemItemDatas;
+        bool itemExcludeTowns;
         int townListIndex;
         std::unordered_set<TownBase*> itemShopTowns;
     };
@@ -308,10 +319,14 @@ namespace SquadAutonomy
         bool refresh(SquadSettingsInfo& settings);
         void readFromSquadSettings(const SquadSettingsInfo& squadSettings);
         void writeToSquadSettings(SquadSettingsInfo& squadSettings) const;
+        void changeCurrentTownSlider(DataPanelLine* line);
 
         void changeTownSearchText(DataPanelLine* line);
+        void addTown(DataPanelLine* line);
+        void clearTowns(DataPanelLine* line);
 
     private:
+        float currentTownTargetIndex;
         int townListIndex;
 
     };

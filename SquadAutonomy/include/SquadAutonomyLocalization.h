@@ -26,6 +26,7 @@ namespace SquadAutonomy
 
 		static std::string lineAIPackageList;
 		static std::string lineTownList;
+		static std::string lineItemDataList;
 		static std::string lineItemCategory;
 		static std::string lineInvalidSquad;
 		static std::string lineSquadAutonomy;
