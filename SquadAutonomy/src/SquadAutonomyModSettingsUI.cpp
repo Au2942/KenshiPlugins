@@ -213,7 +213,7 @@ void ModSettingsUI::refresh()
     std::string logDebugGreyed;
     _logSeverityIndex = static_cast<int>(settingsValuesMutable.logCategory);
     int categoryListIndex = _logCategoryIndex;
-    if (ModSettings::getSingleton().getValues().logSeverity < Logger::Debug) logDebugGreyed = *_GreyedColorCode;
+    if (!ModSettings::getSingleton().getValues().enableLogging || ModSettings::getSingleton().getValues().logSeverity < Logger::Debug) logDebugGreyed = *_GreyedColorCode;
     dropbox = _panel->setLineDropBox(logDebugGreyed + Localization::gettext("Log Debug Category"), _category, &categoryListIndex, false, 1.0);
 
     dropbox->addAValue(logDebugGreyed + "Any", 0);

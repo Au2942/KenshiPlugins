@@ -2,8 +2,6 @@
 
 #include <string>
 
-#include <extern/AreaBiomeGroup.h>
-#include <kenshi/Town.h>
 #include <kenshi/gui/DatapanelGUI.h>
 #include <kenshi/gui/DatapanelLine.h>
 
@@ -28,6 +26,5 @@ namespace SquadAutonomyPanelUtils
         }
     }
 
-    std::string getTownBiomeName(TownBase* town);
 }
 }

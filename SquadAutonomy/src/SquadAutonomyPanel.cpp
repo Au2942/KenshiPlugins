@@ -4,6 +4,7 @@
 #include "SquadAutonomyLocalization.h"
 #include "SquadAutonomyPanelUtils.h"
 
+#include <util/KenshiModUtil.h>
 #include <extern/AreaBiomeGroup.h>
 
 #include <Debug.h>
@@ -203,9 +204,9 @@ void SquadAutonomyPanel::PopupPanel::create()
 
     _panel = gui->createDatapanel(0.25f, 0.125f, 0.25f, 0.5f, true, "Window", true);
     _panel->setPanelName("SquadAutonomyPopup");
-
+    _panel->setLineSpacing(32.0);
     _panel->win->getClientWidget()->setRealSize((float)_panel->win->getClientWidget()->getWidth()/_panel->win->getClientWidget()->getParent()->getWidth(), 0.9);
-    _bottomPanel = _panel->win->getClientWidget()->getParent()->createWidgetReal<MyGUI::Widget>("Kenshi_GenericWindowHeaderSkin", 0.0, 0.9, 1.0, 0.1, MyGUI::Align::Left, "BottomPanel");
+    _bottomPanel = _panel->win->getClientWidget()->getParent()->createWidgetReal<MyGUI::Widget>("Kenshi_FloatingPanelThinSkin", 0.0, 0.9, 1.0, 0.1, MyGUI::Align::Left, "BottomPanel");
     _bottomButton = _bottomPanel->createWidgetReal<MyGUI::Button>("Kenshi_Button1", 0.25, 0.1, 0.5, 0.8, MyGUI::Align::Center, "BottomButton");
     _panel->show(false);
 }
@@ -221,6 +222,7 @@ void SquadAutonomyPanel::PopupPanel::show(bool showBottomPanel)
     {
         _bottomPanel->setVisible(showBottomPanel);
         _panel->show(true);
+        MyGUI::LayerManager::getInstance().upLayerItem(_panel->win);
     }
 }
 
@@ -1092,10 +1094,11 @@ void SquadAutonomyPanel::OptionsTab::LabourOptions::writeToSquadSettings(SquadSe
 SquadAutonomyPanel::OptionsTab::CombatOptions::CombatOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
     attackEnemies(true),
+    ignoreEnemiesInNonHostile(true),
     protectAllies(true),
     doMedic(true),
     doRescue(true),
-    rescueOwnSquadOnly(false)
+    rescueOwnSquadOnly(true)
 {
 }
 
@@ -1106,7 +1109,12 @@ bool SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& s
     if (settings.hasTask(TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME) || settings.hasTask(ATTACK_ENEMIES))
     {
         checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Attack Enemies"), attackEnemies);
-        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
+        if (attackEnemies)
+        {
+            checkbox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Ignore in non-hostile towns"), ignoreEnemiesInNonHostile);
+            Utils::setCallback(*checkbox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        }
         hasTask = true;
     }
     if (settings.hasTask(PROTECT_ALLIES) || settings.hasTask(PROTECT_ALLIES_STAY_IN_TOWN) || settings.hasTask(PROTECT_OWN_SQUAD))
@@ -1138,6 +1146,7 @@ bool SquadAutonomyPanel::OptionsTab::CombatOptions::refresh(SquadSettingsInfo& s
 void SquadAutonomyPanel::OptionsTab::CombatOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
     attackEnemies = squadSettings.getAttackEnemies();
+    ignoreEnemiesInNonHostile = squadSettings.getIgnoreEnemiesInNonHostile();
     protectAllies = squadSettings.getProtectAllies();
     doMedic = squadSettings.getDoMedic();
     doRescue = squadSettings.getDoRescue();
@@ -1147,6 +1156,7 @@ void SquadAutonomyPanel::OptionsTab::CombatOptions::readFromSquadSettings(const 
 void SquadAutonomyPanel::OptionsTab::CombatOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
 {
     squadSettings.setAttackEnemies(attackEnemies);
+    squadSettings.setIgnoreEnemiesInNonHostile(ignoreEnemiesInNonHostile);
     squadSettings.setProtectAllies(protectAllies);
     squadSettings.setDoMedic(doMedic);
     squadSettings.setDoRescue(doRescue);
@@ -1317,7 +1327,6 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
     if (settings.hasTask(SHOPPING))
     {
         hasTask = true;
-        _panel->setLineSpacing(28.0);
         auto shoppingBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Shopping"), doShopping);
         Utils::setCallback(*shoppingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
         if (doShopping)
@@ -1334,6 +1343,7 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
 
             auto buyItems = settings.getBuyItems();
             //Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), false, false);
+            _panel->addSpace(_category, 0.25);
             auto clearBuyItemButton = Utils::addTextButton(*_panel, _category, *_MainColorCode + Localization::gettext("Buying:"), Localization::gettext("Clear Buy Items"));
             Utils::setCallback(*clearBuyItemButton, this, &OptionsTab::ShoppingOptions::clearBuyItem);
 
@@ -1345,6 +1355,7 @@ bool SquadAutonomyPanel::OptionsTab::ShoppingOptions::refresh(SquadSettingsInfo&
                 button->button->setUserData(iter->first);
                 button->button->eventMouseButtonClick += MyGUI::newDelegate(this, &OptionsTab::ShoppingOptions::openBuyItemDetail);
             }
+            _panel->addSpace(_category,0.25);
             auto sellItems = settings.getSellItems();
             //Utils::addText(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), false, false);
             auto clearSellItemButton = Utils::addTextButton(*_panel, _category, *_MainColorCode + Localization::gettext("Selling:"), Localization::gettext("Clear Sell Item"));
@@ -1508,6 +1519,8 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::setupTradeI
         itemQuantity = selectedItem->second.quantity;
         itemOnlyGoodDeal = selectedItem->second.onlyGoodDeal;
         if (!isBuyItem) itemOnlyStolenItems = selectedItem->second.onlyStolenItems;
+        itemItemDatas.clear();
+        itemItemDatas = selectedItem->second.shopItemDatas;
         itemExcludeTowns = selectedItem->second.excludeTowns;
         itemShopTowns.clear();
         itemShopTowns = selectedItem->second.shopTowns;
@@ -1524,8 +1537,8 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refreshShop
         auto popup = _popupPanel->getPanel();
         _popupPanel->show();
         //std::pair<const ItemFunction, ShoppingItemInfo>* item = 
-        popup->clear();
         popup->setLineSpacing(28.0);
+        popup->clear();
         popup->setCaption(getItemFunctionName(selectedItem->first));
         
         Utils::addSlider(*popup, 0, Localization::gettext("Quantity"), true, itemQuantity, 0.0f, 50.0f, 0);
@@ -1533,10 +1546,11 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refreshShop
         auto goodDealBox = Utils::addCheckbox(*popup, 0, Localization::gettext("Only Good Deal"), itemOnlyGoodDeal);
         if (!isBuyItem) auto onlyStolenBox = Utils::addCheckbox(*popup, 0, Localization::gettext("Only Stolen Items"), itemOnlyStolenItems);
 
-        auto searchBox = popup->setLineTextEditable(Localization::gettext("Search"), "", 0, true, false, MyGUI::Align::Left, 0.95f);
+        auto searchBox = popup->setLineTextEditable("itemSearch", "", 0, true, false, MyGUI::Align::Left, 0.95f);
+        searchBox->nameText->setCaption(Localization::gettext("Search"));
         Utils::setCallback(*searchBox, this, &ShoppingOptions::changeItemSearchText);
-        auto dropBox = popup->setLineDropBox(Localization::lineTownList, 0, &itemItemDataListIndex, false, 1.0f);
-        _optionsTab->updateTownList(*popup, "", Localization::lineTownList, 0, itemItemDataListIndex);
+        auto dropBox = popup->setLineDropBox(Localization::lineItemDataList , 0, &itemItemDataListIndex, false, 1.0f);
+        _optionsTab->updateItemDataByFunctionList(*popup, "", Localization::lineItemDataList, 0, itemItemDataListIndex, itemItemFunction);
         auto addItemDataButton = Utils::addTextButton(*popup, 0, "", Localization::gettext("Add shopping Item"));
         Utils::setCallback(*addItemDataButton, this, &ShoppingOptions::addItem);
         auto clearItemDataButton = Utils::addTextButton(*popup, 0, "", Localization::gettext("Clear shopping Items"));
@@ -1544,10 +1558,11 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refreshShop
         for (auto iter = itemItemDatas.begin(); iter != itemItemDatas.end(); ++iter)
         {
             if (!(*iter)) continue;
-            Utils::addText(*popup, 0, (*iter)->name, true, true);
+            Utils::addText(*popup, 0, (*iter)->name, true, true, MyGUI::Align::Center);
         }
 
-        searchBox = popup->setLineTextEditable(Localization::gettext("Search"), "", 0, true, false, MyGUI::Align::Left, 0.95f);
+        searchBox = popup->setLineTextEditable("townSearch", "", 0, true, false, MyGUI::Align::Left, 0.95f);
+        searchBox->nameText->setCaption(Localization::gettext("Search"));
         Utils::setCallback(*searchBox, this, &ShoppingOptions::changeTownSearchText);
         dropBox = popup->setLineDropBox(Localization::lineTownList, 0, &townListIndex, false, 1.0f);
         _optionsTab->updateTownList(*popup, "", Localization::lineTownList, 0, townListIndex);
@@ -1568,15 +1583,15 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::refreshShop
             if (!itemExcludeTowns && checkItem && !checkItem->second.excludeTowns && checkItem->second.hasShopTown(*iter))
             {
                 std::string addText = " " + isBuyItem ? Localization::gettext("*ALSO SELLING*") : Localization::gettext("*ALSO BUYING*");
-                Utils::addText(*popup, 0, "#FF8C21" + Utils::getTownBiomeName(*iter) + addText, true, true);
+                Utils::addText(*popup, 0, "#FF8C21" + KenshiModUtil::getTownBiomeName(*iter) + addText, true, true);
             }
             else
             {
                 std::string addText = itemExcludeTowns ? "#CC0C0C" : "";
-                Utils::addText(*popup, 0, addText + Utils::getTownBiomeName(*iter), true, true);
+                Utils::addText(*popup, 0, addText + KenshiModUtil::getTownBiomeName(*iter), true, true);
             }
         }
-        //popup->addSpace(0, 1.0);
+        popup->addSpace(0, 1.0);
         Utils::addText(*popup, 0, "", false, false); //dummy textbox
     }
 }
@@ -1602,9 +1617,9 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::ShoppingOptions::addItem(Dat
     SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
 
     GameData* itemData = nullptr;
-    if (itemItemDataListIndex < settings.getItemDatas(itemItemFunction)->size())
+    if (itemItemDataListIndex < settings.getItemDatas(itemItemFunction).size())
     {
-        itemData = settings.getItemDatas(itemItemFunction)->at(itemItemDataListIndex);
+        itemData = settings.getItemDatas(itemItemFunction)[itemItemDataListIndex];
     }
     if (itemData)
     {
@@ -1669,8 +1684,10 @@ void SquadAutonomyPanel::OptionsTab::ShoppingOptions::writeToSquadSettings(Squad
 
 SquadAutonomyPanel::OptionsTab::InventoryOptions::InventoryOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
-    doLooting(true),
-    putLootsInStorage(true),
+    doLooting(false),
+    doAnimalLooting(true),
+    putLootsInStorage(false),
+    putResourcesInStorage(false),
     ignoreEquipped(true),
     itemFunctionListIndex(ITEM_NO_FUNCTION)
 {
@@ -1683,14 +1700,21 @@ bool SquadAutonomyPanel::OptionsTab::InventoryOptions::refresh(SquadSettingsInfo
     {
         hasTask = true;
         auto lootingBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Looting"), doLooting);
-        Utils::setCallback(*lootingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        Utils::setCallback(*lootingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
+        if (doLooting)
+        {
+            lootingBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Do Animal Looting"), doAnimalLooting);
+            Utils::setCallback(*lootingBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
+        }
     }
     if (settings.hasTask(PUT_LOOT_IN_STORAGE))
     {
         hasTask = true;
         auto putLootsInStorageBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Put loots in storage"), putLootsInStorage);
         Utils::setCallback(*putLootsInStorageBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
-        if (putLootsInStorage)
+        auto putResourcesInStorageBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Put resources in storage"), putResourcesInStorage);
+        Utils::setCallback(*putResourcesInStorageBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettingsAndRefresh);
+        if (putLootsInStorage || putResourcesInStorage)
         {
             auto ignoreEquippedBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Ignore equipped"), ignoreEquipped);
             Utils::setCallback(*ignoreEquippedBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
@@ -1755,14 +1779,18 @@ void SquadAutonomyPanel::OptionsTab::InventoryOptions::clearForbidItems(DataPane
 void SquadAutonomyPanel::OptionsTab::InventoryOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
     doLooting = squadSettings.getDoLooting();
+    doAnimalLooting = squadSettings.getDoAnimalLooting();
     putLootsInStorage = squadSettings.getPutLootsInStorage();
+    putResourcesInStorage = squadSettings.getPutResourcesInStorage();
     ignoreEquipped = squadSettings.getIgnoreEquipped();
 }
 
 void SquadAutonomyPanel::OptionsTab::InventoryOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
 {
     squadSettings.setDoLooting(doLooting);
+    squadSettings.setDoAnimalLooting(doAnimalLooting);
     squadSettings.setPutLootsInStorage(putLootsInStorage);
+    squadSettings.setPutResourcesInStorage(putResourcesInStorage);
     squadSettings.setIgnoreEquipped(ignoreEquipped);
 }
 
@@ -1817,7 +1845,7 @@ void SquadAutonomyPanel::OptionsTab::updateTownList(DatapanelGUI& panel, const s
     //sort alphabetically
     std::sort(towns.begin(), towns.end(), [](TownBase* a, TownBase* b)
     {
-        return Utils::getTownBiomeName(a) < Utils::getTownBiomeName(b);
+        return KenshiModUtil::getTownBiomeName(a) < KenshiModUtil::getTownBiomeName(b);
     });
 
     townObjects.clear();
@@ -1831,7 +1859,7 @@ void SquadAutonomyPanel::OptionsTab::updateTownList(DatapanelGUI& panel, const s
         {
             TownBase* town = dynamic_cast<TownBase*>(*iter);
 
-            dropBox->addAValue(Utils::getTownBiomeName(town), count);
+            dropBox->addAValue(KenshiModUtil::getTownBiomeName(town), count);
             settingsTowns->push_back(town);
             count++;
         }
@@ -1844,7 +1872,7 @@ void SquadAutonomyPanel::OptionsTab::updateTownList(DatapanelGUI& panel, const s
         {
             TownBase* town = dynamic_cast<TownBase*>(*iter);
 
-            std::string townName = Utils::getTownBiomeName(town);
+            std::string townName = KenshiModUtil::getTownBiomeName(town);
             std::string nameUpper = townName;
             std::transform(nameUpper.begin(), nameUpper.end(), nameUpper.begin(), [](char c) { return std::toupper(c); });
             if (nameUpper.find(keywordUpper) != std::string::npos)
@@ -1888,23 +1916,28 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::updateItemDataByFunctionList
     dropBox->clearValues();
 
     auto settingsItemDatas = settings.getItemDatas(itemFunction);
-
+    if (itemFunction == ITEM_FOOD)
+    {
+        auto extraItemDatas = settings.getItemDatas(ITEM_FOOD_RESTRICTED);
+        settingsItemDatas.insert(settingsItemDatas.end(), extraItemDatas.begin(), extraItemDatas.end());
+    }
+    
 
     if (keyword.empty())
     {
         selectVal = currentSelected;
-        for (int i = 0; i < settingsItemDatas->size(); ++i)
+        for (int i = 0; i < settingsItemDatas.size(); ++i)
         {
-            dropBox->addAValue(settingsItemDatas->at(i)->name, i);
+            dropBox->addAValue(settingsItemDatas[i]->name, i);
         }
     }
     else
     {
         std::string keywordUpper = keyword;
         std::transform(keywordUpper.begin(), keywordUpper.end(), keywordUpper.begin(), [](char c) { return std::toupper(c); });
-        for (int i = 0; i < settingsItemDatas->size(); ++i)
+        for (int i = 0; i < settingsItemDatas.size(); ++i)
         {
-            std::string itemDataName = settingsItemDatas->at(i)->name;
+            std::string itemDataName = settingsItemDatas[i]->name;
             std::string nameUpper = itemDataName;
             std::transform(nameUpper.begin(), nameUpper.end(), nameUpper.begin(), [](char c) { return std::toupper(c); });
             if (nameUpper.find(keywordUpper) != std::string::npos)
@@ -1923,6 +1956,7 @@ void SquadAutonomy::SquadAutonomyPanel::OptionsTab::updateItemDataByFunctionList
 
 SquadAutonomyPanel::OptionsTab::TravelOptions::TravelOptions(OptionsTab& optionsTab, DatapanelGUI& panel, PopupPanel& popupPanel, int category) :
     OptionsBase(optionsTab, panel, popupPanel, category),
+    stopAtTownsAlongTheWay(false),
     townListIndex(0),
     currentTownTargetIndex(0)
 {
@@ -1938,8 +1972,12 @@ bool SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(SquadSettingsInfo& s
         auto targetTown = settings.getTargetTowns();
         if (targetTown.size() > 0)
         {
+            if (currentTownTargetIndex < 0) currentTownTargetIndex = 0;
+            else if (currentTownTargetIndex > targetTown.size() - 1) currentTownTargetIndex = targetTown.size() - 1;
             auto slider = Utils::addSlider(*_panel, _category, Localization::gettext("Current Target"), true, currentTownTargetIndex, 0.0, targetTown.size()-1, 0, true);
             Utils::setCallback(*slider, this, &TravelOptions::changeCurrentTownSlider);
+            auto stopAtTownsAlongTheWayBox = Utils::addCheckbox(*_panel, _category, Localization::gettext("Stop at towns along the way"), stopAtTownsAlongTheWay);
+            Utils::setCallback(*stopAtTownsAlongTheWayBox, _optionsTab, &OptionsTab::writeToSelectedSquadSettings);
         }
         auto editBox = _panel->setLineTextEditable(Localization::gettext("Search"), "", _category, true, false, MyGUI::Align::Left, 0.95f);
         Utils::setCallback(*editBox, this, &TravelOptions::changeTownSearchText);
@@ -1952,7 +1990,7 @@ bool SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(SquadSettingsInfo& s
         for (int i = 0; i < targetTown.size(); ++i)
         {
             std::string prefix = (currentTownTargetIndex == i ? "#56CC0C>" : "") + sc::toString(i) + ": ";
-            Utils::addText(*_panel, _category, prefix + Utils::getTownBiomeName(targetTown[i]), true, true, MyGUI::Align::Left);
+            Utils::addText(*_panel, _category, prefix + KenshiModUtil::getTownBiomeName(targetTown[i]), true, true, MyGUI::Align::Left);
         }
     }
     return hasSignal;
@@ -1960,11 +1998,13 @@ bool SquadAutonomyPanel::OptionsTab::TravelOptions::refresh(SquadSettingsInfo& s
 
 void SquadAutonomyPanel::OptionsTab::TravelOptions::readFromSquadSettings(const SquadSettingsInfo& squadSettings)
 {
+    stopAtTownsAlongTheWay = squadSettings.getStopAtTownsAlongTheWay();
     currentTownTargetIndex = static_cast<float>(squadSettings.getTargetTownIndex());
 }
 
 void SquadAutonomyPanel::OptionsTab::TravelOptions::writeToSquadSettings(SquadSettingsInfo& squadSettings) const
 {
+    squadSettings.setStopAtTownsAlongTheWay(stopAtTownsAlongTheWay);
     squadSettings.setTargetTownIndex(currentTownTargetIndex);
 }
 

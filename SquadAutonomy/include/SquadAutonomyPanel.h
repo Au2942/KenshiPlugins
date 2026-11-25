@@ -226,6 +226,7 @@ namespace SquadAutonomy
 
     private:
         bool attackEnemies;
+        bool ignoreEnemiesInNonHostile;
         bool protectAllies;
         bool doMedic;
         bool doRescue;
@@ -306,7 +307,9 @@ namespace SquadAutonomy
 
     private:
         bool doLooting;
+        bool doAnimalLooting;
         bool putLootsInStorage;
+        bool putResourcesInStorage;
         bool ignoreEquipped;
         int itemFunctionListIndex;
     };
@@ -327,6 +330,7 @@ namespace SquadAutonomy
 
     private:
         float currentTownTargetIndex;
+        bool stopAtTownsAlongTheWay;
         int townListIndex;
 
     };

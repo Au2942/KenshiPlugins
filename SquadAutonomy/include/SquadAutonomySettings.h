@@ -86,6 +86,8 @@ namespace SquadAutonomy
 
         bool getAttackEnemies() const;
         void setAttackEnemies(bool val);
+        bool getIgnoreEnemiesInNonHostile() const;
+        void setIgnoreEnemiesInNonHostile(bool val);
         bool getProtectAllies() const;
         void setProtectAllies(bool val);
         bool getDoMedic() const;
@@ -115,8 +117,12 @@ namespace SquadAutonomy
 
         bool getDoLooting() const;
         void setDoLooting(bool val);
+        bool getDoAnimalLooting() const;
+        void setDoAnimalLooting(bool val);
         bool getPutLootsInStorage() const;
         void setPutLootsInStorage(bool val);
+        bool getPutResourcesInStorage() const;
+        void setPutResourcesInStorage(bool val);
         bool getIgnoreEquipped() const;
         void setIgnoreEquipped(bool val);
         std::unordered_set<ItemFunction> getForbidItems() const;
@@ -124,6 +130,8 @@ namespace SquadAutonomy
         void addForbidItem(ItemFunction itemFunction);
         void clearForbidItems();
 
+        bool getStopAtTownsAlongTheWay() const;
+        void setStopAtTownsAlongTheWay(bool val);
         void addTargetTown(TownBase* town);
         void clearTargetTown();
         TownBase* getCurrentTargetTown();
@@ -203,6 +211,7 @@ namespace SquadAutonomy
         float _labourOther;
         // Combat
         bool _attackEnemies;
+        bool _ignoreEnemiesInNonHostile;
         bool _protectAllies;
         bool _doMedic;
         bool _doRescue;
@@ -217,11 +226,14 @@ namespace SquadAutonomy
         std::unordered_map<ItemFunction, ShoppingItemInfo> _sellItems;
         // Inventory
         bool _doLooting;
+        bool _doAnimalLooting;
         bool _putLootsInStorage;
+        bool _putResourcesInStorage;
         bool _ignoreEquipped;
         std::unordered_set<ItemFunction> _forbidItems;
         // Travel
         int _targetTownIndex;
+        bool _stopAtTownsAlongTheWay;
         std::vector<TownBase*> _targetTowns;
     };
 
@@ -238,7 +250,7 @@ namespace SquadAutonomy
         std::vector<GameData*>* getAIPackageList();
         std::vector<GameData*>* getSquadTemplate();
         std::unordered_map<ItemFunction, std::vector<GameData*>>* getItemDatasList();
-        std::vector<GameData*>* getItemDatas(ItemFunction itemFunc);
+        const std::vector<GameData*> getItemDatas(ItemFunction itemFunc);
         std::vector<TownBase*>* getTownBaseList();
         void removeSquadSettings(Platoon*);
 

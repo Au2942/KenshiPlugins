@@ -1,8 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2026-10-14 01:17+0700\n"
-"PO-Revision-Date: 2026-10-14 01:20+0700\n"
+"POT-Creation-Date: 2026-11-25 20:12+0700\n"
+"PO-Revision-Date: 2026-11-25 20:13+0700\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru_RU\n"
@@ -14,7 +14,7 @@ msgstr ""
 "X-Poedit-KeywordsList: Localization::gettext:1\n"
 "X-Poedit-SearchPath-0: .\n"
 
-#: SquadAutonomy.cpp:394 SquadAutonomyPanel.cpp:137
+#: SquadAutonomy.cpp:415 SquadAutonomyPanel.cpp:181
 msgid "Settings"
 msgstr "Настройки"
 
@@ -22,39 +22,55 @@ msgstr "Настройки"
 msgid "AUT"
 msgstr "АВТ"
 
-#: SquadAutonomyLocalization.cpp:26
-msgid "AI package"
-msgstr "ИИ Пакеты"
+#: SquadAutonomyLocalization.cpp:41
+msgid "AI Package List"
+msgstr ""
 
-#: SquadAutonomyLocalization.cpp:27
+#: SquadAutonomyLocalization.cpp:42
+msgid "Town"
+msgstr ""
+
+#: SquadAutonomyLocalization.cpp:43
+msgid "Item"
+msgstr ""
+
+#: SquadAutonomyLocalization.cpp:44
+msgid "Item Category"
+msgstr ""
+
+#: SquadAutonomyLocalization.cpp:45
 msgid "No squad selected/invalid squad"
 msgstr "Отряд не выбран / неверный отряд"
 
-#: SquadAutonomyLocalization.cpp:28
+#: SquadAutonomyLocalization.cpp:46
 msgid "Squad Autonomy"
 msgstr "Автономия отряда"
 
-#: SquadAutonomyLocalization.cpp:29
+#: SquadAutonomyLocalization.cpp:47
 msgid "Squad Autonomy:"
 msgstr "Автономия отряда:"
+
+#: SquadAutonomyLocalization.cpp:48
+msgid "Squad Autonomy Popup"
+msgstr ""
 
 #: SquadAutonomyModSettingsUI.cpp:50
 msgid "Squad Autonomy Mod Options"
 msgstr "Настройки мода «Автономия отряда»"
 
-#: SquadAutonomyModSettingsUI.cpp:107
+#: SquadAutonomyModSettingsUI.cpp:145
 msgid "Show button on Mainbar"
 msgstr "Показывать кнопку на главной панели"
 
-#: SquadAutonomyModSettingsUI.cpp:108
+#: SquadAutonomyModSettingsUI.cpp:146
 msgid "Show AUT button on the Mainbar"
 msgstr "Показывать кнопку АВТ на главной панели"
 
-#: SquadAutonomyModSettingsUI.cpp:112
+#: SquadAutonomyModSettingsUI.cpp:150
 msgid "Lock button position"
 msgstr "Зафиксировать положение кнопки"
 
-#: SquadAutonomyModSettingsUI.cpp:113
+#: SquadAutonomyModSettingsUI.cpp:151
 msgid ""
 "Lock/Unlock button position (can be dragged around to change position when "
 "unlocked)"
@@ -62,43 +78,43 @@ msgstr ""
 "Зафиксировать/разблокировать положение кнопки (кнопку можно перетаскивать, "
 "когда положение не зафиксировано)"
 
-#: SquadAutonomyModSettingsUI.cpp:117
+#: SquadAutonomyModSettingsUI.cpp:155
 msgid "Button Width"
 msgstr "Ширина кнопки"
 
-#: SquadAutonomyModSettingsUI.cpp:118
+#: SquadAutonomyModSettingsUI.cpp:156
 msgid "Set the button width relative to the screen width"
 msgstr "Задать ширину кнопки относительно ширины экрана"
 
-#: SquadAutonomyModSettingsUI.cpp:125
+#: SquadAutonomyModSettingsUI.cpp:163
 msgid "Button Height"
 msgstr "Высота кнопки"
 
-#: SquadAutonomyModSettingsUI.cpp:126
+#: SquadAutonomyModSettingsUI.cpp:164
 msgid "Set the button height relative to the screen height"
 msgstr "Задать высоту кнопки относительно высоты экрана"
 
-#: SquadAutonomyModSettingsUI.cpp:133
+#: SquadAutonomyModSettingsUI.cpp:171
 msgid "Button Font Size"
 msgstr "Размер шрифта кнопки"
 
-#: SquadAutonomyModSettingsUI.cpp:134
+#: SquadAutonomyModSettingsUI.cpp:172
 msgid "Set the button font size"
 msgstr "Задать размер шрифта кнопки"
 
-#: SquadAutonomyModSettingsUI.cpp:141
+#: SquadAutonomyModSettingsUI.cpp:179
 msgid "Show button in Squad screen"
 msgstr "Показывать кнопку в экране отряда"
 
-#: SquadAutonomyModSettingsUI.cpp:142
+#: SquadAutonomyModSettingsUI.cpp:180
 msgid "Show AUT button in the Squad Management screen"
 msgstr "Показывать кнопку АВТ в экране управления отрядом"
 
-#: SquadAutonomyModSettingsUI.cpp:146
+#: SquadAutonomyModSettingsUI.cpp:184
 msgid "Enable logging"
 msgstr "Включить логгирование"
 
-#: SquadAutonomyModSettingsUI.cpp:147
+#: SquadAutonomyModSettingsUI.cpp:185
 msgid ""
 "Write to log. Turn on if experiencing frequent crashes and include the last "
 "few lines with your bug report."
@@ -106,259 +122,465 @@ msgstr ""
 "Записывать в журнал. Включите при частых вылетах и приложите последние "
 "несколько строк к отчёту об ошибке."
 
-#: SquadAutonomyModSettingsUI.cpp:157
+#: SquadAutonomyModSettingsUI.cpp:196
 msgid "Log Severity"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:159
+#: SquadAutonomyModSettingsUI.cpp:197
 msgid "None"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:160
+#: SquadAutonomyModSettingsUI.cpp:198
 msgid "Error"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:161
+#: SquadAutonomyModSettingsUI.cpp:199
 msgid "Warning"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:162
+#: SquadAutonomyModSettingsUI.cpp:200
 msgid "Info"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:163
+#: SquadAutonomyModSettingsUI.cpp:201
 msgid "Debug"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:168
+#: SquadAutonomyModSettingsUI.cpp:206
 msgid "Select log severity level. Higher severity includes all lower ones."
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:176
+#: SquadAutonomyModSettingsUI.cpp:217
+msgid "Log Debug Category"
+msgstr ""
+
+#: SquadAutonomyModSettingsUI.cpp:236
+msgid "Select log debug category to be logged."
+msgstr ""
+
+#: SquadAutonomyModSettingsUI.cpp:245
 msgid "Allow Spam"
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:177
+#: SquadAutonomyModSettingsUI.cpp:246
 msgid "Allow logging spam."
 msgstr ""
 
-#: SquadAutonomyModSettingsUI.cpp:184
+#: SquadAutonomyModSettingsUI.cpp:253
 msgid "Reset to Default"
 msgstr "Сбросить настройки"
 
-#: SquadAutonomyPanel.cpp:72
+#: SquadAutonomyPanel.cpp:79
 msgid "Main"
 msgstr "Основное"
 
-#: SquadAutonomyPanel.cpp:73
+#: SquadAutonomyPanel.cpp:80
 msgid "Options"
 msgstr "Настройки"
 
-#: SquadAutonomyPanel.cpp:172
+#: SquadAutonomyPanel.cpp:296
 msgid "Enable Autonomy"
 msgstr "Включить автономию"
 
-#: SquadAutonomyPanel.cpp:177
+#: SquadAutonomyPanel.cpp:301
 msgid "Set Squad Home Building"
 msgstr "Назначить домашнее строение отряда"
 
-#: SquadAutonomyPanel.cpp:180
+#: SquadAutonomyPanel.cpp:304
 msgid "Set Squad Work Building"
 msgstr "Назначить рабочее строение отряда"
 
-#: SquadAutonomyPanel.cpp:186
+#: SquadAutonomyPanel.cpp:310
 msgid "Clear Buildings"
 msgstr "Очистить строения"
 
-#: SquadAutonomyPanel.cpp:192
+#: SquadAutonomyPanel.cpp:316
+msgid "AI Package"
+msgstr "ИИ Пакеты"
+
+#: SquadAutonomyPanel.cpp:318 SquadAutonomyPanel.cpp:1549
+#: SquadAutonomyPanel.cpp:1564 SquadAutonomyPanel.cpp:1979
 msgid "Search"
 msgstr "Поиск"
 
-#: SquadAutonomyPanel.cpp:203
+#: SquadAutonomyPanel.cpp:330
 msgid "Priority"
 msgstr "Приоритет"
 
-#: SquadAutonomyPanel.cpp:208
+#: SquadAutonomyPanel.cpp:335
 msgid "Add AI Package"
 msgstr "Добавить пакет ИИ"
 
-#: SquadAutonomyPanel.cpp:211
+#: SquadAutonomyPanel.cpp:338
 msgid "Clear AI Packages"
 msgstr "Очистить пакеты ИИ"
 
-#: SquadAutonomyPanel.cpp:221
+#: SquadAutonomyPanel.cpp:348
 msgid "Home:"
 msgstr "Дом:"
 
-#: SquadAutonomyPanel.cpp:225
+#: SquadAutonomyPanel.cpp:352
 msgid "Work:"
 msgstr "Работа:"
 
-#: SquadAutonomyPanel.cpp:408
+#: SquadAutonomyPanel.cpp:532
 msgid "Buildings cleared"
 msgstr "Строения очищены"
 
-#: SquadAutonomyPanel.cpp:440
+#: SquadAutonomyPanel.cpp:564
 msgid "No object selected!"
 msgstr "Объект не выбран!"
 
-#: SquadAutonomyPanel.cpp:447
+#: SquadAutonomyPanel.cpp:571
 msgid "Select a building!"
 msgstr "Выберите строение!"
 
-#: SquadAutonomyPanel.cpp:470 SquadAutonomyPanel.cpp:836
+#: SquadAutonomyPanel.cpp:594 SquadAutonomyPanel.cpp:1025
 msgid "Set"
 msgstr "Задать"
 
-#: SquadAutonomyPanel.cpp:473
+#: SquadAutonomyPanel.cpp:597
 msgid "home building:"
 msgstr "домашнее строение:"
 
-#: SquadAutonomyPanel.cpp:477
+#: SquadAutonomyPanel.cpp:601
 msgid "work building:"
 msgstr "рабочее строение:"
 
-#: SquadAutonomyPanel.cpp:599
+#: SquadAutonomyPanel.cpp:741
 msgid "Category"
 msgstr "Категория"
 
-#: SquadAutonomyPanel.cpp:610
+#: SquadAutonomyPanel.cpp:764
 msgid "Basic"
 msgstr "Базовые"
 
-#: SquadAutonomyPanel.cpp:611
+#: SquadAutonomyPanel.cpp:765
 msgid "Labour"
 msgstr "Труд"
 
-#: SquadAutonomyPanel.cpp:612
+#: SquadAutonomyPanel.cpp:766
 msgid "Combat"
 msgstr "Бой"
 
-#: SquadAutonomyPanel.cpp:613
+#: SquadAutonomyPanel.cpp:767
 msgid "Guard"
 msgstr "Охрана"
 
-#: SquadAutonomyPanel.cpp:739
+#: SquadAutonomyPanel.cpp:768
+msgid "Shopping"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:769
+msgid "Inventory"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:770
+msgid "Travel"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:802
+msgid "No settings available for current packages"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:901
 msgid "Start Work Time"
 msgstr "Начало рабочего времени"
 
-#: SquadAutonomyPanel.cpp:742
+#: SquadAutonomyPanel.cpp:904
 msgid "End Work Time"
 msgstr "Конец рабочего времени"
 
-#: SquadAutonomyPanel.cpp:745
-#, fuzzy
-#| msgid "Rest until healed"
-msgid "Rest Until Healed When Wounded"
-msgstr "Отдыхать до полного исцеления"
+#: SquadAutonomyPanel.cpp:907
+msgid "Auto Movement Speed"
+msgstr ""
 
-#: SquadAutonomyPanel.cpp:750 SquadAutonomyPanel.cpp:752
+#: SquadAutonomyPanel.cpp:912
+msgid "Rest Until Healed When Wounded"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:917 SquadAutonomyPanel.cpp:919
 msgid "Rest Health Threshold"
 msgstr "Порог здоровья для отдыха"
 
-#: SquadAutonomyPanel.cpp:755 SquadAutonomyPanel.cpp:757
+#: SquadAutonomyPanel.cpp:922 SquadAutonomyPanel.cpp:924
 msgid "Healed Health Threshold"
 msgstr "Порог здоровья для прекращения отдыха"
 
-#: SquadAutonomyPanel.cpp:761
+#: SquadAutonomyPanel.cpp:928
 msgid "Allow Using Paid Beds"
 msgstr "Разрешить использовать платные кровати"
 
-#: SquadAutonomyPanel.cpp:764
+#: SquadAutonomyPanel.cpp:931
 msgid "Allow Sleep Outside Work Hours"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:813
+#: SquadAutonomyPanel.cpp:989
 msgid "Stats Used:"
 msgstr "Используемые навыки:"
 
-#: SquadAutonomyPanel.cpp:813
+#: SquadAutonomyPanel.cpp:989
 msgid "(bigger number = higher priority, 0 = forbid)"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:817
-msgid "Science"
-msgstr "Наука"
-
-#: SquadAutonomyPanel.cpp:818
-msgid "Labouring (Mining)"
-msgstr "Работа"
-
-#: SquadAutonomyPanel.cpp:819
-msgid "Farming"
-msgstr "Фермерство"
-
-#: SquadAutonomyPanel.cpp:820
-msgid "Cooking"
-msgstr "Готовка"
-
-#: SquadAutonomyPanel.cpp:821
-msgid "Medic"
-msgstr "Медик"
-
-#: SquadAutonomyPanel.cpp:822
-msgid "Engineer"
-msgstr "Инженер"
-
-#: SquadAutonomyPanel.cpp:823
-msgid "Robotics"
-msgstr "Робототехника"
-
-#: SquadAutonomyPanel.cpp:824
-msgid "Weapon Smith"
-msgstr "Ковка оружия"
-
-#: SquadAutonomyPanel.cpp:825
-msgid "Armour Smith"
-msgstr "Ковка доспехов"
-
-#: SquadAutonomyPanel.cpp:826
-msgid "Crossbow Smith"
-msgstr "Ковка арбалетов"
-
-#: SquadAutonomyPanel.cpp:827
+#: SquadAutonomyPanel.cpp:1013
 msgid "Automatic Machine"
 msgstr "Автоматический верстак"
 
-#: SquadAutonomyPanel.cpp:828
+#: SquadAutonomyPanel.cpp:1015
 msgid "Other"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:832
+#: SquadAutonomyPanel.cpp:1021
 msgid "Set All"
 msgstr ""
 
-#: SquadAutonomyPanel.cpp:913
+#: SquadAutonomyPanel.cpp:1110
 msgid "Attack Enemies"
 msgstr "Атаковать врагов"
 
-#: SquadAutonomyPanel.cpp:916
+#: SquadAutonomyPanel.cpp:1114
+msgid "Ignore in non-hostile towns"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1121
 msgid "Protect Allies"
 msgstr "Защищать союзников"
 
-#: SquadAutonomyPanel.cpp:919
+#: SquadAutonomyPanel.cpp:1127
 msgid "Do Medic"
 msgstr "Лечить"
 
-#: SquadAutonomyPanel.cpp:922
+#: SquadAutonomyPanel.cpp:1133
 msgid "Rescue Downed Allies"
 msgstr "Спасать павших союзников"
 
-#: SquadAutonomyPanel.cpp:953
+#: SquadAutonomyPanel.cpp:1137
+msgid "Rescue Own Squad Only"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1179
 msgid "Man Turrets"
 msgstr "Использовать турели"
 
-#: SquadAutonomyPanel.cpp:956
+#: SquadAutonomyPanel.cpp:1185
 msgid "Gate Guard:"
 msgstr "Охрана ворот:"
 
-#: SquadAutonomyPanel.cpp:958
+#: SquadAutonomyPanel.cpp:1187
 msgid "Stay Inside Gate"
 msgstr "Оставаться внутри ворот"
 
-#: SquadAutonomyPanel.cpp:961
+#: SquadAutonomyPanel.cpp:1190
 msgid "Close Gate"
 msgstr "Закрывать ворота"
+
+#: SquadAutonomyPanel.cpp:1266
+msgid "First Aid"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1269
+msgid "Skeleton Repair Kit"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1272
+msgid "Splinting"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1275
+msgid "Backpack"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1278
+msgid "Food"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1281
+msgid "Weapon"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1284
+msgid "Ammunition"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1287
+msgid "Clothing"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1290
+msgid "Narcotic"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1293
+msgid "Blueprint"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1296
+msgid "Book"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1299
+msgid "Material"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1329
+msgid "Do Shopping"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1337 SquadAutonomyPanel.cpp:1543
+msgid "Quantity"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1338
+msgid "Add Buy Item"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1340
+msgid "Add Sell Item"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1346
+msgid "Buying:"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1346
+msgid "Clear Buy Items"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1352
+msgid "Buy"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1353
+msgid ": until >="
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1360
+msgid "Selling:"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1360
+msgid "Clear Sell Item"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1364
+msgid "Sell"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1365
+msgid ": until <="
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1391
+msgid "Buy amount must be higher than 0"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1545
+msgid "Only Good Deal"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1546
+msgid "Only Stolen Items"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1553
+msgid "Add shopping Item"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1555
+msgid "Clear shopping Items"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1569
+msgid "Add shopping town"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1571
+msgid "Clear shopping towns"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1575
+msgid "Exclude towns"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1584
+msgid "*ALSO SELLING*"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1584
+msgid "*ALSO BUYING*"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1701
+msgid "Do Looting"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1705
+msgid "Do Animal Looting"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1712
+msgid "Put loots in storage"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1714
+msgid "Put resources in storage"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1718
+msgid "Ignore equipped"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1726
+msgid "Add Forbid Item"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1728
+msgid "Clear Forbid Items"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1974
+msgid "Current Target"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1976
+msgid "Stop at towns along the way"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1983
+msgid "Add Target Town"
+msgstr ""
+
+#: SquadAutonomyPanel.cpp:1985
+msgid "Clear Target Towns"
+msgstr ""
+
+#~ msgid "Science"
+#~ msgstr "Наука"
+
+#~ msgid "Labouring (Mining)"
+#~ msgstr "Работа"
+
+#~ msgid "Farming"
+#~ msgstr "Фермерство"
+
+#~ msgid "Cooking"
+#~ msgstr "Готовка"
+
+#~ msgid "Medic"
+#~ msgstr "Медик"
+
+#~ msgid "Engineer"
+#~ msgstr "Инженер"
+
+#~ msgid "Robotics"
+#~ msgstr "Робототехника"
+
+#~ msgid "Armour Smith"
+#~ msgstr "Ковка доспехов"
+
+#~ msgid "Crossbow Smith"
+#~ msgstr "Ковка арбалетов"
 
 #~ msgid ": Autonomy enable"
 #~ msgstr ": Автономия включена"

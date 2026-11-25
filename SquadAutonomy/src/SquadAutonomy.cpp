@@ -34,6 +34,7 @@
 
 #include <kenshi/util/hand.h>
 #include <kenshi/util/PerfTimer.h>
+#include <kenshi/util/UtilityT.h>
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
 #include <kenshi/GameData.h>
@@ -43,6 +44,7 @@
 #include <kenshi/Character.h>
 #include <kenshi/CharMovement.h>
 #include <kenshi/CharBody.h>
+#include <kenshi/CharStats.h>
 #include <kenshi/RaceData.h>
 #include <kenshi/AI/AI.h>
 #include <kenshi/AI/AITaskSystem.h>
@@ -78,7 +80,6 @@
 
 #include <core/Functions.h>
 #include <fstream>
-
 #include <codecvt>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -658,11 +659,57 @@ namespace SquadAutonomy
         auto factions = *ou->factionMgr->getAllFactions();*/
         Character* leader = squad->getSquadLeader();
         TownBase* currentTown = nullptr;
-        Blackboard* bb = squad->getBlackboard();
+        //Blackboard* bb = squad->getBlackboard();
         ActivePlatoon* activeSquad = squad->activePlatoon;
-        if (bb)
+        /*
+        TownType tts[] = { TOWN_TOWN, TOWN_VILLAGE, TOWN_MILITARY, TOWN_OUTPOST, TOWN_SLAVE_CAMP};
+        size_t length = sizeof(tts) / sizeof(tts[0]);
+        for (int i = 0; i < length; ++i)
         {
-            currentTown = bb->getCurrentTownLocation();
+            Town* town = shou->townList->getNearestTown(leader->pos, nullptr, nullptr, squad->getFaction(), tts[i]);
+            if (town)
+            {
+                Faction* faction = town->getFaction();
+                if (faction && faction->relations && faction->relations->isEnemy(squad->getFaction())) continue;
+                float distance = town->squaredDistanceTo(leader->pos);
+                if (minDistance > distance)
+                {
+                    currentTown = town;
+                    minDistance = distance;
+                }
+            }
+        }
+        */
+        float minDistance = std::numeric_limits<float>::max();
+        lektor<RootObject*> towns = shou->townList->getAllTowns();
+        //DebugLog("set nearest towns list size: " + sc::toString(towns.size()));
+        for (int i = 0; i < towns.size(); ++i)
+        {
+            hand hand = towns[i]->getHandle();
+            if (!hand) continue;
+            TownBase* town = hand.getTown();
+            if (town)
+            {
+                switch (town->townType)
+                {
+                case TownType::TOWN_NULL:
+                case TownType::TOWN_POI:
+                case TownType::TOWN_RUINS:
+                case TownType::TOWN_PRISON:
+                case TownType::TOWN_NEST:
+                case TownType::TOWN_NEST_MARKER:
+                    continue;
+                default:
+                    break;
+                }
+            }
+            float distance = town->squaredDistanceTo(leader->pos);
+            if (minDistance < distance) continue;
+            Faction* faction = town->getFaction();
+            if (faction && faction->relations && faction->relations->isEnemy(squad->getFaction())) continue;
+            currentTown = town;
+            minDistance = distance;
+
         }
         Building* home = nullptr;
         if (currentTown)
@@ -670,6 +717,16 @@ namespace SquadAutonomy
             if (leader && leader->isInsideBuilding)
             {
                 Building* building = leader->isInsideBuilding.getBuilding();
+                /*
+                if (!building)
+                {
+                    auto bars = currentTown->findAllBuildingsOfType(BD_BAR, leader);
+                    if (bars->size() > 0)
+                    {
+                        building = bars->at(UtilityT::randomInt(0, bars->size() - 1));
+                    }
+                }
+                */
                 Faction* buildingFaction = nullptr;
                 Faction* myFaction = leader->getFaction();
                 if (building)
@@ -742,10 +799,11 @@ namespace SquadAutonomy
             }
             if (!b->data) continue;
 
-            float efficiency = -1;
-            auto it = b->data->fdata.find("output rate");
-            if (b->data->fdata.size() > 0 && it != b->data->fdata.end())
-                efficiency = it->second;
+            float efficiency = b->getProductionMult();
+            auto it = b->getProductionMult();
+            //b->data->fdata.find("output rate");
+            //if (b->data->fdata.size() > 0 && it != b->data->fdata.end())
+            //    efficiency = it->second;
 
             int cost = 0;
             cost = b->getCostToUse(character);
@@ -869,7 +927,8 @@ namespace SquadAutonomy
             float dist = obj->pos.squaredDistance(useable->pos);
             if (dist >= minDist) continue;
             if (taskSystem && taskSystem->isPathImpossible(useable)) continue;
-            Logger::logDebug(obj->displayName + " is closer to " + useable->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
+            
+            (obj->displayName + " is closer to " + useable->displayName, Logger::LABOUR | Logger::AI_TARGETFINDING, false);
             return false;
         }
         return true;
@@ -1397,14 +1456,28 @@ namespace SquadAutonomy
             //if (order) currentGoal = order->tryToGetCurrentGoal();
             if (order->isInChoosingGoalMode())
             {
-                if (thisptr->getSpecialFunction() == BF_RESEARCH)
+                BuildingFunction bf = thisptr->getSpecialFunction();
+                if (bf == BF_RESEARCH)
                 {
                     if (ou->player && ou->player->technology)
                     {
                         if (ou->player->technology->current.size() == 0) return false;
                     }
                 }
-                if (thisptr->getSpecialFunction() == BF_DOOR)
+                else if (bf == BF_TRAINING)
+                {
+                    StatsEnumerated stats = thisptr->getStatUsed();
+                    //DebugLog(thisptr->displayName + " stats: " + sc::toString(static_cast<int>(stats)));
+                    int limit = UtilityT::round(thisptr->getProductionMult());
+                    //DebugLog(thisptr->displayName + " production mult: " + sc::toString(productionMult));
+                    int charStat = UtilityT::round(character->getStats()->getStat(stats, false));
+                    //DebugLog(thisptr->displayName + " max: " + sc::toString(limit) + " " + character->displayName + " stats: " + sc::toString(charStat));
+                    if (charStat >= limit)
+                    {
+                        return false;
+                    }
+                }
+                else if (bf == BF_DOOR)
                 {
                     return false;
                 }
@@ -1478,6 +1551,45 @@ namespace SquadAutonomy
         return score;
     }
 
+    float (*findSomebodyToLoot_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
+    float findSomebodyToLoot_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
+    {
+        float score = findSomebodyToLoot_orig(thisptr, in, out, justAsking);
+
+        Character* character = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        if (thisptr)
+        {
+            character = thisptr->getCharacter();
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(thisptr->getPlatoon());
+        }
+        if (settings && settings->isEnabled())
+        {
+            if (out && out.getCharacter())
+            {
+                Character* target = out.getCharacter();
+                if (target->isAnimal())
+                {
+                    if (!settings->getDoAnimalLooting())
+                    {
+                        out.setNull();
+                        return 0.0;
+                    }
+                }
+                if (!target->isDead())
+                {
+                    // if not an enemy/trying to kill me and is unconcious
+                    if (!(!target->isAlly(character, false) && target->isUnconcious()))
+                    {
+                        out.setNull();
+                        return 0.0;
+                    }
+                }
+            }
+        }
+        return score;
+    }
+
     float (*findMineToWorkAt_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
     float findMineToWorkAt_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
     {
@@ -1500,7 +1612,6 @@ namespace SquadAutonomy
                 out = FindLabourToDo(character, settings);
                 if (out)
                 {
-                    Logger::log(character->displayName + " found labour: " + out.getBuilding()->displayName);
                     return 1.0;
                 }
                 else return 0.0;
@@ -1643,11 +1754,14 @@ namespace SquadAutonomy
                     }
                 }
             }
-            //if (platoon->getOwnerships()->_homeBuilding) Logger::logDebug(character->displayName + " home: " + platoon->getOwnerships()->_homeBuilding.getBuilding()->displayName);
-            //if (platoon->getOwnerships()->_homeTown) Logger::logDebug(character->displayName + " town: " + platoon->getOwnerships()->_homeTown->displayName);
-            //if (character->getStateBroadcast()->homeBuilding) Logger::logDebug(character->displayName + " state home: " + character->getStateBroadcast()->homeBuilding.getBuilding()->displayName);
-            //if (character->getStateBroadcast()->currentTownLocation) Logger::logDebug(character->displayName + " state current town: " + character->getStateBroadcast()->currentTownLocation->displayName);
-
+            if (gui->getSelectedPlayerCharacter() == character)
+            {
+                if (platoon->getOwnerships()->_homeBuilding) Logger::logDebug(character->displayName + " home: " + platoon->getOwnerships()->_homeBuilding.getBuilding()->displayName, 0, true);
+                if (platoon->getOwnerships()->_homeTown) Logger::logDebug(character->displayName + " town: " + platoon->getOwnerships()->_homeTown->displayName);
+                if (character->getStateBroadcast()->homeBuilding) Logger::logDebug(character->displayName + " state home: " + character->getStateBroadcast()->homeBuilding.getBuilding()->displayName, 0, true);
+                if (character->getStateBroadcast()->currentTownLocation) Logger::logDebug(character->displayName + " state current town: " + character->getStateBroadcast()->currentTownLocation->displayName, 0, true);
+                if (bb->getCurrentTownLocation()) Logger::logDebug(character->displayName + " bb town: " + bb->getCurrentTownLocation()->displayName, 0, true);
+            }
             // the part that makes everything work
             // basically many of the task scoring/target finding functions have a faction->isPlayer check
             // in many cases if faction->isPlayer is true, it'll just return 0.0/nullptr and do nothing
@@ -2146,7 +2260,10 @@ namespace SquadAutonomy
             if (order)
             {
                 Tasker* currentGoal = order->tryToGetCurrentGoal();
-                if (!order->hasPlayerOrder(OPEN_DOOR))
+                Building* targetBuilding = nullptr;
+                if (thisptr) targetBuilding = thisptr->subject.getBuilding();
+                DoorStuff* door = targetBuilding ? targetBuilding->getDoor() : nullptr;
+                if (door && !order->hasPlayerOrder(OPEN_DOOR) && (door->isLocked() || door->isGate()))
                 {
                     //DebugLog("Open Door");
                     return;
@@ -2187,7 +2304,10 @@ namespace SquadAutonomy
             if (order)
             {
                 Tasker* currentGoal = order->tryToGetCurrentGoal();
-                if (!order->hasPlayerOrder(OPEN_DOOR))
+                Building* targetBuilding = nullptr;
+                if (thisptr) targetBuilding = thisptr->subject.getBuilding();
+                DoorStuff* door = targetBuilding ? targetBuilding->getDoor() : nullptr;
+                if (door && !order->hasPlayerOrder(OPEN_DOOR) && (door->isLocked() || door->isGate()))
                 {
                     //DebugLog("Open Door");
                     return;
@@ -2427,6 +2547,30 @@ namespace SquadAutonomy
     }
 
     bool checkInventorySettings = false;
+
+    float (*findResourceDestinationForMe_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
+    float findResourceDestinationForMe_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
+    {
+        Character* character = nullptr;
+        SquadSettingsInfo* settings = nullptr;
+        if (thisptr)
+        {
+            character = thisptr->getCharacter();
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(thisptr->getPlatoon());
+        }
+        if (settings && settings->isEnabled())
+        {
+            if (settings->getPutLootsInStorage())
+            {
+                checkInventorySettings = true;
+            }
+        }
+        float score = findResourceDestinationForMe_orig(thisptr, in, out, justAsking);
+        checkInventorySettings = false;
+
+        return score;
+    }
+
     float (*findResourceDestinationForMyLoot_orig)(AI* thisptr, const hand& in, hand& out, bool justAsking);
     float findResourceDestinationForMyLoot_hook(AI* thisptr, const hand& in, hand& out, bool justAsking)
     {
@@ -2447,7 +2591,7 @@ namespace SquadAutonomy
         // this calls getExcessLoot inside which then calls getAllStolenItem
         float score = findResourceDestinationForMyLoot_orig(thisptr, in, out, justAsking);
         // this only stop the game from ditching resource when all loot items are equipped
-        // it'll still ditch all loots
+        // it'll still ditch all loots if there's one that isn't
         // need to find somewhere else that does the actual ditching items logic
         // should look into all the ones that call getAllStolenItem
         // 340d40 is called by task_fillmachine (likely this one)
@@ -2474,11 +2618,69 @@ namespace SquadAutonomy
         checkInventorySettings = false;
     }
 
-    // Hook the method (call interception) — the primary mod mechanism
+    void (*getResourceItems_orig)(Inventory* thisptr, ogre_unordered_set<GameData*>::type& out, bool buildingMatsToo);
+    void getResourceItems_hook(Inventory* thisptr, ogre_unordered_set<GameData*>::type& out, bool buildingMatsToo)
+    {
+        if (checkInventorySettings)
+        {
+            Character* character = thisptr->getCallbackCharacter();
+            SquadSettingsInfo* settings = nullptr;
+            if (character && character->getPlatoon())
+            {
+                settings = SquadAutonomySettings::getSingleton().getSquadSettings(character->getPlatoon()->me);
+            }
+            if (settings && settings->isEnabled() && settings->getPutLootsInStorage())
+            {
+                bool leaveOneFood = false;
+                RaceData* race = character->getRace();
+                lektor<Item*> outItems = thisptr->getAllItems();
+                for (int i = 0; i < outItems.size(); ++i)
+                {
+                    auto item = outItems[i];
+                    if (!item) continue;
+                    GameData* data = item->getGameData();
+                    if (!data) continue;
+                    if (settings->getIgnoreEquipped() && item->isEquipped) continue;
+                    if (settings->hasForbidItem(item->itemFunction)) continue;
+                    itemType type = data->type;
+                    if (type == 4)
+                    {
+                        if (item->itemFunction == ITEM_NO_FUNCTION)
+                        {
+                            out.insert(data);
+                        }
+                        else if (item->itemFunction == ITEM_FOOD_RESTRICTED)
+                        {
+                            if (race && race->canEat(item, character->isAnimal()))
+                            {
+                                if (leaveOneFood)
+                                {
+                                    out.insert(data);
+                                }
+                                leaveOneFood = true;
+                            }
+                            else out.insert(data);
+                        }
+                        else if (item->itemFunction == ITEM_FOOD)
+                        {
+                            if (leaveOneFood)
+                            {
+                                out.insert(data);
+                            }
+                            leaveOneFood = true;
+                        }
+                    }
+                    //Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
+                }
+                return;
+            }
+        }
+        getResourceItems_orig(thisptr, out, buildingMatsToo);
+    }
+
     void (*getAllStolenItems_orig)(Inventory* thisptr, lektor<Item*>& all, bool includeUnknown);
     void getAllStolenItems_hook(Inventory* thisptr, lektor<Item*>& all, bool includeUnknown)
     {
-        // your code before/instead of the original
         getAllStolenItems_orig(thisptr, all, includeUnknown);
         if (checkInventorySettings)
         {
@@ -2509,42 +2711,6 @@ namespace SquadAutonomy
             }
         }
     }
-
-    bool (*getExcessLoot_orig)(Inventory* thisptr, const hand& me, lektor<Item*>& out, bool justAsking);
-    bool getExcessLoot_hook(Inventory* thisptr, const hand& me, lektor<Item*>& out, bool justAsking)
-    {
-        bool result = getExcessLoot_orig(thisptr, me, out, justAsking);
-        if (checkInventorySettings)
-        { 
-            Character* character = me.getCharacter();
-            SquadSettingsInfo* settings = nullptr;
-            if (character && character->getPlatoon())
-            {
-                settings = SquadAutonomySettings::getSingleton().getSquadSettings(character->getPlatoon()->me);
-            }
-            if (settings && settings->isEnabled() && settings->getPutLootsInStorage())
-            {
-                lektor<Item*> outItems;
-                for (int i = 0; i < out.size(); ++i)
-                {
-                    auto item = out[i];
-                    if (!item) continue;
-                    if (settings->getIgnoreEquipped() && item->isEquipped) continue;
-                    if (settings->hasForbidItem(item->itemFunction)) continue;
-                    lektorEx::push_back(outItems, item);
-                    //Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
-                }
-                out = outItems;
-                for (int i = 0; i < out.size(); ++i)
-                {
-                    auto item = out[i];
-                    Logger::logDebug(character->displayName + " put loots in storage: " + item->displayName);
-                }
-            }
-        }
-        
-        return result;
-    }
     
 
     float (*SpeedSelector_getMoveSpeed_orig)(SpeedSelector* thisptr, Character* character, MoveSpeed speed);
@@ -2574,13 +2740,12 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            // overwrite mission town here
-            if (settings->hasSignal(SIG_WANDERING_TOWN_TO_TOWN) && settings->getTargetTowns().size() > 0)
+            if (settings->getTargetTowns().size() > 0)
             {
                 Blackboard* bb = thisptr->blackboard;
                 if (bb)
                 {
-                    if (bb->getCurrentTownLocation() != settings->getCurrentTargetTown())
+                    if (!bb->currentTownLocation || bb->currentTownLocation != settings->getCurrentTargetTown())
                     {
                         return false;
                     }
@@ -2604,13 +2769,12 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            // overwrite mission town here
-            if (settings->hasSignal(SIG_WANDERING_TOWN_TO_TOWN) && settings->getTargetTowns().size() > 0)
+            if (settings->getTargetTowns().size() > 0)
             {
                 Blackboard* bb = thisptr->blackboard;
                 if (bb)
                 {
-                    if (bb->getCurrentTownLocation() != settings->getCurrentTargetTown())
+                    if (!bb->currentTownLocation || bb->currentTownLocation != settings->getCurrentTargetTown())
                     {
                         return true;
                     }
@@ -2634,12 +2798,12 @@ namespace SquadAutonomy
         }
         if (settings && settings->isEnabled())
         {
-            if (settings->hasSignal(SIG_WANDERING_TOWN_TO_TOWN) && settings->getTargetTowns().size() > 0)
+            if (settings->getTargetTowns().size() > 0)
             {
                 Blackboard* bb = thisptr->blackboard;
                 if (bb)
                 {
-                    if (bb->getCurrentTownLocation() != settings->getCurrentTargetTown())
+                    if (!bb->currentTownLocation || bb->currentTownLocation != settings->getCurrentTargetTown())
                     {
                         return;
                     }
@@ -2653,15 +2817,41 @@ namespace SquadAutonomy
     void Package_WanderingTrader_activateAndSetup_hook(AIPackage* thisptr)
     {
         // inside calls getNearishTown and assign that to missionTown
-        Package_WanderingTrader_activateAndSetup_orig(thisptr);
         Platoon* squad = thisptr->squad;
         SquadSettingsInfo* settings = nullptr;
         ActivePlatoon* activePlatoon = nullptr;
+        Blackboard* bb = thisptr->blackboard;
         if (squad)
         {
             activePlatoon = squad->activePlatoon;
             settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
         }
+        if (settings && settings->isEnabled())
+        {
+            for (auto iter = activePlatoon->things.begin(); iter != activePlatoon->things.end(); ++iter)
+            {
+                auto obj = reinterpret_cast<Character*>(*iter);
+                if (obj == squad->getSquadLeader()) continue;
+                CharBody* body = obj->getBody();
+                if (body) body->endAction();
+            }
+
+            if (settings->getTargetTowns().size() > 0)
+            {
+                if (bb)
+                {
+                    // grace period for when loading a game
+                    // TODO: find better way for this
+                    if (bb->getTimeSpentInTown_inGameHours() > 2.0 && bb->getCurrentTownLocation() == settings->getCurrentTargetTown())
+                    {
+                        settings->nextTargetTown();
+                    }
+                }
+            }
+        }
+
+        Package_WanderingTrader_activateAndSetup_orig(thisptr);
+
         if (settings && settings->isEnabled())
         {
             // overwrite mission town here
@@ -2671,6 +2861,22 @@ namespace SquadAutonomy
                 //TownBase* targetTown = reinterpret_cast<TownBase*>(reinterpret_cast<uintptr_t>(thisptr) + 0xb0);
                 //targetTown = settings->getCurrentTargetTown();
             }
+            else if (thisptr->missionTown.getTown())
+            {
+                TownType type = thisptr->missionTown.getTown()->townType;
+                switch (type)
+                {
+                case TownType::TOWN_NULL:
+                case TownType::TOWN_POI:
+                case TownType::TOWN_RUINS:
+                case TownType::TOWN_PRISON:
+                case TownType::TOWN_NEST:
+                case TownType::TOWN_NEST_MARKER:
+                    thisptr->missionTown = shou->townList->getNearishTown(squad->getFaction(), squad->pos, nullptr, bb->getCurrentTownLocation(), true, TOWN_TOWN | TOWN_VILLAGE | TOWN_MILITARY | TOWN_OUTPOST | TOWN_SLAVE_CAMP);
+                default:
+                    break;
+                }
+            }
         }
     }
 
@@ -2678,7 +2884,7 @@ namespace SquadAutonomy
     bool (*Package_WanderingTrader_signalStart_orig)(AIPackage* thisptr);
     bool Package_WanderingTrader_signalStart_hook(AIPackage* thisptr)
     {
-
+        
         Platoon* squad = thisptr->squad;
         SquadSettingsInfo* settings = nullptr;
         ActivePlatoon* activePlatoon = nullptr;
@@ -2694,49 +2900,88 @@ namespace SquadAutonomy
             {
                 auto obj = reinterpret_cast<Character*>(*iter);
                 StateBroadcastData* stateBroadcast = obj->getStateBroadcast();
-                MedicalSystem* medical = obj->getMedical();
-                if (stateBroadcast && (stateBroadcast->isSleeping || stateBroadcast->unconcious))
+                if (stateBroadcast)
                 {
-                    return false;
+                    if (stateBroadcast->isSleeping || stateBroadcast->unconcious)
+                    {
+                        return false;
+                    }
                 }
             }
-        }
 
+        }
+        
         return Package_WanderingTrader_signalStart_orig(thisptr);
     }
 
     bool (*Package_WanderingTrader_signalEnd_orig)(AIPackage* thisptr);
     bool Package_WanderingTrader_signalEnd_hook(AIPackage* thisptr)
     {
-        bool result = Package_WanderingTrader_signalEnd_orig(thisptr);
-        if (result)
+        Platoon* squad = thisptr->squad;
+        SquadSettingsInfo* settings = nullptr;
+        ActivePlatoon* activePlatoon = nullptr;
+        if (squad)
         {
-            Platoon* squad = thisptr->squad;
-            SquadSettingsInfo* settings = nullptr;
-            ActivePlatoon* activePlatoon = nullptr;
-            if (squad)
+            activePlatoon = squad->activePlatoon;
+            settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
+        }
+        if (settings && settings->isEnabled())
+        {
+            for (auto iter = activePlatoon->things.begin(); iter != activePlatoon->things.end(); ++iter)
             {
-                activePlatoon = squad->activePlatoon;
-                settings = SquadAutonomySettings::getSingleton().getSquadSettings(squad);
-            }
-            if (settings && settings->isEnabled())
-            {
-                Blackboard* bb = thisptr->blackboard;
-                if (bb)
+                auto obj = reinterpret_cast<Character*>(*iter);
+                StateBroadcastData* stateBroadcast = obj->getStateBroadcast();
+                if (stateBroadcast)
                 {
-                    if (!bb->currentTownLocation || bb->currentTownLocation != settings->getCurrentTargetTown())
+                    if (stateBroadcast->isSleeping)
                     {
-                        return false;
+                        return true;
                     }
                 }
             }
         }
+        bool result = Package_WanderingTrader_signalEnd_orig(thisptr);
+        
+        if (result)
+        {
+            if (settings && settings->isEnabled())
+            {
+                Blackboard* bb = thisptr->blackboard;
+                TownBase* currentTown = bb ? bb->getCurrentTownLocation() : nullptr;
+                if (!currentTown) return false;
+                TownType townType = currentTown->townType;
+                switch (townType)
+                {
+                case TownType::TOWN_NULL:
+                case TownType::TOWN_POI:
+                case TownType::TOWN_RUINS:
+                case TownType::TOWN_PRISON:
+                case TownType::TOWN_NEST:
+                case TownType::TOWN_NEST_MARKER:
+                    return false;
+                default:
+                    break;
+                }
+                if (settings->getTargetTowns().size() > 0)
+                {
+                    if (bb)
+                    {
+                        if (!settings->getStopAtTownsAlongTheWay())
+                        {
+                            if (currentTown != settings->getCurrentTargetTown()) return false;
+                        }
+                    }
+                }
+            }
+        }
+        
         return result;
     }
 
     void (*Package_WanderingTrader_clearMissionTown_orig)(AIPackage* thisptr);
     void Package_WanderingTrader_clearMissionTown_hook(AIPackage* thisptr)
     {
+        /*
         // called in Package_WanderingTrader::PeriodicUpdate when blackboard->getCurrentTown == AIPackage->missionTown
         Platoon* squad = thisptr->squad;
         SquadSettingsInfo* settings = nullptr;
@@ -2764,6 +3009,7 @@ namespace SquadAutonomy
                 }
             }
         }
+        */
         Package_WanderingTrader_clearMissionTown_orig(thisptr);
 
     }
@@ -2846,6 +3092,16 @@ namespace SquadAutonomy
                     {
                         return 0.0;
                     }
+                    if (settings->getIgnoreEnemiesInNonHostile())
+                    {
+                        Blackboard* bb = squad->getBlackboard();
+                        TownBase* currentTown = bb ? bb->getCurrentTownLocation() : nullptr;
+                        Faction* townFaction = currentTown ? currentTown->getFaction() : nullptr;
+                        if (townFaction->relations && !townFaction->relations->isEnemy(squad->getFaction()))
+                        {
+                            return 0.0;
+                        }
+                    }
                 }
                 if (settings->isRestTime())
                 {
@@ -2878,24 +3134,9 @@ namespace SquadAutonomy
                 }
                 return (medical->scoreFirstAidNeed(race->robot)) * 2.0;
             }
-            else if (type == PATROL_TOWN || type == PATROL)
+            /*
+            else if (type == PATROL_TOWN)
             {
-                /*
-                Tasker* currentTask = taskSystem->tryToGetCurrentGoal();
-                if (currentTask)
-                {
-                    if (currentTask->key() == type)
-                    {
-                        float score = taskSystem->currentGoalScore;
-                        int startTime = currentTask->startTime;
-                        int currentTime = static_cast<int>(ou->getTimeStamp_inGameHours().getTotalHours()) % 24;
-                        if (abs(currentTime - startTime) > 2) score *= 0.99;
-                        //DebugLog("Patrol score: " + sc::toString(score));
-                        taskSystem->currentGoalScore = std::max(score, 0.0001f);
-                        return taskSystem->currentGoalScore;
-                    }
-                }
-                */
                 if (settings->isRestTime())
                 {
                     if (character->isInsideBuilding)
@@ -2904,6 +3145,7 @@ namespace SquadAutonomy
                     }
                 }
             }
+            */
             else if (type == RELAX_IN_TOWN_PACKAGE)
             {
                 if (settings->hasTask(SHOPPING) && settings->getDoShopping())
@@ -2951,8 +3193,9 @@ namespace SquadAutonomy
                 {
                     return 0.0;
                 }
+                else return score * 2.0;
             }
-            else if (type == PUT_LOOT_IN_STORAGE)
+            else if (type == PUT_LOOT_IN_STORAGE || type == DITCH_ALL_RESOURCES)
             {
                 if (!settings->getPutLootsInStorage())
                 {
@@ -3333,7 +3576,8 @@ namespace SquadAutonomy
             ErrorLog("Could not add InventorySection::getValidInventoryPosition hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&InventorySection::_NV_addItem), &SquadAutonomy::_NV_addItem_hook, &SquadAutonomy::_NV_addItem_orig))
             ErrorLog("Could not add InventorySection::_NV_addItem hook!");
-
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getResourceItems), &SquadAutonomy::getResourceItems_hook, &SquadAutonomy::getResourceItems_orig))
+            ErrorLog("Could not add Inventory::getResourceItems hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&Inventory::getAllStolenItems), &SquadAutonomy::getAllStolenItems_hook, &SquadAutonomy::getAllStolenItems_orig))
             ErrorLog("Could not add Inventory::getAllStolenItems hook!");
 
@@ -3375,8 +3619,14 @@ namespace SquadAutonomy
             ErrorLog("Could not add AI::findKOIntruder_town hook!");
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findDisabledAlly), &SquadAutonomy::findDisabledAlly_hook, &SquadAutonomy::findDisabledAlly_orig))
             ErrorLog("Could not add AI::findDisabledAlly hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findSomebodyToLoot), &SquadAutonomy::findSomebodyToLoot_hook, &SquadAutonomy::findSomebodyToLoot_orig))
+            ErrorLog("Could not add AI::findSomebodyToLoot hook!");
+
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findResourceDestinationForMyLoot), &SquadAutonomy::findResourceDestinationForMyLoot_hook, &SquadAutonomy::findResourceDestinationForMyLoot_orig))
             ErrorLog("Could not add AI::findResourceDestinationForMyLoot hook!");
+        if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AI::findResourceDestinationForMe), &SquadAutonomy::findResourceDestinationForMe_hook, &SquadAutonomy::findResourceDestinationForMe_orig))
+            ErrorLog("Could not add AI::findResourceDestinationForMyLoot hook!");
+
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Task_FillMachine_putStolenItemsInStorage, &SquadAutonomy::Task_FillMachine_putStolenItemsInStorage_hook, &SquadAutonomy::Task_FillMachine_putStolenItemsInStorage_orig))
             ErrorLog("Could not add Task_FillMachine_putStolenItemsInStorage hook!");
 
@@ -3413,6 +3663,7 @@ namespace SquadAutonomy
         ErrorLog("Could not add AITaskSytem::_NV_setCurrentGoal hook!");*/
         /*if (KenshiLib::SUCCESS != KenshiLib::QueueHook(KenshiLib::GetRealAddress(&AITaskSytem::setTaskExpiryTimer), &SquadAutonomy::setTaskExpiryTimer_hook, &SquadAutonomy::setTaskExpiryTimer_orig))
         ErrorLog("Could not add AITaskSytem::setTaskExpiryTimer hook!");*/
+
         /*
         if (KenshiLib::SUCCESS != KenshiLib::QueueHook(SquadAutonomy::Package_HangAroundBar_signalStart, &SquadAutonomy::Package_HangAroundBar_signalStart_hook, &SquadAutonomy::Package_HangAroundBar_signalStart_orig))
             ErrorLog("Could not add Package_HangAroundBar::signalStart hook!");

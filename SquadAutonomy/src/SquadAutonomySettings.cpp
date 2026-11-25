@@ -4,6 +4,8 @@
 
 #include <Debug.h>
 
+#include <util/KenshiModUtil.h>
+
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
@@ -265,14 +267,14 @@ std::unordered_map<ItemFunction, std::vector<GameData*>>* SquadAutonomy::SquadAu
 {
     return &_itemDatasByFunctionList;
 }
-std::vector<GameData*>* SquadAutonomy::SquadAutonomySettings::getItemDatas(ItemFunction itemFunc)
+const std::vector<GameData*> SquadAutonomy::SquadAutonomySettings::getItemDatas(ItemFunction itemFunc)
 {
     auto itr = _itemDatasByFunctionList.find(itemFunc);
     if (itr != _itemDatasByFunctionList.end())
     {
-        return &((*itr).second);
+        return (*itr).second;
     }
-    return nullptr;
+    return std::vector<GameData*>();
 }
 std::vector<TownBase*>* SquadAutonomy::SquadAutonomySettings::getTownBaseList()
 {
@@ -323,10 +325,11 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _labourAutomaticMachine(1.0),
     _labourOther(1.0),
     _attackEnemies(true),
+    _ignoreEnemiesInNonHostile(true),
     _protectAllies(true),
     _doMedic(true),
     _doRescue(true),
-    _rescueOwnSquadOnly(false),
+    _rescueOwnSquadOnly(true),
     _manTurrets(false),
     _stayInsideGate(false),
     _closeGate(false),
@@ -334,11 +337,14 @@ SquadSettingsInfo::SquadSettingsInfo(Platoon& squad) :
     _buyItems(),
     _sellItems(),
     _doLooting(false),
+    _doAnimalLooting(true),
     _putLootsInStorage(false),
+    _putResourcesInStorage(false),
     _ignoreEquipped(true),
     _forbidItems(),
-    _targetTowns(),
-    _targetTownIndex(0)
+    _stopAtTownsAlongTheWay(false),
+    _targetTownIndex(0),
+    _targetTowns()
 {
     Faction* faction = squad.getFaction();
     if (faction)
@@ -1085,6 +1091,14 @@ void SquadSettingsInfo::setAttackEnemies(bool val)
 {
     _attackEnemies = val;
 }
+bool SquadAutonomy::SquadSettingsInfo::getIgnoreEnemiesInNonHostile() const
+{
+    return _ignoreEnemiesInNonHostile;
+}
+void SquadAutonomy::SquadSettingsInfo::setIgnoreEnemiesInNonHostile(bool val)
+{
+    _ignoreEnemiesInNonHostile = val;
+}
 bool SquadSettingsInfo::getProtectAllies() const
 {
     return _protectAllies;
@@ -1211,6 +1225,16 @@ void SquadAutonomy::SquadSettingsInfo::setDoLooting(bool val)
     _doLooting = val;
 }
 
+bool SquadAutonomy::SquadSettingsInfo::getDoAnimalLooting() const
+{
+    return _doAnimalLooting;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setDoAnimalLooting(bool val)
+{
+    _doAnimalLooting = val;
+}
+
 bool SquadAutonomy::SquadSettingsInfo::getPutLootsInStorage() const
 {
     return _putLootsInStorage;
@@ -1219,6 +1243,16 @@ bool SquadAutonomy::SquadSettingsInfo::getPutLootsInStorage() const
 void SquadAutonomy::SquadSettingsInfo::setPutLootsInStorage(bool val)
 {
     _putLootsInStorage = val;
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getPutResourcesInStorage() const
+{
+    return _putResourcesInStorage;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setPutResourcesInStorage(bool val)
+{
+    _putResourcesInStorage = val;
 }
 
 bool SquadAutonomy::SquadSettingsInfo::getIgnoreEquipped() const
@@ -1253,6 +1287,16 @@ void SquadAutonomy::SquadSettingsInfo::addForbidItem(ItemFunction itemFunction)
 void SquadAutonomy::SquadSettingsInfo::clearForbidItems()
 {
     _forbidItems.clear();
+}
+
+bool SquadAutonomy::SquadSettingsInfo::getStopAtTownsAlongTheWay() const
+{
+    return _stopAtTownsAlongTheWay;
+}
+
+void SquadAutonomy::SquadSettingsInfo::setStopAtTownsAlongTheWay(bool val)
+{
+    _stopAtTownsAlongTheWay = val;
 }
 
 void SquadAutonomy::SquadSettingsInfo::addTargetTown(TownBase* town)
@@ -1390,6 +1434,7 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjs
     rapidjson::Value combat;
     combat.SetObject();
     combat.AddMember("attackEnemies", _attackEnemies, allocator);
+    combat.AddMember("ignoreEnemiesInNonHostile", _ignoreEnemiesInNonHostile, allocator);
     combat.AddMember("protectAllies", _protectAllies, allocator);
     combat.AddMember("doMedic", _doMedic, allocator);
     combat.AddMember("doRescue", _doRescue, allocator);
@@ -1398,9 +1443,9 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjs
 
     rapidjson::Value guard;
     guard.SetObject();
-    combat.AddMember("manTurrets", _manTurrets, allocator);
-    combat.AddMember("stayInsideGate", _stayInsideGate, allocator);
-    combat.AddMember("closeGate", _closeGate, allocator);
+    guard.AddMember("manTurrets", _manTurrets, allocator);
+    guard.AddMember("stayInsideGate", _stayInsideGate, allocator);
+    guard.AddMember("closeGate", _closeGate, allocator);
     options.AddMember("guard", guard, allocator);
 
     rapidjson::Value shopping;
@@ -1413,13 +1458,16 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getSquadOptionsMember(rapidjs
     rapidjson::Value inventory;
     inventory.SetObject();
     inventory.AddMember("doLooting", _doLooting, allocator);
+    inventory.AddMember("doAnimalLooting", _doAnimalLooting, allocator);
     inventory.AddMember("putLootsInStorage", _putLootsInStorage, allocator);
+    inventory.AddMember("putResourcesInStorage", _putResourcesInStorage, allocator);
     inventory.AddMember("ignoreEquipped", _ignoreEquipped, allocator);
     inventory.AddMember("forbidItems", getForbidItemsMember(allocator, _forbidItems), allocator);
     options.AddMember("inventory", inventory, allocator);
 
     rapidjson::Value travel;
     travel.SetObject();
+    travel.AddMember("stopAtTownsAlongTheWay", _stopAtTownsAlongTheWay, allocator);
     travel.AddMember("targetTownIndex", _targetTownIndex, allocator);
     travel.AddMember("targetTowns", getTargetTownsMember(allocator, _targetTowns), allocator);
     options.AddMember("travel", travel, allocator);
@@ -1461,7 +1509,7 @@ rapidjson::Value SquadSettingsInfo::getShoppingItemsMember(rapidjson::Document::
         for (auto townIter = info.shopTowns.begin(); townIter != info.shopTowns.end(); ++townIter)
         {
             TownBase* town = *townIter;
-            shopTowns.PushBack(getHandMember(allocator, town->getHandle(), ""), allocator);
+            shopTowns.PushBack(getHandMember(allocator, town->getHandle(), KenshiModUtil::getTownBiomeName(town)), allocator);
         }
         item.AddMember("shopTowns", shopTowns, allocator);
 
@@ -1491,7 +1539,7 @@ rapidjson::Value SquadAutonomy::SquadSettingsInfo::getTargetTownsMember(rapidjso
     towns.SetArray();
     for (int i = 0; i < targetTowns.size(); ++i)
     {
-        towns.PushBack(getHandMember(allocator, targetTowns[i]->getHandle(), ""), allocator);
+        towns.PushBack(getHandMember(allocator, targetTowns[i]->getHandle(), KenshiModUtil::getTownBiomeName(targetTowns[i])), allocator);
     }
     return towns;
 }
@@ -1658,6 +1706,10 @@ void SquadSettingsInfo::readSquadOptionsFromMember(rapidjson::Value& member)
                 {
                     _attackEnemies = subItr->value.GetBool();
                 }
+                else if (key == "ignoreEnemiesInNonHostile")
+                {
+                    _ignoreEnemiesInNonHostile = subItr->value.GetBool();
+                }
                 else if (key == "protectAllies")
                 {
                     _protectAllies = subItr->value.GetBool();
@@ -1726,9 +1778,17 @@ void SquadSettingsInfo::readSquadOptionsFromMember(rapidjson::Value& member)
                 {
                     _doLooting = subItr->value.GetBool();
                 }
+                else if (key == "doAnimalLooting")
+                {
+                    _doAnimalLooting = subItr->value.GetBool();
+                }
                 else if (key == "putLootsInStorage")
                 {
                     _putLootsInStorage = subItr->value.GetBool();
+                }
+                else if (key == "putResourcesInStorage")
+                {
+                    _putResourcesInStorage = subItr->value.GetBool();
                 }
                 else if (key == "ignoreEquipped")
                 {
@@ -1746,7 +1806,11 @@ void SquadSettingsInfo::readSquadOptionsFromMember(rapidjson::Value& member)
             {
                 key = subItr->name.GetString();
 
-                if (key == "targetTownIndex")
+                if (key == "stopAtTownsAlongTheWay")
+                {
+                    _stopAtTownsAlongTheWay = subItr->value.GetBool();
+                }
+                else if (key == "targetTownIndex")
                 {
                     _targetTownIndex = subItr->value.GetInt();
                 }
@@ -1783,42 +1847,42 @@ std::unordered_map<ItemFunction, ShoppingItemInfo> SquadSettingsInfo::readShoppi
         }
         subItr = itr->FindMember("shopItemDatas");
         std::unordered_set<GameData*> shopItemDatas;
-        if (SquadAutonomySettings::initialized)
+
+        SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
+        auto itemDatas = settings.getItemDatas(itemFunc);
+        if (itemDatas.size() > 0)
         {
-            SquadAutonomySettings& settings = SquadAutonomySettings::getSingleton();
-            auto itemDatas = settings.getItemDatas(itemFunc);
-            if (itemDatas->size() > 0)
+            if (subItr != itr->MemberEnd())
             {
-                if (subItr != itr->MemberEnd())
+                for (auto dataItr = subItr->value.Begin(); dataItr != subItr->value.End(); ++dataItr)
                 {
-                    for (auto dataItr = subItr->value.Begin(); dataItr != subItr->value.End(); ++dataItr)
+                    auto dataSubItr = dataItr->FindMember("itemType");
+                    itemType type = NULL_ITEM;
+                    std::string name = "";
+                    if (dataSubItr != dataItr->MemberEnd())
                     {
-                        auto dataSubItr = dataItr->FindMember("itemType");
-                        itemType type = NULL_ITEM;
-                        if (dataSubItr != dataItr->MemberEnd())
+                        type = static_cast<itemType>(dataSubItr->value.GetInt());
+                    }
+                    else continue;
+
+                    dataSubItr = dataItr->FindMember("name");
+                    if (dataSubItr != dataItr->MemberEnd())
+                    {
+                        name = dataSubItr->value.GetString();
+                    }
+                    for (int i = 0; i < itemDatas.size(); ++i)
+                    {
+                        GameData* data = itemDatas[i];
+                        if (data->type == type && data->name == name)
                         {
-                            type = static_cast<itemType>(dataSubItr->value.GetInt());
-                        }
-                        else continue;
-                        std::string name = "";
-                        dataSubItr = dataItr->FindMember("name");
-                        if (dataSubItr != dataItr->MemberEnd())
-                        {
-                            name = dataSubItr->value.GetString();
-                        }
-                        for (int i = 0; i < itemDatas->size(); ++i)
-                        {
-                            GameData* data = itemDatas->at(i);
-                            if (data->type == type && data->name == name)
-                            {
-                                shopItemDatas.insert(data);
-                                break;
-                            }
+                            shopItemDatas.insert(data);
+                            break;
                         }
                     }
                 }
             }
         }
+
 
         bool excludeTowns = false;
         SettingsUtils::parseBoolSetting(*itr, "excludeTowns", excludeTowns);
@@ -1890,7 +1954,6 @@ std::vector<TownBase*> SquadAutonomy::SquadSettingsInfo::readTargetTownsFromMemb
     }
     return targetTowns;
 }
-
 
 hand SquadSettingsInfo::parseHandSetting(const std::string& dataLine)
 {
@@ -2157,44 +2220,11 @@ void SquadSettingsInfo::readSquadOptionsFromStream(std::istream& stream)
             SettingsUtils::parseBoolSetting(dataLine, _closeGate);
             continue;
         }
-        if (type == "DoShopping")
-        {
-            SettingsUtils::parseBoolSetting(dataLine, _doShopping);
-            continue;
-        }
-        if (type == "BuyItems")
-        {
-            _buyItems = readShoppingItemsFromStream(stream);
-            continue;
-        }
-        if (type == "SellItems")
-        {
-            _sellItems = readShoppingItemsFromStream(stream);
-            continue;
-        }
-        if (type == "DoLooting")
-        {
-            SettingsUtils::parseBoolSetting(dataLine, _doLooting);
-            continue;
-        }
-        if (type == "PutLootsInStorage")
-        {
-            SettingsUtils::parseBoolSetting(dataLine, _putLootsInStorage);
-            continue;
-        }
-        if (type == "IgnoreEquipped")
-        {
-            SettingsUtils::parseBoolSetting(dataLine, _ignoreEquipped);
-            continue;
-        }
-        if (type == "ForbidItems")
-        {
-            continue;
-        }
         if (type == "EndOptions")
         {
             break;
         }
     }
 }
+
 

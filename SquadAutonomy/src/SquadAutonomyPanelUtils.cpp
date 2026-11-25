@@ -113,13 +113,4 @@ namespace SquadAutonomy
         return text;
     }
 
-    std::string SquadAutonomyPanelUtils::getTownBiomeName(TownBase* town)
-    {
-        std::string biomeName = "";
-        if (town->biome && town->biome->data) biomeName = town->biome->data->name;
-        std::string townName = town->getKnownName();
-        if (!biomeName.empty() && biomeName != "NONE") townName += ", " + biomeName;
-        return townName;
-    }
-
 }

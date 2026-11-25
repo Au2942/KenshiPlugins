@@ -62,7 +62,8 @@ const std::vector<std::string> &ModSettings::getConfigPackages() const
 
 void ModSettings::loadFromFile()
 {
-    DebugLog("Finding Config file at: " + converter.to_bytes(_configFilePath));
+    
+    ("Finding Config file at: " + converter.to_bytes(_configFilePath));
     std::ifstream cfgFile(_configFilePath);
     if (!cfgFile.is_open())
     {
